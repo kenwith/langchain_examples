@@ -130,7 +130,7 @@ def demo_basic_structured_output(model):
     
     chain = create_structured_chain(model, Person, method="function_calling")
     
-    text = "John Doe is a 30-year-old software engineer at TechCorp. His email is john.doe@techcorp.com and he knows Python, JavaScript, and Go."
+    text = "John Doe is a 30-year-old software engineer at TechCorp. His email is john.doe@example.com and he knows Python, JavaScript, and Go."
     
     result = chain.invoke(text)
     print(f"Input: {text}")
@@ -163,7 +163,7 @@ def demo_json_parser_chain(model):
     
     chain = create_json_parser_chain(model, Person)
     
-    text = "Jane Smith, 28, data scientist at DataFlow. Contact: jane.smith@dataflow.io. Skills: Python, R, SQL, Machine Learning."
+    text = "Jane Smith, 28, data scientist at DataFlow. Contact: jane.smith@example.com. Skills: Python, R, SQL, Machine Learning."
     
     result = chain.invoke({"text": text})
     print(f"Input: {text}")
@@ -202,7 +202,7 @@ def demo_retry_parsing(model):
     # Wrap with retry logic
     retry_chain = retry_with_fallback(primary_chain, fallback_chain, max_retries=1)
     
-    text = "Bob Wilson, 45, project manager at BuildIt. Email: bob.wilson@buildit.com. Skills: Project Management, Agile, JIRA, Team Leadership."
+    text = "Bob Wilson, 45, project manager at BuildIt. Email: bob.wilson@example.com. Skills: Project Management, Agile, JIRA, Team Leadership."
     
     result = retry_chain.invoke(text)
     print(f"Input: {text}")
@@ -220,7 +220,7 @@ def demo_complex_extraction(model):
     
     text = """
     Sarah Johnson, 35, is the CTO of InnovateLab, an AI research company founded in 2018 
-    with 75 employees based in Boston. Her email is sarah@innovatelab.ai. She has expertise 
+    with 75 employees based in Boston. Her email is sarah@example.com. She has expertise 
     in Machine Learning, Deep Learning, NLP, and Computer Vision.
     """
     
