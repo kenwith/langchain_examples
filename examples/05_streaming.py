@@ -1,7 +1,7 @@
 """
 Streaming Responses Example
 
-Demonstrates: Token streaming, async streaming, streaming with tools, streaming structured output
+Demonstrates: Token streaming, async streaming, streaming with tools, streaming structured output, concurrent streaming
 Provider-agnostic using init_chat_model
 """
 import os
@@ -216,6 +216,203 @@ async def demo_custom_generator():
         print(f"Got: {chunk.strip()}")
 
 
+# =============================================================================
+# Concurrent Streaming with asyncio.gather
+# =============================================================================
+
+async def stream_single_prompt(prompt_text: str, model_name: str = None) -> AsyncGenerator[tuple[str, str], None]:
+    """
+    Stream a single prompt and yield (prompt_id, chunk) pairs.
+    
+    Args:
+        prompt_text: The prompt to send to the model
+        model_name: Optional model override
+        
+    Yields:
+        Tuples of (prompt_identifier, token_chunk)
+    """
+    model = get_model() if model_name is None else init_chat_model(model_name)
+    chain = ChatPromptTemplate.from_messages([
+        ("system", "You are a helpful assistant. Be concise."),
+        ("user", "{question}"),
+    ]) | model | StrOutputParser()
+    
+    prompt_id = prompt_text[:30] + "..." if len(prompt_text) > 30 else prompt_text
+    async for chunk in chain.astream({"question": prompt_text}):
+        yield (prompt_id, chunk)
+
+
+async def concurrent_streaming_gather():
+    """
+    Demonstrate concurrent streaming of multiple prompts using asyncio.gather.
+    
+    This pattern allows streaming responses from multiple model calls simultaneously,
+    interleaving tokens as they arrive from each stream.
+    """
+    print("=== Concurrent Streaming with asyncio.gather ===")
+    
+    prompts = [
+        "Write a haiku about Python",
+        "Write a haiku about JavaScript", 
+        "Write a haiku about Rust",
+        "Write a haiku about Go",
+    ]
+    
+    # Create async generators for each prompt
+    async def collect_stream(prompt: str) -> list[tuple[str, str]]:
+        """Collect all chunks from a single stream into a list."""
+        chunks = []
+        async for prompt_id, chunk in stream_single_prompt(prompt):
+            chunks.append((prompt_id, chunk))
+        return chunks
+    
+    # Run all streams concurrently and collect results
+    print("Starting concurrent streams...\n")
+    results = await asyncio.gather(*[collect_stream(p) for p in prompts])
+    
+    # Print results grouped by prompt
+    for prompt_chunks in results:
+        prompt_id = prompt_chunks[0][0] if prompt_chunks else "unknown"
+        print(f"--- {prompt_id} ---")
+        for _, chunk in prompt_chunks:
+            print(chunk, end="", flush=True)
+        print("\n")
+
+
+async def concurrent_streaming_interleaved():
+    """
+    Demonstrate truly interleaved concurrent streaming.
+    
+    This version yields tokens as they arrive from any stream,
+    showing real-time interleaving of multiple model responses.
+    """
+    print("=== Interleaved Concurrent Streaming ===")
+    
+    prompts = [
+        "Count from 1 to 3",
+        "List 3 colors",
+        "List 3 animals",
+    ]
+    
+    # Create generators for each prompt
+    generators = [stream_single_prompt(p) for p in prompts]
+    
+    # Use asyncio.as_completed style pattern for true interleaving
+    # We'll create tasks that yield chunks as they arrive
+    async def stream_with_label(gen: AsyncGenerator[tuple[str, str], None], label: str):
+        """Wrap generator to add a label for identification."""
+        async for prompt_id, chunk in gen:
+            yield (label, chunk)
+    
+    labeled_generators = [
+        stream_with_label(gen, f"Task-{i}") 
+        for i, gen in enumerate(generators)
+    ]
+    
+    # Create a merged async generator that yields from all streams as they produce
+    async def merged_stream():
+        # Create tasks for each generator's iteration
+        pending = {
+            asyncio.create_task(gen.__anext__()): gen 
+            for gen in labeled_generators
+        }
+        
+        while pending:
+            done, pending = await asyncio.wait(
+                pending, 
+                return_when=asyncio.FIRST_COMPLETED
+            )
+            
+            for task in done:
+                gen = pending.pop(task)
+                try:
+                    label, chunk = task.result()
+                    yield (label, chunk)
+                    # Schedule next chunk from this generator
+                    new_task = asyncio.create_task(gen.__anext__())
+                    pending[new_task] = gen
+                except StopAsyncIteration:
+                    # This generator is exhausted
+                    pass
+    
+    print("Streaming interleaved responses:\n")
+    async for label, chunk in merged_stream():
+        print(f"[{label}] {chunk}", end="", flush=True)
+    print("\n")
+
+
+async def concurrent_streaming_with_semaphore():
+    """
+    Demonstrate concurrent streaming with a semaphore for rate limiting.
+    
+    Useful when you want to limit the number of concurrent model calls
+    to avoid rate limits or resource exhaustion.
+    """
+    print("=== Concurrent Streaming with Semaphore (Rate Limited) ===")
+    
+    prompts = [f"Write a one-sentence fact about topic {i}" for i in range(6)]
+    semaphore = asyncio.Semaphore(2)  # Max 2 concurrent streams
+    
+    async def limited_stream(prompt: str) -> list[tuple[str, str]]:
+        async with semaphore:
+            chunks = []
+            async for prompt_id, chunk in stream_single_prompt(prompt):
+                chunks.append((prompt_id, chunk))
+            return chunks
+    
+    print("Running 6 prompts with max 2 concurrent...\n")
+    results = await asyncio.gather(*[limited_stream(p) for p in prompts])
+    
+    for prompt_chunks in results:
+        prompt_id = prompt_chunks[0][0] if prompt_chunks else "unknown"
+        print(f"--- {prompt_id} ---")
+        for _, chunk in prompt_chunks:
+            print(chunk, end="", flush=True)
+        print("\n")
+
+
+async def concurrent_structured_streaming():
+    """
+    Demonstrate concurrent streaming with structured output parsing.
+    
+    Shows how to run multiple structured output extractions concurrently.
+    """
+    print("=== Concurrent Structured Output Streaming ===")
+    
+    from langchain_core.output_parsers import JsonOutputParser
+    
+    class Fact(BaseModel):
+        topic: str = Field(description="The topic")
+        fact: str = Field(description="A fun fact")
+        confidence: float = Field(description="Confidence 0-1")
+    
+    parser = JsonOutputParser(pydantic_object=Fact)
+    model = get_model()
+    
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "Return a fun fact as JSON. {format_instructions}"),
+        ("user", "Give me a fun fact about {topic}"),
+    ])
+    
+    chain = prompt | model | parser
+    
+    topics = ["octopus", "honeybee", "banana", "lightning"]
+    
+    async def extract_fact(topic: str) -> Fact:
+        result = await chain.ainvoke({
+            "topic": topic,
+            "format_instructions": parser.get_format_instructions()
+        })
+        return result
+    
+    print("Extracting structured facts concurrently...\n")
+    facts = await asyncio.gather(*[extract_fact(t) for t in topics])
+    
+    for fact in facts:
+        print(f"  {fact['topic']}: {fact['fact']} (confidence: {fact['confidence']})")
+    print()
+
+
 if __name__ == "__main__":
     basic_streaming()
     asyncio.run(async_streaming())
@@ -223,4 +420,8 @@ if __name__ == "__main__":
     langgraph_stream_modes()
     streaming_structured()
     asyncio.run(demo_custom_generator())
+    asyncio.run(concurrent_streaming_gather())
+    asyncio.run(concurrent_streaming_interleaved())
+    asyncio.run(concurrent_streaming_with_semaphore())
+    asyncio.run(concurrent_structured_streaming())
     print("\nAll streaming examples completed!")
