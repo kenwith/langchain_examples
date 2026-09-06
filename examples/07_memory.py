@@ -2,7 +2,7 @@
 Memory & Conversation History Example
 
 Demonstrates: ConversationBufferMemory, ConversationSummaryMemory, 
-vector store memory, custom memory with LangGraph
+ConversationSummaryBufferMemory, vector store memory, custom memory with LangGraph
 Provider-agnostic using init_chat_model
 """
 import os
@@ -17,6 +17,7 @@ from langchain.memory import (
     ConversationBufferMemory,
     ConversationSummaryMemory,
     ConversationBufferWindowMemory,
+    ConversationSummaryBufferMemory,
 )
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
@@ -135,7 +136,94 @@ def summary_memory_example():
 
 
 # =============================================================================
-# 4. RunnableWithMessageHistory (LCEL Pattern)
+# 4. ConversationSummaryBufferMemory (Hybrid: Summary + Recent Buffer)
+# =============================================================================
+
+def summary_buffer_memory_example():
+    """SummaryBufferMemory - condenses old messages while keeping recent history intact"""
+    print("\n=== ConversationSummaryBufferMemory ===")
+
+    model = get_model()
+    # max_token_limit: total tokens for buffer + summary
+    # When buffer exceeds limit, oldest messages are summarized
+    memory = ConversationSummaryBufferMemory(
+        llm=model,
+        max_token_limit=300,  # Small limit for demo
+        return_messages=True,
+    )
+
+    # Simulate a longer conversation
+    conversation = [
+        ("user", "Hi, I'm planning a trip to Japan next spring"),
+        ("assistant", "That sounds wonderful! Spring is beautiful in Japan with cherry blossoms."),
+        ("user", "I'm particularly interested in Kyoto and Tokyo"),
+        ("assistant", "Excellent choices! Kyoto has temples and gardens, Tokyo has modern attractions."),
+        ("user", "What's the best time to see cherry blossoms in Kyoto?"),
+        ("assistant", "Typically late March to early April. Philosopher's Path and Maruyama Park are great spots."),
+        ("user", "Any food recommendations in Tokyo?"),
+        ("assistant", "Try sushi at Tsukiji, ramen in Shinjuku, and street food in Asakusa."),
+        ("user", "I also want to visit Osaka for a day trip"),
+        ("assistant", "Osaka is great for food! Try takoyaki and okonomiyaki in Dotonbori."),
+        ("user", "What about transportation between cities?"),
+        ("assistant", "The Shinkansen (bullet train) is fastest. Japan Rail Pass can save money."),
+        ("user", "Do I need to book Shinkansen tickets in advance?"),
+        ("assistant", "Not required but recommended for peak seasons. Can reserve at stations."),
+        ("user", "What's the weather like in spring?"),
+        ("assistant", "Mild, 10-20°C. Pack layers and a light jacket for evenings."),
+        ("user", "Any cultural etiquette I should know?"),
+        ("assistant", "Remove shoes indoors, don't tip, be quiet on trains, respect queues."),
+    ]
+
+    print("Adding conversation history...")
+    for role, content in conversation:
+        if role == "user":
+            memory.chat_memory.add_user_message(content)
+        else:
+            memory.chat_memory.add_ai_message(content)
+
+    memory_vars = memory.load_memory_variables({})
+    print(f"\nMemory contents ({len(memory_vars['history'])} messages):")
+    for i, msg in enumerate(memory_vars["history"]):
+        content_preview = msg.content[:120] + "..." if len(msg.content) > 120 else msg.content
+        print(f"  [{i}] {msg.type}: {content_preview}")
+
+    # Show the buffer vs summary breakdown
+    print(f"\n--- Memory Structure ---")
+    print(f"Buffer (recent messages kept verbatim): {len(memory.buffer)} messages")
+    print(f"Summary (condensed older messages): {memory.moving_summary_buffer[:200]}..." if memory.moving_summary_buffer else "Summary: (empty)")
+
+    # Continue conversation - should have context from both summary and buffer
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "You are a travel assistant. Use the conversation history to answer."),
+        MessagesPlaceholder(variable_name="history"),
+        ("user", "{input}"),
+    ])
+
+    chain = prompt | model | StrOutputParser()
+
+    print("\n--- Continuing conversation ---")
+    follow_up = "What was the first city I mentioned wanting to visit?"
+    result = chain.invoke({
+        "input": follow_up,
+        "history": memory_vars["history"]
+    })
+    print(f"User: {follow_up}")
+    print(f"Bot: {result}")
+
+    # Add to memory
+    memory.chat_memory.add_user_message(follow_up)
+    memory.chat_memory.add_ai_message(result)
+
+    # Check memory after adding
+    memory_vars = memory.load_memory_variables({})
+    print(f"\nMemory after follow-up ({len(memory_vars['history'])} messages):")
+    for i, msg in enumerate(memory_vars["history"]):
+        content_preview = msg.content[:100] + "..." if len(msg.content) > 100 else msg.content
+        print(f"  [{i}] {msg.type}: {content_preview}")
+
+
+# =============================================================================
+# 5. RunnableWithMessageHistory (LCEL Pattern)
 # =============================================================================
 
 def runnable_with_history():
@@ -189,7 +277,7 @@ def runnable_with_history():
 
 
 # =============================================================================
-# 5. LangGraph State-Based Memory
+# 6. LangGraph State-Based Memory
 # =============================================================================
 
 def langgraph_memory():
@@ -241,7 +329,7 @@ def langgraph_memory():
 
 
 # =============================================================================
-# 6. Vector Store Memory (Semantic Retrieval)
+# 7. Vector Store Memory (Semantic Retrieval)
 # =============================================================================
 
 def vector_memory_example():
@@ -289,7 +377,7 @@ def vector_memory_example():
 
 
 # =============================================================================
-# 7. Custom Memory Class
+# 8. Custom Memory Class
 # =============================================================================
 
 class CustomMemory:
@@ -344,6 +432,7 @@ if __name__ == "__main__":
     buffer_memory_example()
     window_memory_example()
     summary_memory_example()
+    summary_buffer_memory_example()
     runnable_with_history()
     langgraph_memory()
     vector_memory_example()
