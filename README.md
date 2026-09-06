@@ -65,12 +65,23 @@ LANGCHAIN_MODEL=anthropic/claude-3-5-sonnet python examples/01_basic_chains.py
 
 | Issue | Solution |
 |-------|----------|
-| `ModuleNotFoundError: langchain_<provider>` | Install provider package: `pip install langchain-anthropic langchain-openai langchain-google-genai langchain-groq langchain-ollama` |
-| `AuthenticationError` | Verify API key in `.env` matches provider (e.g., `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_API_KEY`, `GROQ_API_KEY`) |
-| `init_chat_model` returns wrong model | Ensure `LANGCHAIN_MODEL` uses format `provider/model-name` (e.g., `anthropic/claude-3-5-sonnet`) |
-| Streaming not working | Confirm model supports streaming; some providers require `streaming=True` in model kwargs |
-| Ollama connection refused | Start Ollama server: `ollama serve` and pull model: `ollama pull llama3.1` |
-| LangGraph state errors | Check state schema matches across nodes; use `StateGraph` type hints |
+| `ModuleNotFoundError: langchain_anthropic` | `pip install langchain-anthropic` |
+| `ModuleNotFoundError: langchain_openai` | `pip install langchain-openai` |
+| `ModuleNotFoundError: langchain_google_genai` | `pip install langchain-google-genai` |
+| `ModuleNotFoundError: langchain_groq` | `pip install langchain-groq` |
+| `ModuleNotFoundError: langchain_ollama` | `pip install langchain-ollama` |
+| `AuthenticationError` (Anthropic) | Verify `ANTHROPIC_API_KEY` in `.env`; key must start with `sk-ant-`; check [console.anthropic.com](https://console.anthropic.com) for valid key |
+| `AuthenticationError` (OpenAI) | Verify `OPENAI_API_KEY` in `.env`; key must start with `sk-`; check [platform.openai.com](https://platform.openai.com) for valid key and billing |
+| `AuthenticationError` (Google) | Verify `GOOGLE_API_KEY` in `.env`; enable Generative Language API in [Google Cloud Console](https://console.cloud.google.com); key must have API access |
+| `AuthenticationError` (Groq) | Verify `GROQ_API_KEY` in `.env`; key must start with `gsk_`; check [console.groq.com](https://console.groq.com) for valid key |
+| `init_chat_model` returns wrong model | Ensure `LANGCHAIN_MODEL` uses format `provider/model-name` (e.g., `anthropic/claude-3-5-sonnet`, `openai/gpt-4o`, `google/gemini-1.5-pro`, `groq/llama-3.1-70b-versatile`, `ollama/llama3.1`) |
+| Streaming not working | Confirm model supports streaming; some providers require `streaming=True` in model kwargs; Ollama requires `streaming=True` explicitly |
+| Ollama connection refused | Start Ollama server: `ollama serve` and pull model: `ollama pull llama3.1`; verify `http://localhost:11434` is accessible |
+| Ollama model not found | Pull the model first: `ollama pull <model-name>` (e.g., `ollama pull llama3.1`, `ollama pull mistral`) |
+| LangGraph state errors | Check state schema matches across nodes; use `StateGraph` type hints; ensure all nodes return dict with same keys |
+| `RateLimitError` / `429` | Implement exponential backoff; check provider quota limits; consider `max_retries` in model config |
+| `ContextWindowExceeded` / token limit | Reduce input length; use smaller model; implement summarization or sliding window for conversation history |
+| `ImportError: cannot import name 'init_chat_model'` | Upgrade LangChain: `pip install -U langchain`; `init_chat_model` requires langchain>=0.2.0 |
 
 ## Security Notes
 
