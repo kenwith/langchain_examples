@@ -1,18 +1,35 @@
 """
 Basic LangChain Chains Example
+==============================
 
-Demonstrates: LLM + Prompt + Output Parser
-Provider-agnostic using init_chat_model
+This module demonstrates how to build and run simple language model chains
+using LangChain's expression language (LCEL). It covers:
+
+- Creating reusable prompt templates with `build_prompt_template`.
+- Initializing a chat model from environment variables or a provided name.
+- Running chains that return plain text, structured JSON, and fallback models.
+- Composing sequential chains with intermediate value passing.
+
+The module is provider-agnostic: it uses `init_chat_model` to load a model
+based on the `LANGCHAIN_MODEL` environment variable (default: "openai/gpt-4o-mini").
+Make sure your API keys are set in the environment (e.g., `OPENAI_API_KEY`).
+
+Example usage:
+    python examples/01_basic_chains.py
+
+This will execute all the chain examples and print their outputs.
 """
+
 import os
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional
 
 from dotenv import load_dotenv
 from langchain.chat_models import init_chat_model
 from langchain_core.language_models import BaseChatModel
-from langchain_core.output_parsers import JsonOutputParser, StrOutputParser
+from langchain_core.output_parsers import BaseOutputParser, JsonOutputParser, StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import Runnable, RunnableLambda, RunnableSequence
+from langchain_core.runnables import Runnable, RunnableLambda
+
 from pydantic import BaseModel, Field
 
 load_dotenv()
@@ -69,6 +86,33 @@ def build_prompt_template(
     return ChatPromptTemplate.from_messages(messages)
 
 
+def run_chain(
+    prompt: ChatPromptTemplate,
+    inputs: Dict[str, Any],
+    model_name: Optional[str] = None,
+    parser: Optional[BaseOutputParser] = None,
+) -> Any:
+    """Load the model and run the given prompt with the provided inputs.
+
+    This is a convenience helper that builds a chain from a prompt, a model,
+    and an optional output parser, then invokes it with the given inputs.
+
+    Args:
+        prompt: The ChatPromptTemplate to use.
+        inputs: A dictionary of input variables for the prompt.
+        model_name: Optional model name to pass to `get_model`.
+        parser: Optional output parser. Defaults to StrOutputParser.
+
+    Returns:
+        The output from the chain, whose type depends on the parser used.
+    """
+    model = get_model(model_name)
+    if parser is None:
+        parser = StrOutputParser()
+    chain = prompt | model | parser
+    return chain.invoke(inputs)
+
+
 def basic_string_chain() -> str:
     """Run a simple chain: prompt -> LLM -> string output.
 
@@ -83,12 +127,10 @@ def basic_string_chain() -> str:
         input_variables=["topic", "audience"],
     )
 
-    model = get_model()
-    parser = StrOutputParser()
-
-    chain: Runnable[Dict[str, Any], str] = prompt | model | parser
-
-    result = chain.invoke({"topic": "quantum computing", "audience": "10-year-old"})
+    result = run_chain(
+        prompt,
+        {"topic": "quantum computing", "audience": "10-year-old"},
+    )
     print(f"Result: {result}\n")
     return result
 
@@ -116,12 +158,12 @@ def structured_output_chain() -> Dict[str, Any]:
         input_variables=["topic", "audience"],
     )
 
-    model = get_model()
     parser = JsonOutputParser(pydantic_object=Explanation)
-
-    chain: Runnable[Dict[str, Any], Dict[str, Any]] = prompt | model | parser
-
-    result = chain.invoke({"topic": "neural networks", "audience": "college student"})
+    result = run_chain(
+        prompt,
+        {"topic": "neural networks", "audience": "college student"},
+        parser=parser,
+    )
     print(f"Result: {result}\n")
     return result
 
@@ -142,11 +184,9 @@ def chain_with_fallback() -> str:
 
     primary_model = get_model()
     fallback_model = init_chat_model("openai/gpt-4o-mini")
+    model = primary_model.with_fallbacks([fallback_model])
 
-    chain: Runnable[Dict[str, Any], str] = (
-        prompt | primary_model.with_fallbacks([fallback_model]) | StrOutputParser()
-    )
-
+    chain: Runnable[Dict[str, Any], str] = prompt | model | StrOutputParser()
     result = chain.invoke({"question": "What is the capital of France?"})
     print(f"Result: {result}\n")
     return result
@@ -160,37 +200,44 @@ def sequential_chains() -> Dict[str, str]:
     """
     print("=== Sequential Chains ===")
 
-    model = get_model()
-
-    # Chain 1: Generate a topic
     topic_prompt = build_prompt_template(
         system_message="You are a creative blog topic generator.",
         user_message="Suggest one interesting topic about {domain} for a blog post.",
         input_variables=["domain"],
     )
-    topic_chain: Runnable[Dict[str, Any], str] = topic_prompt | model | StrOutputParser()
-
-    # Chain 2: Create outline from topic
     outline_prompt = build_prompt_template(
         system_message="You are an expert content strategist.",
         user_message="Create a 3-point outline for a blog post about: {topic}",
         input_variables=["topic"],
     )
-    outline_chain: Runnable[Dict[str, Any], str] = outline_prompt | model | StrOutputParser()
-
-    # Chain 3: Write intro from outline
     intro_prompt = build_prompt_template(
         system_message="You are an engaging blog writer.",
         user_message="Write an engaging intro paragraph for a blog post with this outline:\n{outline}",
         input_variables=["outline"],
     )
-    intro_chain: Runnable[Dict[str, Any], str] = intro_prompt | model | StrOutputParser()
 
-    # Combined chain using RunnableLambda for intermediate value passing
+    # Combined chain using RunnableLambda for intermediate value passing,
+    # with run_chain used inside each lambda to keep the logic concise.
     full_chain: Runnable[Dict[str, Any], Dict[str, str]] = (
-        RunnableLambda(lambda x: {"topic": topic_chain.invoke(x), "domain": x["domain"]})
-        | RunnableLambda(lambda x: {"outline": outline_chain.invoke({"topic": x["topic"]}), "topic": x["topic"]})
-        | RunnableLambda(lambda x: {"intro": intro_chain.invoke({"outline": x["outline"]}), "outline": x["outline"], "topic": x["topic"]})
+        RunnableLambda(
+            lambda x: {
+                "topic": run_chain(topic_prompt, {"domain": x["domain"]}),
+                "domain": x["domain"],
+            }
+        )
+        | RunnableLambda(
+            lambda x: {
+                "outline": run_chain(outline_prompt, {"topic": x["topic"]}),
+                "topic": x["topic"],
+            }
+        )
+        | RunnableLambda(
+            lambda x: {
+                "intro": run_chain(intro_prompt, {"outline": x["outline"]}),
+                "outline": x["outline"],
+                "topic": x["topic"],
+            }
+        )
     )
 
     result = full_chain.invoke({"domain": "artificial intelligence"})
