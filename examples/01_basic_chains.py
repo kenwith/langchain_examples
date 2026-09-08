@@ -113,6 +113,39 @@ def run_chain(
     return chain.invoke(inputs)
 
 
+def run_prompt(
+    prompt: ChatPromptTemplate,
+    inputs: Dict[str, Any],
+    model_name: Optional[str] = None,
+) -> Any:
+    """Execute a single prompt, print the response, and handle missing API keys gracefully.
+
+    This is a convenience wrapper around `run_chain` that prints the result and
+    catches common exceptions related to missing or invalid API keys. If an error
+    occurs, it prints a user-friendly message and returns None.
+
+    Args:
+        prompt: The ChatPromptTemplate to use.
+        inputs: Dictionary of input variables for the prompt.
+        model_name: Optional model name to pass to `get_model`.
+
+    Returns:
+        The output from the chain, or None if an error occurred.
+    """
+    try:
+        result = run_chain(prompt, inputs, model_name)
+        print(f"Result: {result}")
+        return result
+    except Exception as e:
+        # Check if it's likely a missing API key error
+        error_str = str(e).lower()
+        if "api_key" in error_str or "api key" in error_str or "auth" in error_str:
+            print("Error: Missing or invalid API key. Please set the appropriate environment variable (e.g., OPENAI_API_KEY).")
+        else:
+            print(f"Error running prompt: {e}")
+        return None
+
+
 def basic_string_chain() -> str:
     """Run a simple chain: prompt -> LLM -> string output.
 
@@ -248,6 +281,16 @@ def sequential_chains() -> Dict[str, str]:
 
 
 if __name__ == "__main__":
+    # Demonstrate run_prompt with graceful error handling
+    print("=== Using run_prompt helper ===")
+    prompt = build_prompt_template(
+        system_message="You are a helpful assistant.",
+        user_message="What is the capital of {country}?",
+        input_variables=["country"],
+    )
+    run_prompt(prompt, {"country": "France"})
+
+    # Run the other examples as before
     basic_string_chain()
     structured_output_chain()
     chain_with_fallback()
