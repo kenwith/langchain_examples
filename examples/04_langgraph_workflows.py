@@ -13,6 +13,9 @@ load_dotenv()
 
 DB_PATH = "checkpoints.sqlite"
 
+# The shared state passed between nodes.
+# `messages` accumulates over time via the reducer (append), so each step sees the full conversation.
+# `user_id` and `thread_id` are metadata used for checkpointing and resuming sessions.
 class AgentState(TypedDict):
     messages: Annotated[List[BaseMessage], lambda x, y: x + y]
     user_id: str
@@ -65,11 +68,27 @@ def create_checkpointer():
 
 def build_graph(checkpointer):
     workflow = StateGraph(AgentState)
+
+    # Define the two nodes:
+    #   agent: calls the LLM, which may respond with tool calls.
+    #   tools: executes any requested tools from the last agent message.
     workflow.add_node("agent", call_model)
     workflow.add_node("tools", tool_node)
+
+    # Entry point: start in the agent node.
     workflow.set_entry_point("agent")
+
+    # Conditional transition after the agent:
+    # - If the last model message contains tool_calls, route to "tools".
+    # - Otherwise, the conversation is complete and we end.
     workflow.add_conditional_edges("agent", should_continue, {"tools": "tools", "end": END})
+
+    # After tools run, always return to the agent so the model can
+    # process the tool results and generate a final answer.
     workflow.add_edge("tools", "agent")
+
+    # Optional: visualize the graph (requires graphviz/pydot).
+    # e.g. graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
     return workflow.compile(checkpointer=checkpointer)
 
 def run_conversation(thread_id: str, user_id: str, user_input: str, graph):
@@ -106,59 +125,49 @@ def main():
     print("=" * 60)
     print("LangGraph SQLite Checkpointing Demo")
     print("=" * 60)
-    
+
     checkpointer = create_checkpointer()
     graph = build_graph(checkpointer)
-    
+
+    # Optional graph visualization (uncomment if you want to generate a diagram):
+    # graph.get_graph().draw_mermaid_png(output_file_path="graph.png")
+    # graph.get_graph().print_ascii()
+
     user_id = "user_123"
-    thread_id = "thread_abc"
-    
+    thread_id = "thread_1"
+
+    # --- Session 1: First conversation in this thread ---
     print(f"\nUser: {user_id}")
     print(f"Thread: {thread_id}")
-    print("-" * 40)
-    
-    print("\n--- First Conversation Session ---")
-    response1 = run_conversation(thread_id, user_id, "Hi! What's the weather in New York?", graph)
+    print("\n--- First message ---")
+    response1 = run_conversation(thread_id, user_id, "What's the weather in New York?", graph)
     print(f"Assistant: {response1}")
-    
-    response2 = run_conversation(thread_id, user_id, "Thanks! Can you calculate 25 * 4 + 10?", graph)
+
+    print("\n--- Second message (should trigger tools) ---")
+    response2 = run_conversation(thread_id, user_id, "And what's 15 * 14?")
     print(f"Assistant: {response2}")
-    
-    print("\n--- Simulating New Session (Same Thread) ---")
-    print("Loading conversation history...")
-    history = get_conversation_history(thread_id, user_id, graph)
-    print(f"Found {len(history)} messages in history")
-    for msg in history:
-        role = "User" if isinstance(msg, HumanMessage) else "Assistant"
+
+    print("\n--- Checking checkpoint state ---")
+    state = get_conversation_history(thread_id, user_id, graph)
+    print(f"Messages in thread: {len(state)}")
+    for msg in state:
+        role = "Human" if isinstance(msg, HumanMessage) else "AI"
         content = msg.content[:80] + "..." if len(msg.content) > 80 else msg.content
         print(f"  [{role}] {content}")
-    
-    print("\n--- Continuing Conversation ---")
-    response3 = run_conversation(thread_id, user_id, "What was the weather I asked about earlier?", graph)
+
+    print("\n--- New session, same thread (memory persists) ---")
+    response3 = run_conversation(thread_id, user_id, "What was the weather in New York?")
     print(f"Assistant: {response3}")
-    
-    print("\n--- Starting New Thread ---")
-    new_thread_id = "thread_xyz"
-    response4 = run_conversation(new_thread_id, user_id, "Hello! What's the weather in London?", graph)
+
+    print("\n--- New thread (separate memory) ---")
+    thread2 = "thread_2"
+    response4 = run_conversation(thread2, user_id, "What is the weather in Paris?")
     print(f"Assistant: {response4}")
-    
-    print("\n--- Thread Listing ---")
+
+    print("\n--- Listing all threads for user ---")
     threads = list_threads(user_id)
-    print(f"Threads for {user_id}:")
-    for thread_id_db, last_updated in threads:
-        print(f"  - {thread_id_db} (last updated: {last_updated})")
-    
-    print("\n--- Checkpoint Inspection ---")
-    config = {"configurable": {"thread_id": thread_id, "user_id": user_id}}
-    state = graph.get_state(config)
-    if state:
-        print(f"Current state keys: {list(state.values.keys()) if state.values else 'None'}")
-        print(f"Next nodes: {state.next}")
-        print(f"Checkpoint metadata: {state.metadata}")
-    
-    print("\n" + "=" * 60)
-    print("Demo complete! Checkpoints saved to:", DB_PATH)
-    print("=" * 60)
+    for tid, last_updated in threads:
+        print(f"  Thread: {tid} | Last updated: {last_updated}")
 
 if __name__ == "__main__":
     main()
