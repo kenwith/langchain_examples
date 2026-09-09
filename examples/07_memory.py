@@ -33,15 +33,30 @@ def get_model():
 
 
 # =============================================================================
-# 1. ConversationBufferMemory (Full History)
+# Helper: Print conversation history clearly
+# =============================================================================
+
+def print_history(messages, max_chars=100):
+    """Print a list of messages in a readable format, truncating long content."""
+    print(f"  ({len(messages)} messages)")
+    for i, msg in enumerate(messages):
+        content = msg.content
+        if len(content) > max_chars:
+            content = content[:max_chars] + "..."
+        print(f"    [{i}] {msg.type}: {content}")
+
+
+# =============================================================================
+# 1. ConversationBufferMemory (Full History with trimming)
 # =============================================================================
 
 def buffer_memory_example():
-    """Basic buffer memory - stores all messages"""
-    print("=== ConversationBufferMemory ===")
+    """Basic buffer memory - stores all messages, but trims to last N to prevent unbounded growth"""
+    print("=== ConversationBufferMemory (with trimming) ===")
 
     model = get_model()
     memory = ConversationBufferMemory(return_messages=True)
+    MAX_MESSAGES = 4  # Keep last 2 exchanges (4 messages)
 
     # Simulate conversation
     conversation = [
@@ -56,6 +71,10 @@ def buffer_memory_example():
         else:
             memory.chat_memory.add_ai_message(content)
 
+    # Trim to last MAX_MESSAGES
+    if len(memory.chat_memory.messages) > MAX_MESSAGES:
+        memory.chat_memory.messages = memory.chat_memory.messages[-MAX_MESSAGES:]
+
     # Create chain with memory
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a helpful assistant."),
@@ -67,7 +86,8 @@ def buffer_memory_example():
 
     # Load memory variables
     memory_vars = memory.load_memory_variables({})
-    print(f"Memory: {memory_vars}")
+    print("Memory contents:")
+    print_history(memory_vars["history"])
 
     # Continue conversation
     result = chain.invoke({
@@ -76,9 +96,15 @@ def buffer_memory_example():
     })
     print(f"Response: {result}")
 
-    # Update memory
+    # Update memory (and trim again)
     memory.chat_memory.add_user_message("What did I say my name was?")
     memory.chat_memory.add_ai_message(result)
+    if len(memory.chat_memory.messages) > MAX_MESSAGES:
+        memory.chat_memory.messages = memory.chat_memory.messages[-MAX_MESSAGES:]
+
+    print("\nAfter adding response, memory now contains:")
+    memory_vars = memory.load_memory_variables({})
+    print_history(memory_vars["history"])
 
 
 # =============================================================================
@@ -98,9 +124,8 @@ def window_memory_example():
         memory.chat_memory.add_ai_message(f"Response {i}")
 
     memory_vars = memory.load_memory_variables({})
-    print(f"Stored messages (should be last 2 pairs = 4 messages):")
-    for msg in memory_vars["history"]:
-        print(f"  {msg.type}: {msg.content}")
+    print("Stored messages (should be last 2 pairs = 4 messages):")
+    print_history(memory_vars["history"])
 
 
 # =============================================================================
@@ -130,9 +155,10 @@ def summary_memory_example():
             memory.chat_memory.add_ai_message(content)
 
     memory_vars = memory.load_memory_variables({})
-    print(f"Summary memory:")
+    print("Summary memory:")
     for msg in memory_vars["history"]:
-        print(f"  {msg.type}: {msg.content[:100]}...")
+        content = msg.content[:100] + "..." if len(msg.content) > 100 else msg.content
+        print(f"  {msg.type}: {content}")
 
 
 # =============================================================================
@@ -183,9 +209,7 @@ def summary_buffer_memory_example():
 
     memory_vars = memory.load_memory_variables({})
     print(f"\nMemory contents ({len(memory_vars['history'])} messages):")
-    for i, msg in enumerate(memory_vars["history"]):
-        content_preview = msg.content[:120] + "..." if len(msg.content) > 120 else msg.content
-        print(f"  [{i}] {msg.type}: {content_preview}")
+    print_history(memory_vars["history"])
 
     # Show the buffer vs summary breakdown
     print(f"\n--- Memory Structure ---")
@@ -217,17 +241,15 @@ def summary_buffer_memory_example():
     # Check memory after adding
     memory_vars = memory.load_memory_variables({})
     print(f"\nMemory after follow-up ({len(memory_vars['history'])} messages):")
-    for i, msg in enumerate(memory_vars["history"]):
-        content_preview = msg.content[:100] + "..." if len(msg.content) > 100 else msg.content
-        print(f"  [{i}] {msg.type}: {content_preview}")
+    print_history(memory_vars["history"])
 
 
 # =============================================================================
-# 5. RunnableWithMessageHistory (LCEL Pattern)
+# 5. RunnableWithMessageHistory (LCEL Pattern with trimming)
 # =============================================================================
 
 def runnable_with_history():
-    """Using RunnableWithMessageHistory for LCEL chains"""
+    """Using RunnableWithMessageHistory for LCEL chains, with session history trimming"""
     print("\n=== RunnableWithMessageHistory ===")
 
     from langchain_core.runnables.history import RunnableWithMessageHistory
@@ -245,10 +267,14 @@ def runnable_with_history():
 
     # In-memory store for session histories
     store = {}
+    MAX_SESSION_MESSAGES = 6  # Keep last 3 exchanges
 
     def get_session_history(session_id: str):
         if session_id not in store:
             store[session_id] = ChatMessageHistory()
+        # Trim to last MAX_SESSION_MESSAGES
+        if len(store[session_id].messages) > MAX_SESSION_MESSAGES:
+            store[session_id].messages = store[session_id].messages[-MAX_SESSION_MESSAGES:]
         return store[session_id]
 
     with_history = RunnableWithMessageHistory(
@@ -275,17 +301,22 @@ def runnable_with_history():
     )
     print(f"Response 3 (new session): {result3}")
 
+    # Show history for session 1
+    print("\nSession 1 history:")
+    print_history(store["user-123"].messages)
+
 
 # =============================================================================
-# 6. LangGraph State-Based Memory
+# 6. LangGraph State-Based Memory (with trimming)
 # =============================================================================
 
 def langgraph_memory():
-    """Memory using LangGraph state and checkpointer"""
+    """Memory using LangGraph state and checkpointer, with message trimming"""
     print("\n=== LangGraph State Memory ===")
 
     model = get_model()
     memory = MemorySaver()
+    MAX_STATE_MESSAGES = 6  # Keep last 3 exchanges
 
     class ChatState(BaseModel):
         messages: Annotated[list[BaseMessage], add_messages] = Field(default_factory=list)
@@ -298,6 +329,10 @@ def langgraph_memory():
             # Simple extraction
             name = last_msg.split("my name is")[-1].strip().split()[0].rstrip(".")
             state.user_name = name.capitalize()
+
+        # Trim messages to last MAX_STATE_MESSAGES
+        if len(state.messages) > MAX_STATE_MESSAGES:
+            state.messages = state.messages[-MAX_STATE_MESSAGES:]
 
         # Build prompt with context
         system_msg = SystemMessage(
@@ -326,6 +361,11 @@ def langgraph_memory():
         print(f"\nUser: {msg}")
         result = app.invoke({"messages": [HumanMessage(content=msg)]}, config=config)
         print(f"Bot: {result['messages'][-1].content}")
+
+    # Show final state
+    final_state = app.get_state(config)
+    print("\nFinal state messages:")
+    print_history(final_state.values["messages"])
 
 
 # =============================================================================
@@ -377,7 +417,7 @@ def vector_memory_example():
 
 
 # =============================================================================
-# 8. Custom Memory Class
+# 8. Custom Memory Class (with improved trimming and printing)
 # =============================================================================
 
 class CustomMemory:
@@ -423,9 +463,8 @@ def custom_memory_example():
         memory.add_message(HumanMessage(content=f"Message {i}"))
         memory.add_message(AIMessage(content=f"Response {i}"))
 
-    print(f"Stored {len(memory.get_messages())} messages (trimmed to fit)")
-    for msg in memory.get_messages():
-        print(f"  {msg.type}: {msg.content[:30]}...")
+    print(f"Stored {len(memory.get_messages())} messages (trimmed to fit):")
+    print_history(memory.get_messages())
 
 
 if __name__ == "__main__":
