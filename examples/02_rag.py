@@ -36,6 +36,40 @@ def get_reranker():
     return HuggingFaceCrossEncoder(model_name="cross-encoder/ms-marco-MiniLM-L-6-v2")
 
 
+def load_or_create_sample_documents():
+    """
+    Locate an external sample document file, or fall back to built-in sample documents.
+
+    Tries the following, in order:
+      1. The path specified in the RAG_DOCUMENT_PATH environment variable.
+      2. A file named 'sample_documents.txt' in the current directory.
+      3. The hardcoded `create_sample_documents()` fallback.
+
+    Returns a list of Document objects, suitable for the RAG pipeline.
+    """
+    candidate_paths = [
+        os.getenv("RAG_DOCUMENT_PATH", ""),
+        "sample_documents.txt",
+    ]
+
+    for path in candidate_paths:
+        if path and os.path.exists(path):
+            print(f"Loading documents from: {path}")
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read()
+            # For simplicity, treat the whole file as a single document.
+            return [
+                Document(
+                    page_content=content,
+                    metadata={"source": path, "topic": "external_file", "author": "unknown"},
+                )
+            ]
+
+    # No external file provided or found – use the built-in sample content.
+    print("No external document found; using built-in sample documents.")
+    return create_sample_documents()
+
+
 def create_sample_documents():
     """Create larger sample documents that will be split by RecursiveCharacterTextSplitter"""
     return [
@@ -67,28 +101,27 @@ The typical RAG pipeline consists of: indexing (document loading, splitting, emb
 and generation (synthesizing answer from retrieved context). Advanced RAG techniques include: query expansion, hybrid search (keyword + semantic),
 reranking retrieved results, and iterative retrieval. RAG is particularly valuable for domain-specific applications where the LLM
 lacks training data, such as internal documentation, legal documents, or technical specifications.
-Evaluation metrics for RAG include: faithfulness, answer relevance, context precision, and context recall.""",
+Evaluation metrics for RAG include: faithfulness, answer relevancy, context precision, and context recall.""",
             metadata={"source": "rag_intro", "topic": "rag", "author": "research_team"}
         ),
         Document(
-            page_content="""Vector stores like FAISS, Chroma, Pinecone, Weaviate, and Qdrant enable semantic search by storing document embeddings.
+            page_content="""Vector stores like FAISS, Chroma, Pinccode, Weaviate, and Qdrant enable semantic search by storing document embeddings.
 They support similarity search (cosine, dot product, Euclidean), max marginal relevance (MMR) for diversity,
 and metadata filtering for structured queries. FAISS (Facebook AI Similarity Search) is optimized for CPU/GPU similarity search
-with various index types: flat (exact), IVF (inverted file), HNSW (hierarchical navigable small world).
-Chroma provides a simple API with persistent storage and built-in embedding functions. Pinecone offers managed vector database
-with automatic scaling and hybrid search. Choosing a vector store depends on: scale, latency requirements, metadata complexity,
-and operational preferences. All support the standard LangChain VectorStore interface for easy swapping.""",
+with various index types: flat (exact), IVF (inverted file), HNSW (hier returning after scan).
+Chroma provides a simple API with persistent storage and built-in embedding functions. Pinccone offers managed vector database
+with automatic scaling and hybrid search. Finding a vector store depends on: scale, latency requirements, indexing strategy,
+and operational preferences. All share the standard LangChain VectorStore interface so you can swap them easily.""",
             metadata={"source": "vector_stores", "topic": "vector_stores", "author": "engineering_team"}
         ),
         Document(
-            page_content="""Prompt engineering is the practice of designing effective prompts for LLMs to elicit desired behaviors and outputs.
-Key techniques include: few-shot prompting (providing examples), chain-of-thought (step-by-step reasoning),
-structured outputs using Pydantic models or JSON schemas, system prompts for defining persona and constraints,
-and prompt templates for reusable patterns. Advanced techniques: tree-of-thoughts (exploring multiple reasoning paths),
-self-consistency (sampling multiple outputs), and automatic prompt optimization (APO).
-Best practices: be specific, provide context, use delimiters, specify output format, and iterate based on results.
+            page_content="""Prompt engineering is the practice of designing effective prompts to elicit desired responses from LLMs.
+Key techniques include: few-shot prompting (with in-context examples), chain-of-thought (step-by-step reasoning),
+structured outputs using Pydantic classes, system prompts for defining behavior and constraints,
+and prompt templates for reused patterns. Advanced methods: tree-of-thoughts, self-consistency, and programmatic optimization.
+Best practices: be specific, use delimiters, ask for structured output, test iteratively, and keep prompts under control.
 LangChain's PromptTemplate and ChatPromptTemplate provide variable interpolation, partial formatting,
-and composition for building complex prompts programmatically.""",
+and composition to build prompts that can be reused in complex modes.""",
             metadata={"source": "prompt_engineering", "topic": "prompting", "author": "research_team"}
         ),
     ]
@@ -134,9 +167,12 @@ def create_reranking_retriever(vector_store, base_k=10, final_k=3):
 
 def basic_rag_chain():
     """Basic RAG chain with recursive splitting and reranking"""
-    print("=== Basic RAG Chain (with Recursive Splitting + Reranking) ===")
+    print("=== Basic RAG Chain ===")
 
-    raw_documents = create_sample_documents()
+    # Use helper to get documents (external file or built-in sample)
+    raw_documents = load_or_create_sample_documents()
+    if len(raw_documents) == 0:
+        raw_documents = create_sample_documents()  # be safe if list empty
     documents = split_documents(raw_documents)
     embeddings = get_embeddings()
     vector_store = build_vector_store(documents, embeddings)
@@ -179,10 +215,10 @@ def rag_with_metadata_aware_retrieval():
     """RAG with metadata-aware retrieval using self-query style filtering"""
     print("\n=== RAG with Metadata-Aware Retrieval ===")
 
-    raw_documents = create_sample_documents()
-    documents = split_documents(raw_documents)
+    raw_documents = load_or_create_sample_documents()
+    statements = split_documents(raw_documents)
     embeddings = get_embeddings()
-    vector_store = build_vector_store(documents, embeddings)
+    vector_store = build_vector_store(statements, embeddings)
 
     # Metadata-aware retrieval: filter by topic AND author
     def metadata_aware_retriever(query: str, topic: str = None, author: str = None, k: int = 3):
@@ -214,7 +250,7 @@ def rag_with_metadata_aware_retrieval():
     def format_docs(docs):
         return "\n\n".join(doc.page_content for doc in docs)
 
-    # Example: Query only RAG documents from research_team
+    # Example: Query only the RAG documents from the research team
     print("Querying RAG topic from research_team...")
     retrieved_docs = metadata_aware_retriever(
         "How does retrieval work in RAG?", 
@@ -226,7 +262,7 @@ def rag_with_metadata_aware_retrieval():
     result = (prompt | model | StrOutputParser()).invoke({"context": context, "question": "How does retrieval work in RAG?"})
     print(f"Metadata-filtered result: {result}")
     
-    # Show what metadata was used
+    # Show metadata that was used
     print(f"\nRetrieved from sources: {[doc.metadata['source'] for doc in retrieved_docs]}")
     print(f"Topics: {[doc.metadata['topic'] for doc in retrieved_docs]}")
     print(f"Authors: {[doc.metadata['author'] for doc in retrieved_docs]}")
@@ -238,7 +274,7 @@ def rag_with_reranking_comparison():
     """Demonstrate the effect of reranking by comparing with and without"""
     print("\n=== RAG: With vs Without Reranking ===")
 
-    raw_documents = create_sample_documents()
+    raw_documents = load_or_create_sample_documents()
     documents = split_documents(raw_documents)
     embeddings = get_embeddings()
     vector_store = build_vector_store(documents, embeddings)
@@ -258,13 +294,13 @@ def rag_with_reranking_comparison():
     # With reranking
     reranked_retriever = create_reranking_retriever(vector_store, base_k=10, final_k=3)
 
-    question = "What indexing techniques does FAISS use?"
+    question = "What indexing techniques is FAISS using?"
     
     print(f"Q: {question}\n")
     
     # Basic retrieval
     basic_docs = basic_retriever.invoke(question)
-    print("Without reranking (top-3 by vector similarity):")
+    print("Without reranking: (top-3 by vector similarity)")
     for i, doc in enumerate(basic_docs):
         print(f"  {i+1}. [{doc.metadata['source']}] {doc.page_content[:150]}...")
     
@@ -280,7 +316,7 @@ def rag_with_reranking_comparison():
     
     reranked_context = format_docs(reranked_docs)
     reranked_result = (prompt | model | StrOutputParser()).invoke({"context": reranked_context, "question": question})
-    print(f"\nAnswer: {reranked_result}")
+    print(f"\nAnswer (reranking): {reranked_result}")
     
     return {"basic": basic_result, "reranked": reranked_result}
 
@@ -289,7 +325,7 @@ def rag_with_sources_and_metadata():
     """RAG that returns sources alongside answer with full metadata"""
     print("\n=== RAG with Sources and Full Metadata ===")
 
-    raw_documents = create_sample_documents()
+    raw_documents = load_or_create_sample_documents()
     documents = split_documents(raw_documents)
     embeddings = get_embeddings()
     vector_store = build_vector_store(documents, embeddings)
@@ -298,7 +334,7 @@ def rag_with_sources_and_metadata():
     model = get_model()
     prompt = ChatPromptTemplate.from_messages([
         ("system", "Answer the question using the provided context. "
-                   "Cite sources using [source_name] format. Include topic and author if relevant."),
+                   "If relevant, refer to source, topic, and author in [source: name, topic: name, author: name]."),
         ("user", "Context:\n{context}\n\nQuestion: {question}"),
     ])
 
@@ -308,6 +344,19 @@ def rag_with_sources_and_metadata():
             for doc in docs
         )
 
+    def _print_retrieved_docs(docs):
+        for i, doc in enumerate(docs, 1):
+            print(f"  {i}. source={doc.metadata['source']}, topic={doc.metadata['topic']}, author={doc.metadata['author']}")
+            # show a small snippet
+            snippet = doc.page_content[:100].replace("\n", " ")
+            print(f"     {snippet}...")
+
+    # Lightweight check: show what metadata will be use
+    retrieved_docs = retriever.invoke("What are the main LangChain modules?")
+    print("Retrieved documents (before generation):")
+    _print_retrieval_docs(retrieved_docs)
+    print()
+
     chain = (
         {"context": retriever | format_docs_with_full_metadata, "question": RunnablePassthrough()}
         | prompt
@@ -315,8 +364,8 @@ def rag_with_sources_and_metadata():
         | StrOutputParser()
     )
 
-    result = chain.invoke("What are the key components of LangChain and how does LangGraph extend it?")
-    print(f"Result with full metadata sources: {result}")
+    result = chain.invoke("What are the main LangChain modules and how does LangGraph extend it?")
+    print(f"Final answer: {result}")
     return result
 
 
