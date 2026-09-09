@@ -20,7 +20,30 @@ load_dotenv()
 
 
 def get_model():
+    """Initialize chat model based on LANGCHAIN_MODEL env var.
+    Throws a helpful error if the API key for the specified provider is missing.
+    """
     model_name = os.getenv("LANGCHAIN_MODEL", "openai/gpt-4o-mini")
+    # Known provider prefixes and their required API key environment variables
+    provider_key_map = {
+        "openai": "OPENAI_API_KEY",
+        "anthropic": "ANTHROPIC_API_KEY",
+        "google": "GOOGLE_API_KEY",
+        "cohere": "COHERE_API_KEY",
+        "mistral": "MISTRAL_API_KEY",
+        "azure": "AZURE_OPENAI_API_KEY",
+        "together": "TOGETHER_API_KEY",
+        "fireworks": "FIREWORKS_API_KEY",
+        "groq": "GROQ_API_KEY",
+    }
+    provider = model_name.split("/")[0].lower()
+    if provider in provider_key_map:
+        key_var = provider_key_map[provider]
+        if not os.getenv(key_var):
+            raise EnvironmentError(
+                f"Missing API key for provider '{provider}'. "
+                f"Set the {key_var} environment variable (e.g., in your .env file)."
+            )
     return init_chat_model(model_name)
 
 
@@ -30,14 +53,32 @@ def get_model():
 
 @tool
 def get_current_time() -> str:
-    """Get the current date and time."""
+    """Get the current date and time.
+
+    Returns:
+        Current timestamp in the format 'YYYY-MM-DD HH:MM:SS'.
+    """
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
 
-@tool
+class CalculateInput(BaseModel):
+    """Input for the safe calculator tool."""
+    expression: str = Field(description="The mathematical expression to evaluate, e.g., '15 * 23'.")
+
+
+@tool(args_schema=CalculateInput)
 def calculate(expression: str) -> float:
-    """Evaluate a mathematical expression safely."""
-    # Safe evaluation - only allow basic math
+    """Evaluate a mathematical expression safely.
+
+    Supports basic arithmetic operators (+, -, *, /, parentheses) and numbers.
+    Does not allow access to Python built‑ins or modules.
+
+    Args:
+        expression: A string containing a valid mathematical expression.
+
+    Returns:
+        The result as a float, or a string error message if evaluation fails.
+    """
     allowed_names = {"__builtins__": {}}
     try:
         result = eval(expression, allowed_names)
@@ -46,9 +87,23 @@ def calculate(expression: str) -> float:
         return f"Error: {e}"
 
 
-@tool
+class SearchInput(BaseModel):
+    """Input for the knowledge base search tool."""
+    query: str = Field(description="The search query to look up in the knowledge base.")
+
+
+@tool(args_schema=SearchInput)
 def search_knowledge_base(query: str) -> str:
-    """Search a mock knowledge base for information."""
+    """Search a mock knowledge base for information.
+
+    Contains a static collection of entries about topics like LangChain, LangGraph, RAG, and more.
+
+    Args:
+        query: The user's search query.
+
+    Returns:
+        A short answer if the query matches an entry, otherwise a fallback message.
+    """
     knowledge = {
         "langchain": "LangChain is a framework for building LLM applications.",
         "langgraph": "LangGraph enables stateful multi-agent workflows.",
@@ -63,15 +118,23 @@ def search_knowledge_base(query: str) -> str:
 
 
 class WeatherInput(BaseModel):
-    """Input for weather tool."""
+    """Input for the weather tool."""
     location: str = Field(description="City and state, e.g., 'San Francisco, CA'")
     unit: str = Field(default="celsius", description="Temperature unit: celsius or fahrenheit")
 
 
 @tool(args_schema=WeatherInput)
 def get_weather(location: str, unit: str = "celsius") -> str:
-    """Get mock weather for a location."""
-    # Mock data
+    """Get mock weather data for a location.
+
+    Args:
+        location: City name (and optionally state), e.g., 'San Francisco, CA'.
+        unit: Either 'celsius' (default) or 'fahrenheit'.
+
+    Returns:
+        A string describing the current weather for the location.
+    """
+    # Mock data - in a real app this would call a live weather API
     mock_weather = {
         "san francisco": {"temp_c": 18, "condition": "foggy"},
         "new york": {"temp_c": 22, "condition": "sunny"},
@@ -133,7 +196,15 @@ class MultiToolResult(BaseModel):
 
 @tool
 def get_structured_weather(location: str, unit: str = "celsius") -> WeatherReport:
-    """Get structured weather report for a location."""
+    """Get a structured weather report for a location.
+
+    Args:
+        location: City name (e.g., 'San Francisco, CA').
+        unit: 'celsius' (default) or 'fahrenheit'.
+
+    Returns:
+        A WeatherReport object with structured weather data.
+    """
     mock_weather = {
         "san francisco": {"temp_c": 18, "condition": "foggy", "humidity": 85},
         "new york": {"temp_c": 22, "condition": "sunny", "humidity": 60},
@@ -165,11 +236,17 @@ def get_structured_weather(location: str, unit: str = "celsius") -> WeatherRepor
 
 @tool
 def structured_calculate(expression: str) -> CalculationResult:
-    """Evaluate expression and return structured result with steps."""
+    """Evaluate an expression and return a structured result with execution steps.
+
+    Args:
+        expression: A string containing a valid mathematical expression.
+
+    Returns:
+        A CalculationResult object containing the expression, result, and steps.
+    """
     allowed_names = {"__builtins__": {}}
     steps = []
     try:
-        # Simple step tracking for demo
         steps.append(f"Parsing expression: {expression}")
         result = eval(expression, allowed_names)
         steps.append(f"Evaluated to: {result}")
@@ -188,7 +265,14 @@ def structured_calculate(expression: str) -> CalculationResult:
 
 @tool
 def structured_search(query: str) -> SearchResult:
-    """Search knowledge base and return structured result."""
+    """Search the knowledge base and return a structured result.
+
+    Args:
+        query: The user's search query.
+
+    Returns:
+        A SearchResult object with the answer, source, and confidence.
+    """
     knowledge = {
         "langchain": ("LangChain is a framework for building LLM applications.", "langchain_docs"),
         "langgraph": ("LangGraph enables stateful multi-agent workflows.", "langgraph_docs"),
@@ -246,7 +330,17 @@ def tool_calling_agent():
 
 
 def react_agent_langgraph():
-    """Using LangGraph's create_react_agent (ReAct pattern)"""
+    """
+    Using LangGraph's create_react_agent (ReAct pattern).
+
+    The ReAct loop works as follows:
+      1. The model receives a user message and decides whether to call a tool.
+      2. If yes, it emits a Tool Call (the Action).
+      3. The tool runs and its result is returned as an Observation.
+      4. The model reads the observation and either makes another Tool Call
+         or produces a final Answer.
+      5. The process repeats until no tool calls are made.
+    """
     print("\n=== ReAct Agent (LangGraph) ===")
 
     model = get_model()
