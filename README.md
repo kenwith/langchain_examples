@@ -120,6 +120,7 @@ Never commit real API keys. The `.env` file is listed in `.gitignore`.
 | Streaming | `examples/05_streaming.py` | Streaming responses |
 | Evaluation | `examples/06_evaluation.py` | Testing and evaluation patterns |
 | Memory | `examples/07_memory.py` | Conversation history management |
+| Batch Inference | `examples/08_batch_inference.py` | Process multiple inputs efficiently with batch API calls |
 
 ## Usage Examples
 
@@ -198,6 +199,16 @@ python examples/07_memory.py
 ```
 
 The script maintains a chat history and uses it to provide context in a multi-turn conversation.
+
+### 08_batch_inference.py
+
+Demonstrates batch inference for processing multiple inputs efficiently.
+
+```bash
+python examples/08_batch_inference.py
+```
+
+This script shows how to send multiple prompts in a single API call using batch endpoints, reducing latency and cost.
 
 ## Running Examples
 
