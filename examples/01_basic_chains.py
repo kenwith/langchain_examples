@@ -3,12 +3,30 @@ Basic LangChain Chains Example
 ==============================
 
 This module demonstrates how to build and run simple language model chains
-using LangChain's expression language (LCEL). It covers:
+using LangChain's expression language (LCEL). It is designed to be both a
+standalone script and a reusable module for learning and experimentation.
+
+Features demonstrated
+---------------------
 
 - Creating reusable prompt templates with `build_prompt_template`.
 - Initializing a chat model from environment variables or a provided name.
 - Running chains that return plain text, structured JSON, and fallback models.
 - Composing sequential chains with intermediate value passing.
+- Graceful handling of missing or invalid API keys via `run_prompt`.
+
+Module Functions
+----------------
+- `get_model` — Initialize a chat model from environment variables or a name.
+- `build_prompt_template` — Construct a reusable `ChatPromptTemplate`.
+- `run_chain` — Build and invoke a prompt → model → parser pipeline.
+- `run_prompt` — Run a prompt with error handling and pretty-printed output.
+- `format_output` — Format strings, dicts, and lists for console display.
+- `basic_string_chain` — Simple free-text generation example.
+- `structured_output_chain` — Pydantic-validated JSON output example.
+- `chain_with_fallback` — Model fallback resilience example.
+- `sequential_chains` — Multi‑step chain composition example.
+- `main` — Entry point for the all the examples.
 
 Usage Notes
 -----------
@@ -22,18 +40,17 @@ Alternatively, you can set the `LANGCHAIN_MODEL` environment variable to
 use a different model provider (e.g., Anthropic, Google, etc.) and set the
 corresponding API key.
 
-Run the script directly to see all examples in action:
+Run the script directly to execute all examples:
 
     python examples/01_basic_chains.py
 
-The script demonstrates:
-- A simple string output chain.
-- A structured JSON output chain using Pydantic.
-- A chain with a fallback model for resilience.
-- A sequential chain that passes intermediate results.
+You can also import the module and call `main()` programmatically:
 
-The module also includes a `format_output` helper function that parses and
-formats model outputs for clear console display.
+    from examples.01_basic_chains import main
+    main()
+
+Each example function can also be called individually, allowing you to
+integrate specific chain patterns into your own code.
 """
 
 import os
@@ -292,8 +309,7 @@ def sequential_chains() -> Dict[str, str]:
         input_variables=["outline"],
     )
 
-    # Combined chain using RunnableLambda for intermediate value passing,
-    # with run_chain used inside each lambda to keep the logic concise.
+    # Combined chain using RunnableLambda for intermediate value passing.
     full_chain: Runnable[Dict[str, Any], Dict[str, str]] = (
         RunnableLambda(
             lambda x: {
@@ -323,7 +339,14 @@ def sequential_chains() -> Dict[str, str]:
     return result
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Run all the example chains.
+
+    This is the main entry point for the script. It runs the `run_prompt`
+    demo first (to show graceful error handling), followed by the four
+    chain configuration examples. After completion it prints a summary
+    message.
+    """
     # Demonstrate run_prompt with graceful error handling
     print("=== Using run_prompt helper ===")
     prompt = build_prompt_template(
@@ -333,9 +356,14 @@ if __name__ == "__main__":
     )
     run_prompt(prompt, {"country": "France"})
 
-    # Run the other examples as before
+    # Run the other examples
     basic_string_chain()
     structured_output_chain()
     chain_with_fallback()
     sequential_chains()
+
     print("All basic chain examples completed!")
+
+
+if __name__ == "__main__":
+    main()
