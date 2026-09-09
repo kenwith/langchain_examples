@@ -10,14 +10,30 @@ using LangChain's expression language (LCEL). It covers:
 - Running chains that return plain text, structured JSON, and fallback models.
 - Composing sequential chains with intermediate value passing.
 
-The module is provider-agnostic: it uses `init_chat_model` to load a model
-based on the `LANGCHAIN_MODEL` environment variable (default: "openai/gpt-4o-mini").
-Make sure your API keys are set in the environment (e.g., `OPENAI_API_KEY`).
+Usage Notes
+-----------
+Before running this script, ensure you have set the appropriate API keys
+in your environment. The default model is `openai/gpt-4o-mini`, which
+requires an OpenAI API key. You can set it as:
 
-Example usage:
+    export OPENAI_API_KEY="your-api-key"
+
+Alternatively, you can set the `LANGCHAIN_MODEL` environment variable to
+use a different model provider (e.g., Anthropic, Google, etc.) and set the
+corresponding API key.
+
+Run the script directly to see all examples in action:
+
     python examples/01_basic_chains.py
 
-This will execute all the chain examples and print their outputs.
+The script demonstrates:
+- A simple string output chain.
+- A structured JSON output chain using Pydantic.
+- A chain with a fallback model for resilience.
+- A sequential chain that passes intermediate results.
+
+The module also includes a `format_output` helper function that parses and
+formats model outputs for clear console display.
 """
 
 import os
@@ -113,6 +129,34 @@ def run_chain(
     return chain.invoke(inputs)
 
 
+def format_output(output: Any, title: str = "Result") -> str:
+    """Format the model output for clear display.
+
+    This helper parses the raw output from a chain and returns a formatted
+    string suitable for console printing. It handles strings, dictionaries,
+    and lists gracefully.
+
+    Args:
+        output: The raw output from the chain (string, dict, or list).
+        title: A title for the output section.
+
+    Returns:
+        A formatted string representation of the output.
+    """
+    if isinstance(output, dict):
+        lines = [f"{title}:"]
+        for key, value in output.items():
+            lines.append(f"  {key}: {value}")
+        return "\n".join(lines)
+    elif isinstance(output, list):
+        lines = [f"{title}:"]
+        for item in output:
+            lines.append(f"  - {item}")
+        return "\n".join(lines)
+    else:
+        return f"{title}: {output}"
+
+
 def run_prompt(
     prompt: ChatPromptTemplate,
     inputs: Dict[str, Any],
@@ -134,10 +178,9 @@ def run_prompt(
     """
     try:
         result = run_chain(prompt, inputs, model_name)
-        print(f"Result: {result}")
+        print(format_output(result, "Result"))
         return result
     except Exception as e:
-        # Check if it's likely a missing API key error
         error_str = str(e).lower()
         if "api_key" in error_str or "api key" in error_str or "auth" in error_str:
             print("Error: Missing or invalid API key. Please set the appropriate environment variable (e.g., OPENAI_API_KEY).")
@@ -164,7 +207,7 @@ def basic_string_chain() -> str:
         prompt,
         {"topic": "quantum computing", "audience": "10-year-old"},
     )
-    print(f"Result: {result}\n")
+    print(format_output(result, "Result") + "\n")
     return result
 
 
@@ -197,7 +240,7 @@ def structured_output_chain() -> Dict[str, Any]:
         {"topic": "neural networks", "audience": "college student"},
         parser=parser,
     )
-    print(f"Result: {result}\n")
+    print(format_output(result, "Result") + "\n")
     return result
 
 
@@ -221,7 +264,7 @@ def chain_with_fallback() -> str:
 
     chain: Runnable[Dict[str, Any], str] = prompt | model | StrOutputParser()
     result = chain.invoke({"question": "What is the capital of France?"})
-    print(f"Result: {result}\n")
+    print(format_output(result, "Result") + "\n")
     return result
 
 
@@ -274,9 +317,9 @@ def sequential_chains() -> Dict[str, str]:
     )
 
     result = full_chain.invoke({"domain": "artificial intelligence"})
-    print(f"Topic: {result['topic']}")
-    print(f"Outline: {result['outline']}")
-    print(f"Intro: {result['intro']}\n")
+    print(format_output(result["topic"], "Topic"))
+    print(format_output(result["outline"], "Outline"))
+    print(format_output(result["intro"], "Intro") + "\n")
     return result
 
 
