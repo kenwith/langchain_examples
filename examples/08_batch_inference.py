@@ -4,7 +4,11 @@ Batch Inference Example
 Demonstrates batch processing with semaphore-limited concurrency,
 progress tracking, and error handling using LangChain's init_chat_model.
 
+This example processes multiple prompts concurrently with a shared model
+instance, showing how to reuse a single model across many async calls.
+
 Key features:
+- Shared model instance for concurrent inference
 - Semaphore-based concurrency control
 - Progress tracking with callbacks
 - Graceful error handling with retry logic
@@ -12,6 +16,7 @@ Key features:
 """
 
 import asyncio
+import os
 import time
 from dataclasses import dataclass
 from typing import Any, Callable, Awaitable
@@ -163,10 +168,9 @@ async def run_batch(
 # Example Processors
 # ============================================================
 
-async def llm_processor(prompt: str, model: str = "gpt-4o-mini") -> str:
-    """Process a prompt using an LLM."""
-    chat_model = init_chat_model(model, temperature=0)
-    response = await chat_model.ainvoke(prompt)
+async def llm_processor(prompt: str, model: Any) -> str:
+    """Process a prompt using a shared LLM model instance."""
+    response = await model.ainvoke(prompt)
     return response.content
 
 
@@ -243,7 +247,7 @@ def print_results_table(results: list[BatchResult]) -> None:
 # ============================================================
 
 async def main():
-    """Run batch inference demonstration."""
+    """Run batch inference demonstration with a shared model."""
     print("=" * 60)
     print("Batch Inference Demo")
     print("=" * 60)
@@ -270,17 +274,26 @@ async def main():
         timeout=15.0
     )
     
+    # Choose model from environment or use a sensible default
+    model_name = os.getenv("BATCH_MODEL", "gpt-4o-mini")
+    print(f"\nInitializing shared model: {model_name}")
+    shared_model = init_chat_model(model_name, temperature=0)
+    
+    # Define a processor that uses the shared model
+    async def process_with_shared_model(prompt: str) -> str:
+        return await llm_processor(prompt, shared_model)
+    
     print(f"\nProcessing {len(prompts)} items with max_concurrent={config.max_concurrent}")
     print("-" * 60)
     
     # Create progress tracker
     progress = create_progress_tracker(len(prompts), "Batch")
     
-    # Run batch with mock processor (no API key needed)
-    print("\nUsing mock processor (no API calls)...")
+    # Run batch with the shared model
+    print(f"\nUsing shared model ({model_name}) for concurrent inference...")
     results = await run_batch(
         items=prompts,
-        processor=mock_processor,
+        processor=process_with_shared_model,
         config=config,
         progress_callback=progress
     )
