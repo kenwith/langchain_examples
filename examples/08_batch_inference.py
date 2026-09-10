@@ -13,6 +13,17 @@ Key features:
 - Progress tracking with callbacks
 - Graceful error handling with retry logic
 - Result aggregation and reporting
+
+Best Practices for Batch Inference:
+- **Concurrency Control**: Always limit concurrent requests to avoid rate limits and resource exhaustion.
+- **Retries with Backoff**: Use exponential backoff to handle transient errors (e.g., 429, 5xx).
+- **Timeouts**: Set a reasonable timeout per request to prevent hanging tasks from blocking the batch.
+- **Progress Monitoring**: Provide callbacks or progress bars for long-running batches.
+- **Order Preservation**: Process results in input order even if tasks complete out of order.
+- **Partial Results Handling**: Do not fail the entire batch if individual items fail; collect errors for later analysis.
+- **Resource Reuse**: Use a shared model instance instead of recreating the model for every item.
+- **Batching vs Parallelism**: For very large batch sizes, consider chunking and using multiple batches to stay within safe concurrency.
+- **Monitoring & Logging**: Record metrics like duration, success rate, and error types for production use.
 """
 
 import asyncio
@@ -221,6 +232,41 @@ def analyze_results(results: list[BatchResult]) -> dict:
     }
 
 
+def process_batch_results(results: list[BatchResult]) -> dict:
+    """
+    Process batch results into a structured format containing outputs and errors.
+    
+    This function provides a convenient way to convert the list of `BatchResult`
+    objects into a dictionary with easily accessible data:
+    
+    - 'outputs': dictionary mapping original index -> output for successfully processed items.
+    - 'errors': dictionary mapping original index -> error message for failed items.
+    - 'summary': same statistics as returned by `analyze_results`.
+    
+    This makes it straightforward to feed results into a report, UI, or external system.
+    
+    Args:
+        results: List of `BatchResult` objects, typically from `run_batch`.
+    
+    Returns:
+        Dictionary with 'outputs', 'errors', and 'summary' keys.
+    """
+    outputs = {}
+    errors = {}
+    
+    for r in results:
+        if r.error is None:
+            outputs[r.index] = r.output
+        else:
+            errors[r.index] = str(r.error)
+    
+    return {
+        "outputs": outputs,
+        "errors": errors,
+        "summary": analyze_results(results),
+    }
+
+
 def print_results_table(results: list[BatchResult]) -> None:
     """Print results in a readable table format."""
     print("\n" + "=" * 80)
@@ -310,6 +356,18 @@ async def main():
     print(f"  Avg Duration: {summary['avg_duration']:.3f}s")
     print(f"  Total Time:   {summary['total_duration']:.3f}s")
     
+    # Demonstrate the new process_batch_results function
+    print("\n" + "=" * 60)
+    print("Processed Results (Using process_batch_results)")
+    print("=" * 60)
+    processed = process_batch_results(results)
+    print(f"Outputs: {len(processed['outputs'])} items")
+    print(f"Errors: {len(processed['errors'])} items")
+    # Show first output (if any)
+    if processed['outputs']:
+        first_idx = next(iter(processed['outputs']))
+        print(f"First output (index {first_idx}): {str(processed['outputs'][first_idx])[:100]}...")
+    
     # Demonstrate error handling with a failing processor
     print("\n" + "=" * 60)
     print("Error Handling Demo")
@@ -340,6 +398,12 @@ async def main():
     print(f"\nErrors caught: {error_summary['failed']}")
     for err in error_summary['errors']:
         print(f"  Index {err['index']}: {err['error']}")
+    
+    # Demonstrate process_batch_results on failing results
+    processed_errors = process_batch_results(error_results)
+    print("\nProcessed error outputs:")
+    print(f"  Successful outputs: {processed_errors['outputs']}")
+    print(f"  Errors: {processed_errors['errors']}")
 
 
 if __name__ == "__main__":
