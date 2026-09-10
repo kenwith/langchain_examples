@@ -5,6 +5,7 @@ Streaming options:
 - Pass a custom callback handler (e.g., `StreamingCallbackHandler`) to process tokens in real time.
 - Set `streaming=True` on the model constructor to enable streaming for `invoke()` as well.
 - Token usage is extracted from the final chunk's `usage_metadata` when available.
+- Use `stream_response()` for a simple incremental flush example.
 """
 
 from langchain_core.callbacks import BaseCallbackHandler
@@ -45,6 +46,35 @@ def print_token_usage(metadata):
     print(f"  Total tokens: {total_tokens}")
 
 
+def stream_response(model, messages):
+    """Stream response with incremental flush.
+
+    Note: Some providers (e.g., OpenAI) require `streaming=True` on the model
+    constructor for streaming to work. If that's the case, set it when creating
+    the model (e.g., `ChatOpenAI(streaming=True)`).
+    """
+    print("Streaming response (incremental flush):\n")
+    chunks = []
+    try:
+        for chunk in model.stream(messages):
+            content = getattr(chunk, "content", "")
+            if content:
+                print(content, end="", flush=True)
+            chunks.append(chunk)
+        print("\n")
+        usage = None
+        for chunk in reversed(chunks):
+            usage = getattr(chunk, "usage_metadata", None)
+            if usage:
+                break
+        print_token_usage(usage)
+    except NotImplementedError:
+        print("\nStreaming not supported; falling back to normal response.\n")
+        response = model.invoke(messages)
+        print(response.content)
+        print_token_usage(getattr(response, "usage_metadata", None))
+
+
 def stream_or_fallback(model, messages):
     """Stream from a model using a custom callback handler, falling back to a normal response if streaming is unsupported."""
     if not hasattr(model, "stream"):
@@ -81,7 +111,12 @@ def stream_or_fallback(model, messages):
 def main():
     model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     messages = [HumanMessage(content="What is the capital of France?")]
+
+    # Use the callback-handler streaming approach
     stream_or_fallback(model, messages)
+
+    # Uncomment to try the simple incremental flush approach instead:
+    # stream_response(model, messages)
 
 
 if __name__ == "__main__":
