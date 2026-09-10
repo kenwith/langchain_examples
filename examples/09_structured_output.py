@@ -5,6 +5,7 @@ This module demonstrates:
 - Using with_structured_output() for Pydantic model extraction
 - JSON schema validation for structured responses
 - Retry parsing with fallback strategies
+- PydanticOutputParser for schema-driven structured output
 - Provider-agnostic model initialization
 """
 
@@ -44,6 +45,11 @@ class ExtractionResult(BaseModel):
     company: Optional[Company] = None
     confidence: float = Field(description="Confidence score 0-1", ge=0.0, le=1.0)
     raw_text: str = Field(description="Original input text")
+
+
+class PeopleList(BaseModel):
+    """Wrapper for extracting multiple people."""
+    people: List[Person] = Field(description="List of people found in the text")
 
 
 # ============================================================
@@ -187,6 +193,33 @@ def demo_pydantic_parser_chain(model):
     print(f"Type: {type(result)}")
 
 
+def demo_pydantic_output_parser_list(model):
+    """Demonstrate PydanticOutputParser with a list of structured objects."""
+    print("\n" + "=" * 60)
+    print("DEMO: PydanticOutputParser (List Extraction)")
+    print("=" * 60)
+    
+    parser = PydanticOutputParser(pydantic_object=PeopleList)
+    prompt = ChatPromptTemplate.from_messages([
+        ("system", "Extract all people mentioned in the text.\n{format_instructions}"),
+        ("human", "{text}")
+    ]).partial(format_instructions=parser.get_format_instructions())
+    
+    chain = prompt | model | parser
+    
+    text = """
+    John Doe is 30 and knows Python. Jane Smith is 28 and knows R.
+    Bob Wilson is 45 and knows project management.
+    """
+    
+    result = chain.invoke({"text": text})
+    print(f"Input: {text.strip()}")
+    print(f"Output: {result}")
+    print(f"Number of people: {len(result.people)}")
+    for person in result.people:
+        print(f" - {person.name}, {person.age}, skills: {person.skills}")
+
+
 def demo_retry_parsing(model):
     """Demonstrate retry parsing with fallback."""
     print("\n" + "=" * 60)
@@ -277,6 +310,7 @@ if __name__ == "__main__":
         demo_json_mode_structured_output(model)
         demo_json_parser_chain(model)
         demo_pydantic_parser_chain(model)
+        demo_pydantic_output_parser_list(model)
         demo_retry_parsing(model)
         demo_complex_extraction(model)
         demo_schema_validation(model)
