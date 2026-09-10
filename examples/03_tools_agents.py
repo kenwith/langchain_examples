@@ -3,6 +3,16 @@ Tools & Agents Example
 
 Demonstrates: Function calling, ReAct agent, structured tool outputs
 Provider-agnostic using init_chat_model
+
+How to extend with your own tools:
+  1. Define a tool using `@tool` and a plain Python function.
+     Optionally, provide a Pydantic `args_schema` for richer input validation.
+  2. If the tool returns a structured object, define a Pydantic model and
+     annotate the return type.
+  3. Add the tool to the list passed to `create_tool_calling_agent`,
+     `create_react_agent`, or any other agent constructor.
+  4. The agent will automatically decide whether to call your tool based on
+     the description and the user's request.
 """
 import os
 import json
@@ -85,6 +95,63 @@ def calculate(expression: str) -> float:
         return float(result)
     except Exception as e:
         return f"Error: {e}"
+
+
+class ConvertUnitsInput(BaseModel):
+    """Input for the unit converter tool."""
+    value: float = Field(description="The numeric value to convert.")
+    from_unit: str = Field(
+        description="Unit to convert from. Supports 'm', 'km', 'mi', 'ft', 'kg', 'g', 'lb', 'oz'."
+    )
+    to_unit: str = Field(
+        description="Unit to convert to. Supports 'm', 'km', 'mi', 'ft', 'kg', 'g', 'lb', 'oz'."
+    )
+
+
+@tool(args_schema=ConvertUnitsInput)
+def convert_units(value: float, from_unit: str, to_unit: str) -> str:
+    """Convert a numeric value between common length or mass units.
+
+    Supported units:
+        Length: m, km, mi, ft
+        Mass:   kg, g, lb, oz
+
+    Args:
+        value: The number to convert.
+        from_unit: The unit of the input value.
+        to_unit: The desired output unit.
+
+    Returns:
+        A string describing the conversion result.
+    """
+    # Conversion to base units (m and kg)
+    to_base = {
+        "m": 1.0,
+        "km": 1000.0,
+        "mi": 1609.344,
+        "ft": 0.3048,
+        "kg": 1.0,
+        "g": 0.001,
+        "lb": 0.45359237,
+        "oz": 0.028349523125,
+    }
+    from_unit = from_unit.lower().strip()
+    to_unit = to_unit.lower().strip()
+
+    if from_unit not in to_base or to_unit not in to_base:
+        return f"Unsupported unit: '{from_unit}' or '{to_unit}'"
+
+    # Determine category (length vs mass) to avoid nonsensical conversions
+    length_units = {"m", "km", "mi", "ft"}
+    mass_units = {"kg", "g", "lb", "oz"}
+
+    if (from_unit in length_units and to_unit in length_units) or \
+       (from_unit in mass_units and to_unit in mass_units):
+        base_value = value * to_base[from_unit]   # convert to base unit (m or kg)
+        result = base_value / to_base[to_unit]    # convert from base to target unit
+        return f"{value} {from_unit} = {result:.4f} {to_unit}"
+    else:
+        return f"Cannot convert from '{from_unit}' to '{to_unit}' (different unit categories)."
 
 
 class SearchInput(BaseModel):
@@ -218,8 +285,7 @@ def get_structured_weather(location: str, unit: str = "celsius") -> WeatherRepor
             temp = temp * 9/5 + 32
         return WeatherReport(
             location=location,
-            temperature=round(temp, 1),
-            unit=unit,
+            temperature=temp,
             condition=data["condition"],
             humidity=data["humidity"],
             timestamp=datetime.now().isoformat()
@@ -242,7 +308,7 @@ def structured_calculate(expression: str) -> CalculationResult:
         expression: A string containing a valid mathematical expression.
 
     Returns:
-        A CalculationResult object containing the expression, result, and steps.
+        A CalculationResult object with the expression, result, and steps.
     """
     allowed_names = {"__builtins__": {}}
     steps = []
@@ -277,7 +343,7 @@ def structured_search(query: str) -> SearchResult:
         "langchain": ("LangChain is a framework for building LLM applications.", "langchain_docs"),
         "langgraph": ("LangGraph enables stateful multi-agent workflows.", "langgraph_docs"),
         "rag": ("RAG combines retrieval with generation for accurate answers.", "rag_paper"),
-        "vector store": ("Vector stores enable semantic search via embeddings.", "vector_db_docs"),
+        "vector store": ("Vector stores enable semantic search via databases.", "vector_db_docs"),
     }
     query_lower = query.lower()
     for key, (value, source) in knowledge.items():
@@ -302,10 +368,11 @@ def structured_search(query: str) -> SearchResult:
 
 def tool_calling_agent():
     """Using create_tool_calling_agent (LangChain native)"""
-    print("=== Tool Calling Agent ===")
+    print("\n=== Tool Calling Agent ===")
 
     model = get_model()
-    tools = [get_current_time, calculate, search_knowledge_base, get_weather]
+    # Extend this list with your custom tools (e.g., convert_units)
+    tools = [get_current_time, calculate, convert_units, search_knowledge_base, get_weather]
 
     prompt = ChatPromptTemplate.from_messages([
         ("system", "You are a helpful assistant with access to tools. Use them when needed."),
@@ -319,8 +386,10 @@ def tool_calling_agent():
     queries = [
         "What time is it?",
         "Calculate 15 * 23 + 45",
+        "Convert 10 km to miles",
         "What is LangGraph?",
         "What's the weather in San Francisco?",
+        "Convert 5 pounds to kilograms",
     ]
 
     for q in queries:
@@ -344,13 +413,15 @@ def react_agent_langgraph():
     print("\n=== ReAct Agent (LangGraph) ===")
 
     model = get_model()
-    tools = [get_current_time, calculate, search_knowledge_base, get_weather]
+    # Add your new custom tool here, e.g., convert_units
+    tools = [get_current_time, calculate, convert_units, search_knowledge_base, get_weather]
 
     agent = create_react_agent(model, tools)
 
     queries = [
         "What time is it?",
         "Calculate 100 / 4 * 5",
+        "Convert 250 pounds to kilograms",
         "Tell me about RAG",
         "Weather in London in fahrenheit",
     ]
@@ -470,13 +541,14 @@ def parallel_tool_calls():
     print("\n=== Parallel Tool Calls ===")
 
     model = get_model()
-    tools = [get_current_time, calculate, get_weather]
+    # Include convert_units to allow parallel usage
+    tools = [get_current_time, calculate, convert_units, get_weather]
 
     agent = create_react_agent(model, tools)
 
     # This should trigger parallel calls
     result = agent.invoke({
-        "messages": [("user", "What time is it, and calculate 25 * 4, and get weather for New York?")]
+        "messages": [("user", "What time is it, calculate 25 * 4, get weather for New York, and convert 8 miles to kilometers?")]
     })
 
     for msg in result["messages"]:
