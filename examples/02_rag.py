@@ -1,8 +1,18 @@
 """
 RAG (Retrieval-Augmented Generation) Example
 
-Demonstrates: Document loading, splitting, embedding, vector store, retrieval, reranking, generation
-Provider-agnostic using init_chat_model
+This example demonstrates a complete RAG pipeline:
+  1. Document loading: load an external file or use built-in sample documents.
+  2. Document splitting: split documents into smaller chunks for better retrieval.
+  3. Embedding: convert chunks into vector representations using local HuggingFace embeddings.
+  4. Vector store: index embeddings with FAISS for efficient similarity search.
+  5. Retrieval: fetch relevant chunks for a query (with optional metadata filtering).
+  6. Reranking: use a cross-encoder reranker to improve retrieval quality.
+  7. Generation: pass the retrieved context to a chat model to produce a grounded answer.
+
+The example is provider-agnostic: it uses init_chat_model, so the underlying model can be
+configured via the LANGCHAIN_MODEL environment variable (e.g. "openai/gpt-4o-mini").
+Document loading is wrapped in try-except to fail gracefully if an external file cannot be read.
 """
 import os
 from dotenv import load_dotenv
@@ -45,6 +55,9 @@ def load_or_create_sample_documents():
       2. A file named 'sample_documents.txt' in the current directory.
       3. The hardcoded `create_sample_documents()` fallback.
 
+    File reading is wrapped in try-except; if a candidate file exists but cannot be read
+    (e.g. permission error or encoding issue), a warning is printed and the next source is tried.
+
     Returns a list of Document objects, suitable for the RAG pipeline.
     """
     candidate_paths = [
@@ -55,8 +68,12 @@ def load_or_create_sample_documents():
     for path in candidate_paths:
         if path and os.path.exists(path):
             print(f"Loading documents from: {path}")
-            with open(path, "r", encoding="utf-8") as f:
-                content = f.read()
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except (OSError, UnicodeDecodeError) as e:
+                print(f"Error loading {path}: {e}. Trying next source...")
+                continue
             # For simplicity, treat the whole file as a single document.
             return [
                 Document(
