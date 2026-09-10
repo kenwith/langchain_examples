@@ -60,6 +60,25 @@ python examples/01_basic_chains.py
 
 If everything is configured correctly, you should see a generated response from your chosen model.
 
+## Project Structure
+
+```text
+langchain_examples/
+├── examples/          # Runnable example scripts
+│   ├── 01_basic_chains.py
+│   ├── 02_rag.py
+│   ├── 03_tools_agents.py
+│   ├── 04_langgraph_workflows.py
+│   ├── 05_streaming.py
+│   ├── 06_evaluation.py
+│   ├── 07_memory.py
+│   ├── 08_batch_inference.py
+│   └── 09_parallel_tool_calls.py
+├── .env.example       # Template for environment variables
+├── requirements.txt   # Python dependencies
+└── README.md          # This file
+```
+
 ## Model Configuration
 
 All examples use `init_chat_model` for provider-agnostic model selection. Configure via environment variable or `.env`:
@@ -121,6 +140,7 @@ Never commit real API keys. The `.env` file is listed in `.gitignore`.
 | Evaluation | `examples/06_evaluation.py` | Testing and evaluation patterns |
 | Memory | `examples/07_memory.py` | Conversation history management |
 | Batch Inference | `examples/08_batch_inference.py` | Process multiple inputs efficiently with batch API calls |
+| Tools/Agents | `examples/09_parallel_tool_calls.py` | Execute multiple tool calls in parallel with a single model response |
 
 ## Usage Examples
 
@@ -209,6 +229,16 @@ python examples/08_batch_inference.py
 ```
 
 This script shows how to send multiple prompts in a single API call using batch endpoints, reducing latency and cost.
+
+### 09_parallel_tool_calls.py
+
+Demonstrates parallel tool calling, where the model requests multiple tool invocations in a single response.
+
+```bash
+python examples/09_parallel_tool_calls.py
+```
+
+This example shows how to handle multiple tool calls from one model response, execute them concurrently, and feed the results back to the model.
 
 ## Running Examples
 
