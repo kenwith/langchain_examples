@@ -9,6 +9,7 @@ multiple tool calls in parallel.
 """
 
 import os
+import warnings
 
 from langchain.chat_models import init_chat_model
 from langchain_core.tools import tool
@@ -44,8 +45,16 @@ def create_graph():
         temperature=0,
     )
 
+    # Detect whether the model supports parallel tool calls.
+    parallel_supported = getattr(model, "parallel_tool_calls", True)
+    if not parallel_supported:
+        warnings.warn(
+            "The selected model does not support parallel tool calls. "
+            "Falling back to sequential execution."
+        )
+
     tools = [add, multiply]
-    tool_node = ToolNode(tools)
+    tool_node = ToolNode(tools, parallel=parallel_supported)
     model_with_tools = model.bind_tools(tools)
 
     def call_model(state):
