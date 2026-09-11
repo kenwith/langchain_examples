@@ -73,7 +73,9 @@ langchain_examples/
 │   ├── 06_evaluation.py
 │   ├── 07_memory.py
 │   ├── 08_batch_inference.py
-│   └── 09_parallel_tool_calls.py
+│   ├── 09_parallel_tool_calls.py
+│   ├── 10_async.py
+│   └── 11_parallel_tool_calls.py
 ├── .env.example       # Template for environment variables
 ├── requirements.txt   # Python dependencies
 └── README.md          # This file
@@ -141,6 +143,8 @@ Never commit real API keys. The `.env` file is listed in `.gitignore`.
 | Memory | `examples/07_memory.py` | Conversation history management |
 | Batch Inference | `examples/08_batch_inference.py` | Process multiple inputs efficiently with batch API calls |
 | Tools/Agents | `examples/09_parallel_tool_calls.py` | Execute multiple tool calls in parallel with a single model response |
+| Async | `examples/10_async.py` | Async/await patterns for concurrent model calls |
+| Tools/Agents | `examples/11_parallel_tool_calls.py` | Parallel tool calls with async execution |
 
 ## Usage Examples
 
@@ -240,6 +244,26 @@ python examples/09_parallel_tool_calls.py
 
 This example shows how to handle multiple tool calls from one model response, execute them concurrently, and feed the results back to the model.
 
+### 10_async.py
+
+Demonstrates async/await patterns for concurrent model calls.
+
+```bash
+python examples/10_async.py
+```
+
+This example shows how to run multiple model calls concurrently using `asyncio` and LangChain's async methods.
+
+### 11_parallel_tool_calls.py
+
+Demonstrates parallel tool calls with async execution.
+
+```bash
+python examples/11_parallel_tool_calls.py
+```
+
+This example shows how to combine async/await with parallel tool calls for concurrent tool execution.
+
 ## Running Examples
 
 ```bash
@@ -265,18 +289,4 @@ LANGCHAIN_MODEL=anthropic/claude-3-5-sonnet python examples/01_basic_chains.py
 | `AuthenticationError` (Groq) | Verify `GROQ_API_KEY` in `.env`; key must start with `gsk_`; check [console.groq.com](https://console.groq.com) for valid key |
 | `init_chat_model` returns wrong model | Ensure `LANGCHAIN_MODEL` uses format `provider/model-name` (e.g., `anthropic/claude-3-5-sonnet`, `openai/gpt-4o`, `google/gemini-1.5-pro`, `groq/llama-3.1-70b-versatile`, `ollama/llama3.1`) |
 | Streaming not working | Confirm model supports streaming; some providers require `streaming=True` in model kwargs; Ollama requires `streaming=True` explicitly |
-| Ollama connection refused | Start Ollama server: `ollama serve` and pull model: `ollama pull llama3.1`; verify `http://localhost:11434` is accessible |
-| Ollama model not found | Pull the model first: `ollama pull <model-name>` (e.g., `ollama pull llama3.1`, `ollama pull mistral`) |
-| LangGraph state errors | Check state schema matches across nodes; use `StateGraph` type hints; ensure all nodes return dict with same keys |
-| `RateLimitError` / `429` | Implement exponential backoff; check provider quota limits; consider `max_retries` in model config |
-| `ContextWindowExceeded` / token limit | Reduce input length; use smaller model; implement summarization or sliding window for conversation history |
-| `ImportError: cannot import name 'init_chat_model'` | Upgrade LangChain: `pip install -U langchain`; `init_chat_model` requires langchain>=0.2.0 |
-
-## Security Notes
-
-- **Never commit `.env`** - it's in `.gitignore`
-- Use `.env.example` as a template (no real keys)
-- All examples use `init_chat_model` for provider-agnostic model selection
-- Set model via `LANGCHAIN_MODEL` env var or `.env`
-- Rotate any API key that is accidentally committed to version control
-- Avoid printing or logging full API keys in your own scripts
+| Ollama connection refused | Start Ollama server: `ollama serve` and pull model: `ollama
