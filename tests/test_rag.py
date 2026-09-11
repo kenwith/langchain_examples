@@ -110,6 +110,15 @@ def test_document_loading_with_custom_encoding() -> None:
         cleanup_temp_files(temp_paths)
 
 
+def test_text_loader_missing_file_raises_error() -> None:
+    """Test that TextLoader raises a helpful error for non-existent files."""
+    missing_path = os.path.join(tempfile.gettempdir(), "non_existent_file_123.txt")
+    with pytest.raises(FileNotFoundError) as exc_info:
+        TextLoader(missing_path).load()
+    assert "no such file" in str(excinfo.value).lower()
+    assert missing_path in str(excinfo.value)
+
+
 # =============================================================================
 # Text Splitting Tests
 # =============================================================================
@@ -189,6 +198,16 @@ def test_faiss_vector_store_creation() -> None:
 
     assert vectorstore is not None
     assert vectorstore.index.ntotal == len(SAMPLE_DOCS)
+
+
+def test_faiss_load_local_missing_directory_raises_error() -> None:
+    """Test that loading a vector store from a non-existent directory raises a helpful error."""
+    non_existent_path = os.path.join(tempfile.gettempdir(), "no_such_vector_store_dir")
+    embeddings = init_embeddings()
+    with pytest.raises((FileNotFoundError, ValueError)) as exc_info:
+        FAISS.load_local(non_existent_path, embeddings, allow_dangerous_deserialization=True)
+    assert "not found" in str(excinfo.value).lower() or "no such" in str(excinfo.value).lower()
+    assert non_existent_path in str(excinfo.value)
 
 
 def test_faiss_similarity_search() -> None:
