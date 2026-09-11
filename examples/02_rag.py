@@ -13,6 +13,7 @@ This example demonstrates a complete RAG pipeline:
 The example is provider-agnostic: it uses init_chat_model, so the underlying model can be
 configured via the LANGCHAIN_MODEL environment variable (e.g. "openai/gpt-4o-mini").
 Document loading is wrapped in try-except to fail gracefully if an external file cannot be read.
+If RAG_DOCUMENT_PATH points to a missing file, a clear error is raised with instructions.
 """
 import os
 from dotenv import load_dotenv
@@ -50,40 +51,63 @@ def load_or_create_sample_documents():
     """
     Locate an external sample document file, or fall back to built-in sample documents.
 
-    Tries the following, in order:
-      1. The path specified in the RAG_DOCUMENT_PATH environment variable.
-      2. A file named 'sample_documents.txt' in the current directory.
-      3. The hardcoded `create_sample_documents()` fallback.
+    Behavior:
+      1. If the RAG_DOCUMENT_PATH environment variable is set, that file MUST exist.
+         If it is missing, a FileNotFoundError is raised with instructions.
+      2. If RAG_DOCUMENT_PATH is not set, look for a file named 'sample_documents.txt'
+         in the current directory. If found, load it.
+      3. If no external file is provided/found, print a message with instructions on
+         how to supply an external file, then fall back to built-in sample documents.
 
     File reading is wrapped in try-except; if a candidate file exists but cannot be read
     (e.g. permission error or encoding issue), a warning is printed and the next source is tried.
 
     Returns a list of Document objects, suitable for the RAG pipeline.
     """
-    candidate_paths = [
-        os.getenv("RAG_DOCUMENT_PATH", ""),
-        "sample_documents.txt",
-    ]
-
-    for path in candidate_paths:
-        if path and os.path.exists(path):
-            print(f"Loading documents from: {path}")
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except (OSError, UnicodeDecodeError) as e:
-                print(f"Error loading {path}: {e}. Trying next source...")
-                continue
-            # For simplicity, treat the whole file as a single document.
+    env_path = os.getenv("RAG_DOCUMENT_PATH", "").strip()
+    if env_path:
+        if not os.path.exists(env_path):
+            raise FileNotFoundError(
+                f"The file specified in RAG_DOCUMENT_PATH does not exist: {env_path}\n"
+                "Please check the path, download the file, or unset RAG_DOCUMENT_PATH "
+                "to use the built-in sample documents."
+            )
+        print(f"Loading documents from: {env_path}")
+        try:
+            with open(env_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"Error loading {env_path}: {e}. Trying next source...")
+        else:
             return [
                 Document(
                     page_content=content,
-                    metadata={"source": path, "topic": "external_file", "author": "unknown"},
+                    metadata={"source": env_path, "topic": "external_file", "author": "unknown"},
+                )
+            ]
+
+    default_path = "sample_documents.txt"
+    if os.path.exists(default_path):
+        print(f"Loading documents from: {default_path}")
+        try:
+            with open(default_path, "r", encoding="utf-8") as f:
+                content = f.read()
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"Error loading {default_path}: {e}. Trying next source...")
+        else:
+            return [
+                Document(
+                    page_content=content,
+                    metadata={"source": default_path, "topic": "external_file", "author": "unknown"},
                 )
             ]
 
     # No external file provided or found – use the built-in sample content.
-    print("No external document found; using built-in sample documents.")
+    print(
+        "No external document found. To use an external file, set the RAG_DOCUMENT_PATH "
+        "environment variable to the file path, or place a file named 'sample_documents.txt' "
+        "in the current directory. For now, using built-in sample documents."
+    )
     return create_sample_documents()
 
 
