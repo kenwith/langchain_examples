@@ -7,8 +7,24 @@ the model name and available environment variables (e.g. OPENAI_API_KEY,
 ANTHROPIC_API_KEY, GOOGLE_API_KEY). This makes it easy to switch providers
 without changing the chain construction code.
 
+Before running, set the LANGCHAIN_MODEL environment variable to the model
+you want to use. For example:
+
+    export LANGCHAIN_MODEL="gpt-4o-mini"
+
+You also need the API key for the provider of that model (e.g.
+OPENAI_API_KEY for OpenAI models).
+
 Run this example with:
     python examples/01_basic_chains.py
+
+Expected output:
+The script prints a short answer to the question "What is LangChain?".
+The exact wording depends on the model you choose, but it should be a
+concise explanation similar to:
+
+    LangChain is a framework for developing applications powered by
+    language models.
 """
 
 import os
@@ -26,8 +42,18 @@ def build_chain():
     provider, change the model name and ensure the corresponding
     environment variable is set (e.g. ANTHROPIC_API_KEY, GOOGLE_API_KEY).
     """
+    model_name = os.getenv("LANGCHAIN_MODEL")
+    if not model_name:
+        raise ValueError(
+            "The LANGCHAIN_MODEL environment variable is not set. "
+            "Please set it to a model name supported by LangChain, "
+            "e.g. 'gpt-4o-mini' for OpenAI, 'claude-3-5-sonnet' for "
+            "Anthropic, or 'gemini-1.5-pro' for Google. "
+            "You also need the corresponding API key in your environment."
+        )
+
     model = init_chat_model(
-        model=os.getenv("CHAT_MODEL", "gpt-4o-mini"),
+        model=model_name,
         temperature=0,
     )
 
