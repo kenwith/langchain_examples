@@ -7,10 +7,12 @@ This module demonstrates:
 - Retry parsing with fallback strategies
 - PydanticOutputParser for schema-driven structured output
 - Provider-agnostic model initialization
+- Pydantic field validators and clear validation error surfacing
 """
 
+import re
 from typing import Optional, List
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field, ValidationError, field_validator
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import JsonOutputParser, PydanticOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -28,6 +30,14 @@ class Person(BaseModel):
     age: int = Field(description="Age in years", ge=0, le=150)
     email: Optional[str] = Field(default=None, description="Email address if available")
     skills: List[str] = Field(default_factory=list, description="List of skills")
+
+    @field_validator("email")
+    @classmethod
+    def validate_email(cls, v):
+        """Validate email format if provided."""
+        if v is not None and not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", v):
+            raise ValueError("Invalid email format")
+        return v
 
 
 class Company(BaseModel):
@@ -122,6 +132,23 @@ def retry_with_fallback(primary_chain, fallback_chain, max_retries: int = 2):
             raise Exception(f"Both primary and fallback failed. Primary: {last_error}, Fallback: {fallback_error}")
     
     return RunnableLambda(_invoke_with_retry)
+
+
+def format_validation_error(e: ValidationError) -> str:
+    """Format a Pydantic ValidationError into a readable message."""
+    lines = ["Validation error(s):"]
+    for error in e.errors():
+        loc = ".".join(str(x) for x in error["loc"])
+        msg = error["msg"]
+        lines.append(f"  - {loc}: {msg}")
+    return "\n".join(lines)
+
+
+class MockMalformedModel:
+    """A mock model that returns invalid data to demonstrate validation error handling."""
+    def invoke(self, input, *args, **kwargs):
+        # Return a JSON string with invalid field values
+        return '{"name": "John Doe", "age": "thirty", "email": "not-an-email"}'
 
 
 # ============================================================
@@ -291,6 +318,26 @@ def demo_schema_validation(model):
     print(f"Partial input result: {result}")
 
 
+def demo_validation_error_handling(model):
+    """Demonstrate surfacing validation errors from malformed model output."""
+    print("\n" + "=" * 60)
+    print("DEMO: Validation Error Handling")
+    print("=" * 60)
+    
+    # Use a mock model that returns invalid data
+    mock_model = MockMalformedModel()
+    chain = create_json_parser_chain(mock_model, Person)
+    
+    try:
+        result = chain.invoke({"text": "Some text"})
+        print(f"Unexpected success: {result}")
+    except ValidationError as e:
+        print("Caught ValidationError from Pydantic model:")
+        print(format_validation_error(e))
+    except Exception as e:
+        print(f"Caught other exception: {type(e).__name__}: {e}")
+
+
 # ============================================================
 # Main Demo Block
 # ============================================================
@@ -314,6 +361,7 @@ if __name__ == "__main__":
         demo_retry_parsing(model)
         demo_complex_extraction(model)
         demo_schema_validation(model)
+        demo_validation_error_handling(model)
     except Exception as e:
         print(f"\nError during demo: {e}")
         print("Make sure you have the appropriate API keys set in environment variables.")
