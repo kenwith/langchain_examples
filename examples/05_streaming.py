@@ -53,7 +53,7 @@ def stream_response(model, messages):
     constructor for streaming to work. If that's the case, set it when creating
     the model (e.g., `ChatOpenAI(streaming=True)`).
     """
-    print("Streaming response (incremental flush):\n")
+    print("Streaming response (incremental flush):\n", flush=True)
     chunks = []
     try:
         for chunk in model.stream(messages):
@@ -61,7 +61,7 @@ def stream_response(model, messages):
             if content:
                 print(content, end="", flush=True)
             chunks.append(chunk)
-        print("\n")
+        print("\n", flush=True)
         usage = None
         for chunk in reversed(chunks):
             usage = getattr(chunk, "usage_metadata", None)
@@ -69,7 +69,7 @@ def stream_response(model, messages):
                 break
         print_token_usage(usage)
     except NotImplementedError:
-        print("\nStreaming not supported; falling back to normal response.\n")
+        print("\nThe selected provider does not support streaming; falling back to normal response.\n")
         response = model.invoke(messages)
         print(response.content)
         print_token_usage(getattr(response, "usage_metadata", None))
@@ -78,20 +78,20 @@ def stream_response(model, messages):
 def stream_or_fallback(model, messages):
     """Stream from a model using a custom callback handler, falling back to a normal response if streaming is unsupported."""
     if not hasattr(model, "stream"):
-        print("Provider does not support streaming; falling back to normal response.\n")
+        print("The selected provider does not support streaming; falling back to normal response.\n")
         response = model.invoke(messages)
         print(response.content)
         print_token_usage(getattr(response, "usage_metadata", None))
         return
 
     try:
-        print("Streaming response:\n")
+        print("Streaming response:\n", flush=True)
         handler = StreamingCallbackHandler()
         chunks = []
         for chunk in model.stream(messages, callbacks=[handler]):
             chunks.append(chunk)
 
-        print("\n")
+        print("\n", flush=True)
 
         usage = None
         for chunk in reversed(chunks):
@@ -102,7 +102,7 @@ def stream_or_fallback(model, messages):
         print_token_usage(usage)
 
     except NotImplementedError:
-        print("\nStreaming not supported; falling back to normal response.\n")
+        print("\nThe selected provider does not support streaming; falling back to normal response.\n")
         response = model.invoke(messages)
         print(response.content)
         print_token_usage(getattr(response, "usage_metadata", None))
