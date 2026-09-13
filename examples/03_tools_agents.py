@@ -1,7 +1,8 @@
-"""Example 03: Tools and agents with graceful API failure handling.
+"""Example 03: Tools and agents with graceful tool error handling.
 
-This example introduces a tool that simulates an API failure and shows how to
-catch exceptions inside the tool and return a graceful message to the agent.
+This example introduces a self-contained calculator tool that can fail on
+invalid input and shows how to catch exceptions inside the tool and return a
+graceful message to the agent. It works fully offline.
 """
 
 from __future__ import annotations
@@ -15,63 +16,66 @@ from langchain_openai import ChatOpenAI
 
 
 @dataclass
-class WeatherReport:
-    """A weather report returned by the weather tool."""
-    location: str
-    temperature: float
-    conditions: str
+class CalculationResult:
+    """A calculation result returned by the calculator tool."""
+    expression: str
+    result: Optional[float] = None
     error: Optional[str] = None
 
     def __str__(self) -> str:
         if self.error:
-            return f"Could not get weather for {self.location}: {self.error}"
-        return f"{self.location}: {self.temperature:.1f}°F, {self.conditions}"
+            return f"Could not evaluate '{self.expression}': {self.error}"
+        return f"{self.expression} = {self.result:g}"
 
 
 @tool
-def get_weather(location: str) -> WeatherReport:
-    """Get the current weather for a given location.
+def calculate(expression: str) -> CalculationResult:
+    """Evaluate a mathematical expression.
 
     Args:
-        location: The city or region to get weather for.
+        expression: A mathematical expression string, e.g., '2 + 2' or 'sqrt(16)'.
 
     Returns:
-        A WeatherReport with current conditions or an error message.
+        A CalculationResult with the evaluated result or an error message.
     """
-    # Simulate an external API that can fail.
-    # In real code this would be an HTTP request to a weather service.
-    unavailable_locations = {"nowhere", "atlantis", "middle-earth"}
+    import math
+
+    # Allow only safe builtins and useful math functions in the evaluation
+    # namespace. No network access or dangerous builtins are available.
+    allowed_globals = {
+        "__builtins__": {},
+        "math": math,
+        "sqrt": math.sqrt,
+        "sin": math.sin,
+        "cos": math.cos,
+        "tan": math.tan,
+        "log": math.log,
+        "log10": math.log10,
+        "exp": math.exp,
+        "pi": math.pi,
+        "e": math.e,
+    }
 
     try:
-        if location.strip().lower() in unavailable_locations:
-            raise ConnectionError(
-                f"Weather API is temporarily unreachable for '{location}'"
-            )
-
-        # Simulate a successful response.
-        return WeatherReport(
-            location=location,
-            temperature=72.5,
-            conditions="Sunny",
-        )
+        # Evaluate the expression. The restricted globals prevent access to
+        # dangerous functionality while still supporting arithmetic and math.
+        result = eval(expression, allowed_globals, {})
+        if isinstance(result, bool) or not isinstance(result, (int, float)):
+            raise ValueError("Expression did not produce a number")
+        return CalculationResult(expression=expression, result=float(result))
     except Exception as exc:
         # Catch the exception inside the tool and return a graceful message.
-        return WeatherReport(
-            location=location,
-            temperature=0.0,
-            conditions="unknown",
-            error=str(exc),
-        )
+        return CalculationResult(expression=expression, error=str(exc))
 
 
 def run_agent_without_executor() -> None:
-    """Run a simple agent loop using a chat model and the weather tool."""
+    """Run a simple agent loop using a chat model and the calculator tool."""
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    llm_with_tools = llm.bind_tools([get_weather])
+    llm_with_tools = llm.bind_tools([calculate])
 
     messages = [
         HumanMessage(
-            content="What is the weather in Nowhere? Also, what about Seattle?"
+            content="What is 1/0? Also, what is 123 * 456?"
         )
     ]
 
@@ -86,7 +90,7 @@ def run_agent_without_executor() -> None:
         for tool_call in response.tool_calls:
             print(f"\nCalling tool '{tool_call['name']}' with args {tool_call['args']}")
             try:
-                tool_result = get_weather.invoke(tool_call["args"])
+                tool_result = calculate.invoke(tool_call["args"])
                 print("Tool result:", tool_result)
             except Exception as exc:
                 # This should not happen because the tool catches its own exceptions,
@@ -115,13 +119,13 @@ def run_agent_with_executor() -> None:
 
     agent = create_tool_calling_agent(
         ChatOpenAI(model="gpt-4o-mini", temperature=0),
-        [get_weather],
+        [calculate],
         prompt,
     )
-    executor = AgentExecutor(agent=agent, tools=[get_weather], verbose=True)
+    executor = AgentExecutor(agent=agent, tools=[calculate], verbose=True)
 
     result = executor.invoke(
-        {"input": "What is the weather in Nowhere? Also, what about Seattle?"}
+        {"input": "What is 1/0? Also, what is 123 * 456?"}
     )
     print("Agent output:", result["output"])
 
