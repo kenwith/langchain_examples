@@ -1,10 +1,14 @@
 """
 LangChain evaluation example: criteria-based evaluation plus a custom evaluator
 that checks for keyword presence and length constraints.
+
+This module demonstrates two evaluation criteria:
+1. LLM-based relevance scoring via LangChain's criteria evaluator.
+2. Deterministic keyword and length checks via a custom StringEvaluator.
 """
 
 import os
-from typing import List
+from typing import List, Optional
 
 from langchain.evaluation import load_evaluator
 from langchain.evaluation.schema import StringEvaluator
@@ -13,10 +17,11 @@ from langchain_openai import ChatOpenAI
 
 class KeywordAndLengthEvaluator(StringEvaluator):
     """
-    Custom evaluator that checks:
-    - Whether required keywords appear (case‑insensitive) in the prediction.
-    - Whether the prediction meets a minimum character length.
-    Returns a binary score (1/0) and an explanation.
+    Custom evaluator that applies two criteria:
+    - Keyword coverage: all required keywords must appear (case-insensitive).
+    - Length sufficiency: prediction must exceed a minimum character count.
+
+    Returns a binary score (1 if both criteria pass, otherwise 0) and an explanation.
     """
 
     def __init__(self, keywords: List[str], min_length: int):
@@ -62,6 +67,63 @@ class KeywordAndLengthEvaluator(StringEvaluator):
         return score, explanation
 
 
+def evaluate_response(
+    prediction: str,
+    reference: str,
+    input_prompt: str,
+    llm: ChatOpenAI,
+    criteria: str = "relevance",
+    keywords: Optional[List[str]] = None,
+    min_length: Optional[int] = None,
+) -> dict:
+    """
+    Evaluate a response using two complementary criteria:
+
+    1. Built-in LLM-based criteria evaluation (e.g., relevance).
+    2. Custom keyword and length evaluation, if both keywords and min_length are provided.
+
+    Args:
+        prediction: The generated response to evaluate.
+        reference: An optional reference answer for comparison.
+        input_prompt: The original prompt used to generate the response.
+        llm: The LLM instance used by the criteria evaluator.
+        criteria: The name of the built-in criteria to use (default: "relevance").
+        keywords: List of required keywords for the custom evaluator.
+        min_length: Minimum character length for the custom evaluator.
+
+    Returns:
+        A dictionary with keys "criteria_result" and "custom_result".
+        "custom_result" is None if keywords or min_length is not provided.
+    """
+    results = {}
+
+    criteria_evaluator = load_evaluator(
+        "criteria",
+        criteria=criteria,
+        llm=llm,
+    )
+    results["criteria_result"] = criteria_evaluator.evaluate_strings(
+        prediction=prediction,
+        reference=reference,
+        input=input_prompt,
+    )
+
+    if keywords is not None and min_length is not None:
+        custom_evaluator = KeywordAndLengthEvaluator(
+            keywords=keywords,
+            min_length=min_length,
+        )
+        results["custom_result"] = custom_evaluator.evaluate_strings(
+            prediction=prediction,
+            reference=reference,
+            input=input_prompt,
+        )
+    else:
+        results["custom_result"] = None
+
+    return results
+
+
 def main():
     # Initialise the LLM (used by the criteria evaluator).
     # The API key is read from the environment only – never hard-code it here.
@@ -76,33 +138,24 @@ def main():
     reference = "A good answer mentions Python and programming."
     input_prompt = "What do you think about programming?"
 
-    # 1) Built‑in criteria evaluation (e.g., relevance)
-    criteria_evaluator = load_evaluator(
-        "criteria",
-        criteria="relevance",
-        llm=llm,
-    )
-    criteria_result = criteria_evaluator.evaluate_strings(
+    results = evaluate_response(
         prediction=prediction,
         reference=reference,
-        input=input_prompt,
-    )
-    print("=== Criteria (relevance) result ===")
-    for key, value in criteria_result.items():
-        print(f"{key}: {value}")
-
-    # 2) Custom evaluator: keyword presence + length constraint
-    custom_evaluator = KeywordAndLengthEvaluator(
+        input_prompt=input_prompt,
+        llm=llm,
+        criteria="relevance",
         keywords=["python", "programming"],
         min_length=50,
     )
-    custom_result = custom_evaluator.evaluate_strings(
-        prediction=prediction,
-        reference=reference,
-        input=input_prompt,
-    )
+
+    # 1) Built‑in criteria evaluation (e.g., relevance)
+    print("=== Criteria (relevance) result ===")
+    for key, value in results["criteria_result"].items():
+        print(f"{key}: {value}")
+
+    # 2) Custom evaluator: keyword presence + length constraint
     print("\n=== Custom (keyword + length) result ===")
-    for key, value in custom_result.items():
+    for key, value in results["custom_result"].items():
         print(f"{key}: {value}")
 
 
