@@ -1,409 +1,59 @@
-"""
-Batch Inference Example
-
-Demonstrates batch processing with semaphore-limited concurrency,
-progress tracking, and error handling using LangChain's init_chat_model.
-
-This example processes multiple prompts concurrently with a shared model
-instance, showing how to reuse a single model across many async calls.
-
-Key features:
-- Shared model instance for concurrent inference
-- Semaphore-based concurrency control
-- Progress tracking with callbacks
-- Graceful error handling with retry logic
-- Result aggregation and reporting
-
-Best Practices for Batch Inference:
-- **Concurrency Control**: Always limit concurrent requests to avoid rate limits and resource exhaustion.
-- **Retries with Backoff**: Use exponential backoff to handle transient errors (e.g., 429, 5xx).
-- **Timeouts**: Set a reasonable timeout per request to prevent hanging tasks from blocking the batch.
-- **Progress Monitoring**: Provide callbacks or progress bars for long-running batches.
-- **Order Preservation**: Process results in input order even if tasks complete out of order.
-- **Partial Results Handling**: Do not fail the entire batch if individual items fail; collect errors for later analysis.
-- **Resource Reuse**: Use a shared model instance instead of recreating the model for every item.
-- **Batching vs Parallelism**: For very large batch sizes, consider chunking and using multiple batches to stay within safe concurrency.
-- **Monitoring & Logging**: Record metrics like duration, success rate, and error types for production use.
-"""
-
 import asyncio
-import os
-import time
-from dataclasses import dataclass
-from typing import Any, Callable, Awaitable
+from typing import List, Any
 
-from langchain.chat_models import init_chat_model
-
-
-# ============================================================
-# Configuration
-# ============================================================
-
-@dataclass
-class BatchConfig:
-    """Configuration for batch processing."""
-    max_concurrent: int = 3
-    max_retries: int = 2
-    retry_delay: float = 1.0
-    timeout: float = 30.0
+from langchain.chains import LLMChain
+from langchain.llms import OpenAI
+from langchain.prompts import PromptTemplate
 
 
-@dataclass
-class BatchResult:
-    """Result of a single batch item processing."""
-    index: int
-    input_data: Any
-    output: Any = None
-    error: Exception | None = None
-    retries: int = 0
-    duration: float = 0.0
+def chunk_list(items: List[Any], chunk_size: int) -> List[List[Any]]:
+    """Split a list into equal-sized chunks."""
+    if chunk_size <= 0:
+        raise ValueError("chunk_size must be positive")
+    return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
-# ============================================================
-# Core Batch Processing
-# ============================================================
+async def run_batch(prompts: List[str], llm: Any = None, batch_size: int = 10) -> List[str]:
+    """Run prompts through an LLM in batches, guarding against empty input."""
+    if not prompts:
+        return []
 
-async def process_with_semaphore(
-    semaphore: asyncio.Semaphore,
-    func: Callable[..., Awaitable[Any]],
-    *args,
-    **kwargs
-) -> Any:
-    """Execute a coroutine with semaphore-based concurrency limit."""
-    async with semaphore:
-        return await func(*args, **kwargs)
+    if llm is None:
+        llm = OpenAI(temperature=0)
 
+    prompt_template = PromptTemplate(
+        input_variables=["prompt"],
+        template="Answer the following question:\n{prompt}",
+    )
+    chain = LLMChain(llm=llm, prompt=prompt_template)
 
-async def process_with_retry(
-    func: Callable[..., Awaitable[Any]],
-    *args,
-    config: BatchConfig,
-    **kwargs
-) -> Any:
-    """Execute a coroutine with retry logic."""
-    last_exception = None
-    
-    for attempt in range(config.max_retries + 1):
+    results: List[str] = []
+    for batch in chunk_list(prompts, batch_size):
         try:
-            return await asyncio.wait_for(
-                func(*args, **kwargs),
-                timeout=config.timeout
+            batch_results = await asyncio.gather(
+                *(chain.arun(prompt=p) for p in batch)
             )
         except Exception as e:
-            last_exception = e
-            if attempt < config.max_retries:
-                await asyncio.sleep(config.retry_delay * (attempt + 1))
-    
-    raise last_exception
+            print(f"Error processing batch: {e}")
+            raise
+        results.extend(batch_results)
 
-
-async def process_batch_item(
-    index: int,
-    input_data: Any,
-    processor: Callable[..., Awaitable[Any]],
-    semaphore: asyncio.Semaphore,
-    config: BatchConfig,
-    progress_callback: Callable[[int, int], None] | None = None
-) -> BatchResult:
-    """Process a single batch item with concurrency control and error handling."""
-    start_time = time.perf_counter()
-    
-    try:
-        result = await process_with_semaphore(
-            semaphore,
-            process_with_retry,
-            processor,
-            input_data,
-            config=config
-        )
-        return BatchResult(
-            index=index,
-            input_data=input_data,
-            output=result,
-            duration=time.perf_counter() - start_time
-        )
-    except Exception as e:
-        return BatchResult(
-            index=index,
-            input_data=input_data,
-            error=e,
-            duration=time.perf_counter() - start_time
-        )
-    finally:
-        if progress_callback:
-            progress_callback(index, 1)
-
-
-async def run_batch(
-    items: list[Any],
-    processor: Callable[..., Awaitable[Any]],
-    config: BatchConfig | None = None,
-    progress_callback: Callable[[int, int], None] | None = None
-) -> list[BatchResult]:
-    """
-    Run batch processing with controlled concurrency.
-    
-    Args:
-        items: List of input items to process
-        processor: Async function to process each item
-        config: BatchConfig for concurrency and retry settings
-        progress_callback: Optional callback(completed, total) for progress tracking
-    
-    Returns:
-        List of BatchResult objects in order of input items
-    """
-    config = config or BatchConfig()
-    semaphore = asyncio.Semaphore(config.max_concurrent)
-    completed = 0
-    total = len(items)
-    
-    def wrapped_progress(idx: int, count: int):
-        nonlocal completed
-        completed += count
-        if progress_callback:
-            progress_callback(completed, total)
-    
-    tasks = [
-        process_batch_item(i, item, processor, semaphore, config, wrapped_progress)
-        for i, item in enumerate(items)
-    ]
-    
-    results = await asyncio.gather(*tasks, return_exceptions=False)
-    
-    # Sort by original index to maintain order
-    results.sort(key=lambda r: r.index)
     return results
 
 
-# ============================================================
-# Example Processors
-# ============================================================
-
-async def llm_processor(prompt: str, model: Any) -> str:
-    """Process a prompt using a shared LLM model instance."""
-    response = await model.ainvoke(prompt)
-    return response.content
-
-
-async def mock_processor(item: dict) -> dict:
-    """Mock processor for testing without API calls."""
-    await asyncio.sleep(0.1)  # Simulate work
-    return {"processed": True, "input": item}
-
-
-# ============================================================
-# Progress Tracking Helpers
-# ============================================================
-
-def create_progress_tracker(total: int, prefix: str = "Progress") -> Callable[[int, int], None]:
-    """Create a simple progress tracking callback."""
-    def track(completed: int, total_items: int):
-        pct = (completed / total_items) * 100
-        bar_len = 30
-        filled = int(bar_len * completed / total_items)
-        bar = "█" * filled + "░" * (bar_len - filled)
-        print(f"\r{prefix}: [{bar}] {completed}/{total_items} ({pct:.1f}%)", end="", flush=True)
-        if completed == total_items:
-            print()
-    return track
-
-
-# ============================================================
-# Result Analysis
-# ============================================================
-
-def analyze_results(results: list[BatchResult]) -> dict:
-    """Analyze batch results and return summary statistics."""
-    successful = [r for r in results if r.error is None]
-    failed = [r for r in results if r.error is not None]
-    
-    durations = [r.duration for r in successful]
-    
-    return {
-        "total": len(results),
-        "successful": len(successful),
-        "failed": len(failed),
-        "success_rate": len(successful) / len(results) * 100 if results else 0,
-        "avg_duration": sum(durations) / len(durations) if durations else 0,
-        "min_duration": min(durations) if durations else 0,
-        "max_duration": max(durations) if durations else 0,
-        "total_duration": sum(r.duration for r in results),
-        "errors": [{"index": r.index, "error": str(r.error)} for r in failed]
-    }
-
-
-def process_batch_results(results: list[BatchResult]) -> dict:
-    """
-    Process batch results into a structured format containing outputs and errors.
-    
-    This function provides a convenient way to convert the list of `BatchResult`
-    objects into a dictionary with easily accessible data:
-    
-    - 'outputs': dictionary mapping original index -> output for successfully processed items.
-    - 'errors': dictionary mapping original index -> error message for failed items.
-    - 'summary': same statistics as returned by `analyze_results`.
-    
-    This makes it straightforward to feed results into a report, UI, or external system.
-    
-    Args:
-        results: List of `BatchResult` objects, typically from `run_batch`.
-    
-    Returns:
-        Dictionary with 'outputs', 'errors', and 'summary' keys.
-    """
-    outputs = {}
-    errors = {}
-    
-    for r in results:
-        if r.error is None:
-            outputs[r.index] = r.output
-        else:
-            errors[r.index] = str(r.error)
-    
-    return {
-        "outputs": outputs,
-        "errors": errors,
-        "summary": analyze_results(results),
-    }
-
-
-def print_results_table(results: list[BatchResult]) -> None:
-    """Print results in a readable table format."""
-    print("\n" + "=" * 80)
-    print(f"{'Index':<6} | {'Status':<10} | {'Duration':>8} | {'Details'}")
-    print("-" * 80)
-    
-    for r in results:
-        status = "SUCCESS" if r.error is None else "FAILED"
-        duration = f"{r.duration:.3f}s"
-        
-        if r.error:
-            details = f"Error: {type(r.error).__name__}: {r.error}"
-        else:
-            output_preview = str(r.output)[:50] + "..." if len(str(r.output)) > 50 else str(r.output)
-            details = f"Output: {output_preview}"
-        
-        print(f"{r.index:<6} | {status:<10} | {duration:>8} | {details}")
-    
-    print("=" * 80)
-
-
-# ============================================================
-# Demo
-# ============================================================
-
 async def main():
-    """Run batch inference demonstration with a shared model."""
-    print("=" * 60)
-    print("Batch Inference Demo")
-    print("=" * 60)
-    
-    # Sample prompts for processing
     prompts = [
         "What is the capital of France?",
-        "Explain quantum computing in one sentence.",
-        "Write a haiku about programming.",
-        "What is 2 + 2?",
-        "Name three programming languages.",
-        "What is the speed of light?",
-        "Define machine learning.",
-        "What is Python?",
-        "Explain recursion briefly.",
-        "What is an API?",
+        "Explain quantum computing in simple terms.",
+        "Write a haiku about Python.",
+        "What are the benefits of using LangChain?",
+        "Tell me a fun fact about space.",
     ]
-    
-    # Configuration
-    config = BatchConfig(
-        max_concurrent=3,
-        max_retries=1,
-        retry_delay=0.5,
-        timeout=15.0
-    )
-    
-    # Choose model from environment or use a sensible default
-    model_name = os.getenv("BATCH_MODEL", "gpt-4o-mini")
-    print(f"\nInitializing shared model: {model_name}")
-    shared_model = init_chat_model(model_name, temperature=0)
-    
-    # Define a processor that uses the shared model
-    async def process_with_shared_model(prompt: str) -> str:
-        return await llm_processor(prompt, shared_model)
-    
-    print(f"\nProcessing {len(prompts)} items with max_concurrent={config.max_concurrent}")
-    print("-" * 60)
-    
-    # Create progress tracker
-    progress = create_progress_tracker(len(prompts), "Batch")
-    
-    # Run batch with the shared model
-    print(f"\nUsing shared model ({model_name}) for concurrent inference...")
-    results = await run_batch(
-        items=prompts,
-        processor=process_with_shared_model,
-        config=config,
-        progress_callback=progress
-    )
-    
-    # Analyze and display results
-    summary = analyze_results(results)
-    print_results_table(results)
-    
-    print("\nSummary:")
-    print(f"  Total:        {summary['total']}")
-    print(f"  Successful:   {summary['successful']}")
-    print(f"  Failed:       {summary['failed']}")
-    print(f"  Success Rate: {summary['success_rate']:.1f}%")
-    print(f"  Avg Duration: {summary['avg_duration']:.3f}s")
-    print(f"  Total Time:   {summary['total_duration']:.3f}s")
-    
-    # Demonstrate the new process_batch_results function
-    print("\n" + "=" * 60)
-    print("Processed Results (Using process_batch_results)")
-    print("=" * 60)
-    processed = process_batch_results(results)
-    print(f"Outputs: {len(processed['outputs'])} items")
-    print(f"Errors: {len(processed['errors'])} items")
-    # Show first output (if any)
-    if processed['outputs']:
-        first_idx = next(iter(processed['outputs']))
-        print(f"First output (index {first_idx}): {str(processed['outputs'][first_idx])[:100]}...")
-    
-    # Demonstrate error handling with a failing processor
-    print("\n" + "=" * 60)
-    print("Error Handling Demo")
-    print("=" * 60)
-    
-    async def failing_processor(item: str) -> str:
-        if "error" in item.lower():
-            raise ValueError(f"Simulated error for: {item}")
-        await asyncio.sleep(0.05)
-        return f"Processed: {item}"
-    
-    test_items = ["item1", "item2", "trigger error", "item4", "another error"]
-    error_config = BatchConfig(max_concurrent=2, max_retries=2, retry_delay=0.1)
-    
-    print(f"\nProcessing {len(test_items)} items (some will fail)...")
-    error_progress = create_progress_tracker(len(test_items), "Errors")
-    
-    error_results = await run_batch(
-        items=test_items,
-        processor=failing_processor,
-        config=error_config,
-        progress_callback=error_progress
-    )
-    
-    print_results_table(error_results)
-    
-    error_summary = analyze_results(error_results)
-    print(f"\nErrors caught: {error_summary['failed']}")
-    for err in error_summary['errors']:
-        print(f"  Index {err['index']}: {err['error']}")
-    
-    # Demonstrate process_batch_results on failing results
-    processed_errors = process_batch_results(error_results)
-    print("\nProcessed error outputs:")
-    print(f"  Successful outputs: {processed_errors['outputs']}")
-    print(f"  Errors: {processed_errors['errors']}")
+
+    results = await run_batch(prompts, batch_size=2)
+
+    for prompt, result in zip(prompts, results):
+        print(f"Q: {prompt}\nA: {result}\n")
 
 
 if __name__ == "__main__":
