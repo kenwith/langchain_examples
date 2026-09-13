@@ -34,22 +34,28 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 
 
-def build_chain():
+def build_chain(model_name=None):
     """Build a basic prompt -> model -> output parser chain.
+
+    Args:
+        model_name: Optional model name. If not provided, the model is
+            loaded from the LANGCHAIN_MODEL environment variable.
 
     The model is initialized with `init_chat_model()`, which reads the
     appropriate API key from environment variables. To use a different
     provider, change the model name and ensure the corresponding
     environment variable is set (e.g. ANTHROPIC_API_KEY, GOOGLE_API_KEY).
     """
-    model_name = os.getenv("LANGCHAIN_MODEL")
+    if model_name is None:
+        model_name = os.getenv("LANGCHAIN_MODEL")
     if not model_name:
         raise ValueError(
-            "The LANGCHAIN_MODEL environment variable is not set. "
-            "Please set it to a model name supported by LangChain, "
-            "e.g. 'gpt-4o-mini' for OpenAI, 'claude-3-5-sonnet' for "
-            "Anthropic, or 'gemini-1.5-pro' for Google. "
-            "You also need the corresponding API key in your environment."
+            "No model name provided. Pass a model_name to build_chain() "
+            "or set the LANGCHAIN_MODEL environment variable. "
+            "Supported models include 'gpt-4o-mini' for OpenAI, "
+            "'claude-3-5-sonnet' for Anthropic, and 'gemini-1.5-pro' for "
+            "Google. You also need the corresponding API key in your "
+            "environment."
         )
 
     model = init_chat_model(
