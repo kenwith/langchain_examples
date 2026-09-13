@@ -18,16 +18,19 @@ maximum (``max_total_steps``), the workflow routes to the failure node instead
 of continuing. This prevents infinite loops and provides a clear error message.
 
 This file also provides a reusable ``run_workflow()`` helper that builds the
-graph, runs it with a given initial state, and returns the final state. This
-makes it easy to experiment with different queries and step limits.
+graph, compiles it, runs it with a given initial state, and returns the final
+state. This makes it easy to experiment with different queries and step limits.
 """
 
-from typing import TypedDict, Literal, Optional
+from dataclasses import dataclass
+from typing import Literal, Optional
+
 from langgraph.graph import StateGraph, END
 
 
-class AgentState(TypedDict):
-    """State dictionary for the agent.
+@dataclass
+class AgentState:
+    """State dataclass for the agent.
 
     Attributes:
         query: The user's original question.
@@ -75,14 +78,14 @@ def research_node(state: AgentState) -> AgentState:
     Returns:
         A new state with ``steps`` incremented and ``answer`` extended.
     """
-    return {
-        "query": state["query"],
-        "steps": state["steps"] + 1,
-        "max_steps": state["max_steps"],
-        "max_total_steps": state["max_total_steps"],
-        "answer": state["answer"] + f" Research step {state['steps'] + 1};",
-        "status": state["status"],
-    }
+    return AgentState(
+        query=state.query,
+        steps=state.steps + 1,
+        max_steps=state.max_steps,
+        max_total_steps=state.max_total_steps,
+        answer=state.answer + f" Research step {state.steps + 1};",
+        status=state.status,
+    )
 
 
 def answer_node(state: AgentState) -> AgentState:
@@ -98,14 +101,14 @@ def answer_node(state: AgentState) -> AgentState:
     Returns:
         A new state with the final answer appended and status set to "success".
     """
-    return {
-        "query": state["query"],
-        "steps": state["steps"],
-        "max_steps": state["max_steps"],
-        "max_total_steps": state["max_total_steps"],
-        "answer": state["answer"] + " Final answer.",
-        "status": "success",
-    }
+    return AgentState(
+        query=state.query,
+        steps=state.steps,
+        max_steps=state.max_steps,
+        max_total_steps=state.max_total_steps,
+        answer=state.answer + " Final answer.",
+        status="success",
+    )
 
 
 def failed_node(state: AgentState) -> AgentState:
@@ -120,14 +123,14 @@ def failed_node(state: AgentState) -> AgentState:
     Returns:
         A new state with a failure message and status set to "failed".
     """
-    return {
-        "query": state["query"],
-        "steps": state["steps"],
-        "max_steps": state["max_steps"],
-        "max_total_steps": state["max_total_steps"],
-        "answer": state["answer"] + " FAILED: Step limit exceeded.",
-        "status": "failed",
-    }
+    return AgentState(
+        query=state.query,
+        steps=state.steps,
+        max_steps=state.max_steps,
+        max_total_steps=state.max_total_steps,
+        answer=state.answer + " FAILED: Step limit exceeded.",
+        status="failed",
+    )
 
 
 def should_continue(state: AgentState) -> Literal["research", "answer", "failed"]:
@@ -148,41 +151,24 @@ def should_continue(state: AgentState) -> Literal["research", "answer", "failed"
         The name of the next node to execute: ``"research"``, ``"answer"``,
         or ``"failed"``.
     """
-    if state["steps"] >= state["max_total_steps"]:
+    if state.steps >= state.max_total_steps:
         return "failed"
-    elif state["steps"] >= state["max_steps"]:
+    elif state.steps >= state.max_steps:
         return "answer"
     else:
         return "research"
 
 
-def run_workflow(initial_state: Optional[AgentState] = None) -> AgentState:
-    """Build and run the LangGraph workflow.
+def build_agent_graph() -> StateGraph:
+    """Build the LangGraph state graph for the agent workflow.
 
-    This helper constructs the state graph, wires up the nodes and edges, and
-    invokes the graph with the provided initial state. If no initial state is
-    given, a default sample state is used.
-
-    Args:
-        initial_state: Optional dictionary containing the initial values for
-            ``query``, ``steps``, ``max_steps``, ``max_total_steps``, ``answer``,
-            and ``status``. If ``None``, a default query and step limits are used.
+    The graph contains a router node with conditional edges to research,
+    answer, and failed nodes. The research node loops back to the router,
+    while the answer and failed nodes terminate at the END node.
 
     Returns:
-        The final state dictionary after the graph has completed, including
-        the accumulated answer, the total number of steps taken, and the status.
+        A fully wired :class:`StateGraph` ready to be compiled.
     """
-    if initial_state is None:
-        initial_state = {
-            "query": "What is LangGraph?",
-            "steps": 0,
-            "max_steps": 3,
-            "max_total_steps": 5,  # Hard limit to prevent infinite loops
-            "answer": "",
-            "status": "in_progress",
-        }
-
-    # Build the state graph
     graph = StateGraph(AgentState)
 
     # Add nodes
@@ -210,13 +196,45 @@ def run_workflow(initial_state: Optional[AgentState] = None) -> AgentState:
     graph.add_edge("answer", END)
     graph.add_edge("failed", END)
 
-    # Compile the graph
+    return graph
+
+
+def run_workflow(initial_state: Optional[AgentState] = None) -> AgentState:
+    """Build, compile, and run the LangGraph workflow.
+
+    This helper constructs the state graph via :func:`build_agent_graph`,
+    compiles it into an executable application, and invokes it with the
+    provided initial state. If no initial state is given, a default sample
+    state is used.
+
+    Args:
+        initial_state: Optional :class:`AgentState` containing the initial values
+            for the workflow. If ``None``, a default query and step limits are used.
+
+    Returns:
+        The final :class:`AgentState` after the graph has completed, including
+        the accumulated answer, the total number of steps taken, and the status.
+    """
+    if initial_state is None:
+        initial_state = AgentState(
+            query="What is LangGraph?",
+            steps=0,
+            max_steps=3,
+            max_total_steps=5,  # Hard limit to prevent infinite loops
+            answer="",
+            status="in_progress",
+        )
+
+    # Build the state graph
+    graph = build_agent_graph()
+
+    # Compile the graph into an executable application
     app = graph.compile()
 
-    # Run the graph
-    result = app.invoke(initial_state)
+    # Run the graph with the initial state
+    final_state = app.invoke(initial_state)
 
-    return result
+    return final_state
 
 
 def main():
@@ -227,10 +245,10 @@ def main():
     """
     result = run_workflow()
 
-    print(f"Query: {result['query']}")
-    print(f"Steps: {result['steps']}")
-    print(f"Status: {result['status']}")
-    print(f"Answer: {result['answer']}")
+    print(f"Query: {result.query}")
+    print(f"Steps: {result.steps}")
+    print(f"Status: {result.status}")
+    print(f"Answer: {result.answer}")
 
 
 if __name__ == "__main__":
