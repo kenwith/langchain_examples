@@ -70,6 +70,13 @@ def create_retriever_tool() -> Tool:
 
     def search(query: str) -> str:
         docs = retriever.invoke(query)
+        if not docs:
+            return (
+                "No relevant documents were found in the knowledge base. "
+                "Politely explain that you don't have information about this "
+                "topic, and suggest trying a different question or consulting "
+                "the official documentation."
+            )
         return "\n\n".join(doc.page_content for doc in docs)
 
     return Tool.from_function(
