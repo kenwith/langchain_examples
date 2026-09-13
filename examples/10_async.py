@@ -48,13 +48,19 @@ async def ask_model(model, prompt: str) -> str:
         raise
 
 
-async def run_concurrent(prompts: list[str]) -> list[str]:
-    """Run multiple prompts concurrently and return all responses.
+async def main() -> None:
+    """Run multiple prompts concurrently and print their responses.
 
-    This creates one coroutine per prompt and awaits them together with
-    asyncio.gather. Because the model calls are I/O-bound, they run
-    concurrently rather than sequentially.
+    This is the async entry point. Each prompt becomes a coroutine, and
+    asyncio.gather runs them together. Because the model calls are I/O-bound,
+    they run concurrently rather than sequentially.
     """
+    prompts = [
+        "What is LangChain?",
+        "What is an async function?",
+        "What is the capital of France?",
+    ]
+
     model = get_model()
     tasks = [ask_model(model, prompt) for prompt in prompts]
 
@@ -62,23 +68,9 @@ async def run_concurrent(prompts: list[str]) -> list[str]:
     # have many prompts, consider wrapping ask_model in an asyncio.Semaphore
     # to limit concurrent API calls and avoid rate limits.
     try:
-        return await asyncio.gather(*tasks)
+        responses = await asyncio.gather(*tasks)
     except Exception as e:
         print(f"One or more concurrent model calls failed: {e}")
-        raise
-
-
-def main() -> None:
-    """Run the async example."""
-    prompts = [
-        "What is LangChain?",
-        "What is an async function?",
-        "What is the capital of France?",
-    ]
-    try:
-        responses = asyncio.run(run_concurrent(prompts))
-    except Exception as e:
-        print(f"Async example failed: {e}")
         return
 
     for prompt, response in zip(prompts, responses):
@@ -86,4 +78,4 @@ def main() -> None:
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
