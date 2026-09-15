@@ -71,7 +71,7 @@ def build_chain(model_name=None):
     return chain
 
 
-def run_chain():
+def main():
     """Build the chain and run it with a sample question."""
     chain = build_chain()
     response = chain.invoke({"question": "What is LangChain?"})
@@ -79,4 +79,4 @@ def run_chain():
 
 
 if __name__ == "__main__":
-    run_chain()
+    main()
