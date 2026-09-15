@@ -39,7 +39,7 @@ class TokenUsageCallbackHandler(BaseCallbackHandler):
         print(f"LLM error: {error}")
 
 
-def run_example() -> None:
+def main() -> None:
     """Run a streaming chat example and display callback-recorded data."""
     model = init_chat_model(os.getenv("MODEL", "gpt-4o-mini"))
     handler = TokenUsageCallbackHandler()
@@ -60,4 +60,4 @@ def run_example() -> None:
 
 
 if __name__ == "__main__":
-    run_example()
+    main()
