@@ -78,7 +78,24 @@ langchain_examples/
 │   ├── 11_parallel_tool_calls.py
 │   ├── 12_structured_output.py
 │   ├── 13_rag_fusion.py
-│   └── 14_agentic_rag.py
+│   ├── 14_agentic_rag.py
+│   └── 15_plan_and_execute.py
+├── tests/             # Automated tests for examples
+│   ├── test_01_basic_chains.py
+│   ├── test_02_rag.py
+│   ├── test_03_tools_agents.py
+│   ├── test_04_langgraph_workflows.py
+│   ├── test_05_streaming.py
+│   ├── test_06_evaluation.py
+│   ├── test_07_memory.py
+│   ├── test_08_batch_inference.py
+│   ├── test_09_parallel_tool_calls.py
+│   ├── test_10_async.py
+│   ├── test_11_parallel_tool_calls.py
+│   ├── test_12_structured_output.py
+│   ├── test_13_rag_fusion.py
+│   ├── test_14_agentic_rag.py
+│   └── test_15_plan_and_execute.py
 ├── .env.example       # Template for environment variables
 ├── requirements.txt   # Python dependencies
 └── README.md          # This file
@@ -151,6 +168,23 @@ Never commit real API keys. The `.env` file is listed in `.gitignore`.
 | Structured Output | `examples/12_structured_output.py` | Generate structured, typed responses with Pydantic schemas |
 | Advanced RAG | `examples/13_rag_fusion.py` | Combine multiple retrieval queries for better results |
 | Agentic RAG | `examples/14_agentic_rag.py` | Agent-driven retrieval-augmented generation |
+| Planning | `examples/15_plan_and_execute.py` | Plan-and-Execute agent pattern with separate planning and execution phases |
+
+## Tests
+
+The `tests/` directory contains automated tests for each example. Tests use `pytest` and verify that the examples run correctly with mocked or minimal API calls.
+
+### Running tests
+
+```bash
+# Run all tests
+pytest tests/ -v
+
+# Run tests for a specific example
+pytest tests/test_01_basic_chains.py -v
+```
+
+Tests are designed to be run without real API keys by using fake model responses (via LangChain's `FakeListChatModel` or similar). This ensures the examples are syntactically correct and the logic works as expected in a CI environment.
 
 ## Usage Examples
 
@@ -168,4 +202,4 @@ To override the model for this run:
 LANGCHAIN_MODEL=openai/gpt-4o python examples/01_basic_chains.py
 ```
 
-Expected output: a parsed, structured
+Expected output: a parsed, structured response from the model, such as a JSON object or a string, depending on the parser used.
