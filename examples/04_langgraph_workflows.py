@@ -22,15 +22,13 @@ graph, compiles it, runs it with a given initial state, and returns the final
 state. This makes it easy to experiment with different queries and step limits.
 """
 
-from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal, Optional, TypedDict
 
 from langgraph.graph import StateGraph, END
 
 
-@dataclass
-class AgentState:
-    """State dataclass for the agent.
+class AgentState(TypedDict):
+    """Typed state dictionary for the agent.
 
     Attributes:
         query: The user's original question.
@@ -78,14 +76,14 @@ def research_node(state: AgentState) -> AgentState:
     Returns:
         A new state with ``steps`` incremented and ``answer`` extended.
     """
-    return AgentState(
-        query=state.query,
-        steps=state.steps + 1,
-        max_steps=state.max_steps,
-        max_total_steps=state.max_total_steps,
-        answer=state.answer + f" Research step {state.steps + 1};",
-        status=state.status,
-    )
+    return {
+        "query": state["query"],
+        "steps": state["steps"] + 1,
+        "max_steps": state["max_steps"],
+        "max_total_steps": state["max_total_steps"],
+        "answer": state["answer"] + f" Research step {state['steps'] + 1};",
+        "status": state["status"],
+    }
 
 
 def answer_node(state: AgentState) -> AgentState:
@@ -101,14 +99,14 @@ def answer_node(state: AgentState) -> AgentState:
     Returns:
         A new state with the final answer appended and status set to "success".
     """
-    return AgentState(
-        query=state.query,
-        steps=state.steps,
-        max_steps=state.max_steps,
-        max_total_steps=state.max_total_steps,
-        answer=state.answer + " Final answer.",
-        status="success",
-    )
+    return {
+        "query": state["query"],
+        "steps": state["steps"],
+        "max_steps": state["max_steps"],
+        "max_total_steps": state["max_total_steps"],
+        "answer": state["answer"] + " Final answer.",
+        "status": "success",
+    }
 
 
 def failed_node(state: AgentState) -> AgentState:
@@ -123,14 +121,14 @@ def failed_node(state: AgentState) -> AgentState:
     Returns:
         A new state with a failure message and status set to "failed".
     """
-    return AgentState(
-        query=state.query,
-        steps=state.steps,
-        max_steps=state.max_steps,
-        max_total_steps=state.max_total_steps,
-        answer=state.answer + " FAILED: Step limit exceeded.",
-        status="failed",
-    )
+    return {
+        "query": state["query"],
+        "steps": state["steps"],
+        "max_steps": state["max_steps"],
+        "max_total_steps": state["max_total_steps"],
+        "answer": state["answer"] + " FAILED: Step limit exceeded.",
+        "status": "failed",
+    }
 
 
 def should_continue(state: AgentState) -> Literal["research", "answer", "failed"]:
@@ -151,9 +149,9 @@ def should_continue(state: AgentState) -> Literal["research", "answer", "failed"
         The name of the next node to execute: ``"research"``, ``"answer"``,
         or ``"failed"``.
     """
-    if state.steps >= state.max_total_steps:
+    if state["steps"] >= state["max_total_steps"]:
         return "failed"
-    elif state.steps >= state.max_steps:
+    elif state["steps"] >= state["max_steps"]:
         return "answer"
     else:
         return "research"
@@ -216,14 +214,14 @@ def run_workflow(initial_state: Optional[AgentState] = None) -> AgentState:
         the accumulated answer, the total number of steps taken, and the status.
     """
     if initial_state is None:
-        initial_state = AgentState(
-            query="What is LangGraph?",
-            steps=0,
-            max_steps=3,
-            max_total_steps=5,  # Hard limit to prevent infinite loops
-            answer="",
-            status="in_progress",
-        )
+        initial_state = {
+            "query": "What is LangGraph?",
+            "steps": 0,
+            "max_steps": 3,
+            "max_total_steps": 5,  # Hard limit to prevent infinite loops
+            "answer": "",
+            "status": "in_progress",
+        }
 
     # Build the state graph
     graph = build_agent_graph()
@@ -245,10 +243,10 @@ def main():
     """
     result = run_workflow()
 
-    print(f"Query: {result.query}")
-    print(f"Steps: {result.steps}")
-    print(f"Status: {result.status}")
-    print(f"Answer: {result.answer}")
+    print(f"Query: {result['query']}")
+    print(f"Steps: {result['steps']}")
+    print(f"Status: {result['status']}")
+    print(f"Answer: {result['answer']}")
 
 
 if __name__ == "__main__":
