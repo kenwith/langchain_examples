@@ -6,7 +6,10 @@ Streaming options:
 - Set `streaming=True` on the model constructor to enable streaming for `invoke()` as well.
 - Token usage is extracted from the final chunk's `usage_metadata` when available.
 - Use `stream_response()` for a simple incremental flush example.
+- Use `stream_with_events()` with `astream_events` for token streaming plus event metadata.
 """
+
+import asyncio
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_core.messages import HumanMessage
@@ -108,12 +111,63 @@ def stream_or_fallback(model, messages):
         print_token_usage(getattr(response, "usage_metadata", None))
 
 
+async def stream_with_events(model, messages):
+    """Stream tokens using astream_events for granular metadata handling."""
+    print("Streaming response with astream_events:\n", flush=True)
+    chunks = []
+    event_metadata = {}
+    usage_metadata = None
+
+    try:
+        async for event in model.astream_events(messages, version="v1"):
+            event_name = event.get("event")
+            if event_name == "on_chat_model_stream":
+                chunk = event.get("data", {}).get("chunk")
+                if chunk is None:
+                    continue
+                content = getattr(chunk, "content", "")
+                if content:
+                    print(content, end="", flush=True)
+                chunks.append(chunk)
+                if not event_metadata:
+                    event_metadata = event.get("metadata", {})
+            elif event_name == "on_chat_model_end":
+                output = event.get("data", {}).get("output")
+                if output is not None:
+                    usage_metadata = getattr(output, "usage_metadata", None)
+                    if not event_metadata:
+                        event_metadata = event.get("metadata", {})
+    except NotImplementedError:
+        print("\nThe selected provider does not support astream_events; falling back to normal response.\n")
+        response = await model.ainvoke(messages)
+        print(response.content)
+        print_token_usage(getattr(response, "usage_metadata", None))
+        return
+
+    print("\n", flush=True)
+
+    if event_metadata:
+        print("\nEvent metadata:")
+        for key, value in event_metadata.items():
+            print(f"  {key}: {value}")
+
+    if usage_metadata is None:
+        for chunk in reversed(chunks):
+            usage_metadata = getattr(chunk, "usage_metadata", None)
+            if usage_metadata:
+                break
+    print_token_usage(usage_metadata)
+
+
 def main():
     model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     messages = [HumanMessage(content="What is the capital of France?")]
 
     # Use the callback-handler streaming approach
     stream_or_fallback(model, messages)
+
+    # Use astream_events for granular metadata handling
+    asyncio.run(stream_with_events(model, messages))
 
     # Uncomment to try the simple incremental flush approach instead:
     # stream_response(model, messages)
