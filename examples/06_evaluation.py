@@ -1,13 +1,15 @@
 """
-LangChain evaluation example: criteria-based evaluation plus a custom evaluator
-that checks for keyword presence and length constraints.
+LangChain evaluation example: criteria-based evaluation plus custom evaluators
+for deterministic checks and reference-answer scoring.
 
-This module demonstrates two evaluation criteria:
+This module demonstrates:
 1. LLM-based relevance scoring via LangChain's criteria evaluator.
 2. Deterministic keyword and length checks via a custom StringEvaluator.
+3. Reference-answer token overlap scoring via a custom StringEvaluator.
 """
 
 import os
+import re
 from typing import List, Optional
 
 from langchain.evaluation import load_evaluator
@@ -67,6 +69,60 @@ class KeywordAndLengthEvaluator(StringEvaluator):
         return score, explanation
 
 
+class ReferenceAnswerEvaluator(StringEvaluator):
+    """
+    Custom evaluator that scores a prediction against a reference answer
+    using token-level F1 overlap. The score is between 0 and 1.
+    """
+
+    @property
+    def requires_input(self) -> bool:
+        # This evaluator does not use the input prompt.
+        return False
+
+    @property
+    def requires_reference(self) -> bool:
+        # This evaluator needs a reference answer to score against.
+        return True
+
+    @property
+    def evaluation_name(self) -> str:
+        return "reference_answer_f1"
+
+    def _evaluate_strings(
+        self,
+        prediction: str,
+        reference: Optional[str] = None,
+        input: Optional[str] = None,
+        **kwargs,
+    ) -> tuple[float, str]:
+        if not reference:
+            return 0.0, "No reference answer provided."
+
+        pred_tokens = set(re.findall(r"\w+", prediction.lower()))
+        ref_tokens = set(re.findall(r"\w+", reference.lower()))
+
+        if not ref_tokens:
+            return 0.0, "Reference answer has no tokens."
+        if not pred_tokens:
+            return 0.0, "Prediction has no tokens."
+
+        overlap = pred_tokens & ref_tokens
+        precision = len(overlap) / len(pred_tokens)
+        recall = len(overlap) / len(ref_tokens)
+
+        if precision + recall == 0:
+            f1 = 0.0
+        else:
+            f1 = 2.0 * precision * recall / (precision + recall)
+
+        explanation = (
+            f"Token overlap F1={f1:.2f} "
+            f"(precision={precision:.2f}, recall={recall:.2f})"
+        )
+        return f1, explanation
+
+
 def evaluate_response(
     prediction: str,
     reference: str,
@@ -124,6 +180,52 @@ def evaluate_response(
     return results
 
 
+def run_evaluation(
+    predictions: List[str],
+    references: List[str],
+    evaluator: Optional[StringEvaluator] = None,
+) -> dict:
+    """
+    Score each prediction/reference pair using the provided evaluator.
+
+    If no evaluator is supplied, uses ReferenceAnswerEvaluator.
+
+    Args:
+        predictions: A list of generated responses.
+        references: A list of reference answers.
+        evaluator: An optional StringEvaluator instance. Defaults to
+            ReferenceAnswerEvaluator.
+
+    Returns:
+        A dictionary with per-pair scores, explanations, and the average score.
+    """
+    if evaluator is None:
+        evaluator = ReferenceAnswerEvaluator()
+
+    if len(predictions) != len(references):
+        raise ValueError("predictions and references must have the same length")
+
+    scores: List[float] = []
+    explanations: List[str] = []
+
+    for prediction, reference in zip(predictions, references):
+        result = evaluator.evaluate_strings(
+            prediction=prediction,
+            reference=reference,
+            input="",
+        )
+        scores.append(result["score"])
+        explanations.append(result["explanation"])
+
+    average_score = sum(scores) / len(scores) if scores else 0.0
+
+    return {
+        "scores": scores,
+        "average_score": average_score,
+        "explanations": explanations,
+    }
+
+
 def main():
     # Initialise the LLM (used by the criteria evaluator).
     # The API key is read from the environment only – never hard-code it here.
@@ -157,6 +259,16 @@ def main():
     print("\n=== Custom (keyword + length) result ===")
     for key, value in results["custom_result"].items():
         print(f"{key}: {value}")
+
+    # 3) Reference-based evaluation
+    print("\n=== Reference answer overlap result ===")
+    eval_results = run_evaluation(
+        predictions=[prediction],
+        references=[reference],
+    )
+    print(f"Scores: {eval_results['scores']}")
+    print(f"Average: {eval_results['average_score']:.2f}")
+    print(f"Explanation: {eval_results['explanations'][0]}")
 
 
 if __name__ == "__main__":
