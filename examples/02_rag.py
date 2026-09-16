@@ -1,15 +1,25 @@
 import os
 
-from langchain.chains import RetrievalQA
+from langchain.chains import LLMChain
 from langchain.document_loaders import DirectoryLoader, TextLoader
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.llms import OpenAI
+from langchain.prompts import PromptTemplate
 from langchain.schema import Document
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import FAISS
 
 # Set DATA_PATH to an environment variable or default to "data"
 DATA_PATH = os.getenv("DATA_PATH", "data")
+
+# Configurable chunking parameters for experimentation
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 0
+
+
+def format_docs(docs: list[Document]) -> str:
+    """Format a list of documents into a single string for prompt injection."""
+    return "\n\n".join(doc.page_content for doc in docs)
 
 
 def build_vectorstore() -> FAISS:
@@ -35,8 +45,8 @@ def build_vectorstore() -> FAISS:
         ]
         documents = [Document(page_content=text) for text in builtin_texts]
 
-    # Split documents into manageable chunks
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    # Split documents into manageable chunks using the configurable constants
+    text_splitter = CharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     texts = text_splitter.split_documents(documents)
 
     # Create embeddings and vector store
@@ -48,17 +58,31 @@ def build_vectorstore() -> FAISS:
 def answer_question(vectorstore: FAISS, query: str) -> str:
     """Answer a query using retrieval-augmented generation.
 
-    Sets up a retriever from the provided vector store and a RetrievalQA chain
-    using OpenAI, then runs the query and returns the answer.
+    Sets up a retriever from the provided vector store, retrieves relevant
+    documents, formats them with the `format_docs` helper, and runs a simple
+    LLMChain with a custom prompt that includes the formatted context.
     """
-    # Set up the retriever and QA chain
+    # Set up the retriever and retrieve relevant documents
     retriever = vectorstore.as_retriever()
-    qa = RetrievalQA.from_chain_type(
-        llm=OpenAI(openai_api_key=os.getenv("OPENAI_API_KEY")),
-        chain_type="stuff",
-        retriever=retriever,
+    docs = retriever.get_relevant_documents(query)
+    context = format_docs(docs)
+
+    # Define the prompt template
+    prompt = PromptTemplate(
+        template="""Use the following pieces of context to answer the question at the end.
+If you don't know the answer, just say that you don't know, don't try to make up an answer.
+
+{context}
+
+Question: {question}
+Helpful Answer:""",
+        input_variables=["context", "question"]
     )
-    return qa.run(query)
+
+    # Create the LLM chain and run it
+    llm = OpenAI(openai_api_key=os.getenv("OPENAI_API_KEY"))
+    chain = LLMChain(llm=llm, prompt=prompt)
+    return chain.run(context=context, question=query)
 
 
 # Build the vector store and answer a sample query
