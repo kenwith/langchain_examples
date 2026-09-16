@@ -1,36 +1,3 @@
-"""Basic chain example using LangChain's provider-agnostic init_chat_model.
-
-This module demonstrates how to build a simple prompt -> model -> output
-parser chain. Instead of hardcoding a specific chat model class, we use
-`init_chat_model()` which is provider-agnostic: it inspects the model name
-and automatically selects the appropriate implementation (e.g. OpenAI,
-Anthropic, Google) based on the model prefix and the available environment
-variables (e.g. OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY). This
-makes it easy to switch providers without changing the chain construction
-code.
-
-Before running, set the LANGCHAIN_MODEL environment variable to the model
-you want to use. For example:
-
-    export LANGCHAIN_MODEL="gpt-4o-mini"
-
-You also need the API key for the provider of that model (e.g.
-OPENAI_API_KEY for OpenAI models). If you prefer, you can pass a model
-name directly to `build_chain(model_name="...")` instead of relying on
-the environment variable.
-
-Run this example with:
-    python examples/01_basic_chains.py
-
-Expected output:
-The script prints a short answer to the question "What is LangChain?".
-The exact wording depends on the model you choose, but it should be a
-concise explanation similar to:
-
-    LangChain is a framework for developing applications powered by
-    language models.
-"""
-
 import os
 
 from langchain.chat_models import init_chat_model
