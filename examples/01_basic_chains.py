@@ -2,10 +2,12 @@
 
 This module demonstrates how to build a simple prompt -> model -> output
 parser chain. Instead of hardcoding a specific chat model class, we use
-`init_chat_model()` which selects the appropriate implementation based on
-the model name and available environment variables (e.g. OPENAI_API_KEY,
-ANTHROPIC_API_KEY, GOOGLE_API_KEY). This makes it easy to switch providers
-without changing the chain construction code.
+`init_chat_model()` which is provider-agnostic: it inspects the model name
+and automatically selects the appropriate implementation (e.g. OpenAI,
+Anthropic, Google) based on the model prefix and the available environment
+variables (e.g. OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY). This
+makes it easy to switch providers without changing the chain construction
+code.
 
 Before running, set the LANGCHAIN_MODEL environment variable to the model
 you want to use. For example:
@@ -13,7 +15,9 @@ you want to use. For example:
     export LANGCHAIN_MODEL="gpt-4o-mini"
 
 You also need the API key for the provider of that model (e.g.
-OPENAI_API_KEY for OpenAI models).
+OPENAI_API_KEY for OpenAI models). If you prefer, you can pass a model
+name directly to `build_chain(model_name="...")` instead of relying on
+the environment variable.
 
 Run this example with:
     python examples/01_basic_chains.py
