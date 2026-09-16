@@ -1,5 +1,6 @@
 import asyncio
-from typing import List, Any
+import random
+from typing import Any, Callable, List
 
 from langchain.chains import LLMChain
 from langchain.llms import OpenAI
@@ -13,8 +14,42 @@ def chunk_list(items: List[Any], chunk_size: int) -> List[List[Any]]:
     return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
 
 
-async def run_batch(prompts: List[str], llm: Any = None, batch_size: int = 10) -> List[str]:
-    """Run prompts through an LLM in batches, guarding against empty input."""
+async def _run_with_retry(
+    chain: LLMChain,
+    prompt: str,
+    max_retries: int = 3,
+    base_delay: float = 1.0,
+) -> str:
+    """Run a single prompt with retries and exponential backoff."""
+    for attempt in range(max_retries):
+        try:
+            return await chain.arun(prompt=prompt)
+        except Exception as e:
+            if attempt == max_retries - 1:
+                raise
+            delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
+            print(f"Error processing prompt, retrying in {delay:.2f}s: {e}")
+            await asyncio.sleep(delay)
+    raise RuntimeError("Unreachable retry state")  # pragma: no cover
+
+
+async def run_batch(
+    prompts: List[str],
+    llm: Any = None,
+    batch_size: int = 10,
+    max_retries: int = 3,
+    progress_callback: Callable[[int, int], None] = None,
+) -> List[str]:
+    """Run prompts through an LLM in batches, guarding against empty input.
+
+    Args:
+        prompts: List of prompt strings.
+        llm: Language model instance. Defaults to OpenAI(temperature=0).
+        batch_size: Number of prompts to process concurrently.
+        max_retries: Number of attempts per prompt before failing.
+        progress_callback: Optional callback called as (completed, total)
+            after each prompt completes.
+    """
     if not prompts:
         return []
 
@@ -27,16 +62,28 @@ async def run_batch(prompts: List[str], llm: Any = None, batch_size: int = 10) -
     )
     chain = LLMChain(llm=llm, prompt=prompt_template)
 
-    results: List[str] = []
-    for batch in chunk_list(prompts, batch_size):
-        try:
-            batch_results = await asyncio.gather(
-                *(chain.arun(prompt=p) for p in batch)
+    results: List[str] = [""] * len(prompts)
+    completed = 0
+    total = len(prompts)
+
+    for batch_start in range(0, len(prompts), batch_size):
+        batch = prompts[batch_start:batch_start + batch_size]
+        batch_indices = list(range(batch_start, batch_start + len(batch)))
+
+        tasks = {}
+        for idx, prompt in zip(batch_indices, batch):
+            task = asyncio.ensure_future(
+                _run_with_retry(chain, prompt, max_retries)
             )
-        except Exception as e:
-            print(f"Error processing batch: {e}")
-            raise
-        results.extend(batch_results)
+            tasks[task] = idx
+
+        for completed_task in asyncio.as_completed(tasks):
+            idx = tasks[completed_task]
+            result = await completed_task
+            results[idx] = result
+            completed += 1
+            if progress_callback is not None:
+                progress_callback(completed, total)
 
     return results
 
@@ -50,7 +97,14 @@ async def main():
         "Tell me a fun fact about space.",
     ]
 
-    results = await run_batch(prompts, batch_size=2)
+    def show_progress(done: int, total: int) -> None:
+        print(f"Progress: {done}/{total}")
+
+    results = await run_batch(
+        prompts,
+        batch_size=2,
+        progress_callback=show_progress,
+    )
 
     for prompt, result in zip(prompts, results):
         print(f"Q: {prompt}\nA: {result}\n")
