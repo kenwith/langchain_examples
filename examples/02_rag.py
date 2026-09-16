@@ -85,7 +85,11 @@ Helpful Answer:""",
     return chain.run(context=context, question=query)
 
 
-# Build the vector store and answer a sample query
-vectorstore = build_vectorstore()
-query = "What is RAG?"
-print(answer_question(vectorstore, query))
+def main(query: str = "What is RAG?") -> str:
+    """Build the vector store and return the generated answer for the query."""
+    vectorstore = build_vectorstore()
+    return answer_question(vectorstore, query)
+
+
+if __name__ == "__main__":
+    print(main())
