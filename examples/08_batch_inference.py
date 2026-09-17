@@ -1,6 +1,6 @@
 import asyncio
 import random
-from typing import Any, Callable, List
+from typing import Any, Callable, List, Optional
 
 from langchain.chains import LLMChain
 from langchain.llms import OpenAI
@@ -38,7 +38,7 @@ async def run_batch(
     llm: Any = None,
     batch_size: int = 10,
     max_retries: int = 3,
-    progress_callback: Callable[[int, int], None] = None,
+    progress_callback: Optional[Callable[[int, int, Optional[str]], None]] = None,
 ) -> List[str]:
     """Run prompts through an LLM in batches, guarding against empty input.
 
@@ -47,8 +47,9 @@ async def run_batch(
         llm: Language model instance. Defaults to OpenAI(temperature=0).
         batch_size: Number of prompts to process concurrently.
         max_retries: Number of attempts per prompt before failing.
-        progress_callback: Optional callback called as (completed, total)
-            after each prompt completes.
+        progress_callback: Optional callback called as (completed, total, error)
+            after each prompt completes. `error` is None on success, or the
+            error message string on failure.
     """
     if not prompts:
         return []
@@ -79,11 +80,16 @@ async def run_batch(
 
         for completed_task in asyncio.as_completed(tasks):
             idx = tasks[completed_task]
-            result = await completed_task
-            results[idx] = result
+            error = None
+            try:
+                result = await completed_task
+                results[idx] = result
+            except Exception as e:
+                error = str(e)
+                results[idx] = f"Error: {e}"
             completed += 1
             if progress_callback is not None:
-                progress_callback(completed, total)
+                progress_callback(completed, total, error)
 
     return results
 
@@ -97,8 +103,11 @@ async def main():
         "Tell me a fun fact about space.",
     ]
 
-    def show_progress(done: int, total: int) -> None:
-        print(f"Progress: {done}/{total}")
+    def show_progress(done: int, total: int, error: Optional[str] = None) -> None:
+        if error:
+            print(f"Progress: {done}/{total} (error: {error})")
+        else:
+            print(f"Progress: {done}/{total}")
 
     results = await run_batch(
         prompts,
