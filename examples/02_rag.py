@@ -22,18 +22,24 @@ def format_docs(docs: list[Document]) -> str:
     return "\n\n".join(doc.page_content for doc in docs)
 
 
-def build_vectorstore() -> FAISS:
-    """Build and return a FAISS vector store from documents.
+def load_documents() -> list[Document]:
+    """Load documents from the DATA_PATH directory or fallback to built-in examples.
 
-    Loads documents from the directory specified by the DATA_PATH environment
-    variable, or falls back to a small built-in set of example documents if the
-    directory does not exist. Splits the documents into chunks, embeds them with
-    OpenAI embeddings, and returns a FAISS vector store.
+    If DATA_PATH exists and is a directory, load all text files from it.
+    If the directory exists but contains no files, raise a clear error.
+    If the directory does not exist, return a small set of built-in example documents.
     """
-    # If the data directory exists, load documents from it; otherwise, use built-in documents.
     if os.path.exists(DATA_PATH):
+        if not os.path.isdir(DATA_PATH):
+            raise ValueError(f"DATA_PATH '{DATA_PATH}' is not a directory.")
         loader = DirectoryLoader(DATA_PATH, loader_cls=TextLoader)
         documents = loader.load()
+        if not documents:
+            raise ValueError(
+                f"No documents found in DATA_PATH directory '{DATA_PATH}'. "
+                "Please add files or remove the directory to use built-in examples."
+            )
+        return documents
     else:
         # Fallback built-in document set so the example runs without external files.
         builtin_texts = [
@@ -43,7 +49,16 @@ def build_vectorstore() -> FAISS:
             "Vector stores like FAISS allow efficient similarity search over document embeddings.",
             "To use this example, set OPENAI_API_KEY in your environment.",
         ]
-        documents = [Document(page_content=text) for text in builtin_texts]
+        return [Document(page_content=text) for text in builtin_texts]
+
+
+def build_vectorstore() -> FAISS:
+    """Build and return a FAISS vector store from documents.
+
+    Loads documents using the `load_documents` helper, splits them into chunks,
+    embeds them with OpenAI embeddings, and returns a FAISS vector store.
+    """
+    documents = load_documents()
 
     # Split documents into manageable chunks using the configurable constants
     text_splitter = CharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
