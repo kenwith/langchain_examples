@@ -6,6 +6,9 @@
 This example demonstrates how to use LangChain's caching layer with both in-memory and
 persistent SQLite caches. A helper selects the cache implementation, and the SQLite cache
 can share responses across separate runs of this script.
+
+By default, the script runs both cache backends sequentially so you can see the behavior
+of each. Set the CACHE_TYPE environment variable to "memory" or "sqlite" to run only one.
 """
 
 import os
@@ -62,5 +65,13 @@ def demonstrate_caching(cache_type: Optional[str] = None):
 
 
 if __name__ == "__main__":
-    # Example: CACHE_TYPE=sqlite python examples/19_llm_caching.py
-    demonstrate_caching()
+    # By default, demonstrate both cache backends.
+    # Set CACHE_TYPE=memory or CACHE_TYPE=sqlite to run a single backend.
+    cache_type = os.getenv("CACHE_TYPE", "both").lower()
+
+    if cache_type == "both":
+        demonstrate_caching("memory")
+        print("\n" + "=" * 60 + "\n")
+        demonstrate_caching("sqlite")
+    else:
+        demonstrate_caching(cache_type)
