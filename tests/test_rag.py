@@ -27,7 +27,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-from langchain_examples.utils import init_chat_model, init_embeddings
+from langchain_examples.utils import init_chat_model, init_embeddings, load_documents
 
 
 # =============================================================================
@@ -117,6 +117,25 @@ def test_text_loader_missing_file_raises_error() -> None:
         TextLoader(missing_path).load()
     assert "no such file" in str(excinfo.value).lower()
     assert missing_path in str(excinfo.value)
+
+
+def test_load_documents_helper_empty_input() -> None:
+    """Test document-loading helper with an empty input list."""
+    docs = load_documents([])
+    assert docs == []
+
+
+def test_load_documents_helper_valid_input() -> None:
+    """Test document-loading helper with valid file paths."""
+    temp_paths = create_temp_docs(SAMPLE_DOCS[:2])
+    try:
+        docs = load_documents(temp_paths)
+        assert len(docs) == 2
+        for i, doc in enumerate(docs):
+            assert doc.page_content == SAMPLE_DOCS[i].page_content
+            assert doc.metadata["source"] == os.path.basename(temp_paths[i])
+    finally:
+        cleanup_temp_files(temp_paths)
 
 
 # =============================================================================
@@ -487,6 +506,10 @@ if __name__ == "__main__":
 
     print("\n1. Testing document loading...")
     test_document_loading_from_text_files()
+    test_document_loading_with_custom_encoding()
+    test_text_loader_missing_file_raises_error()
+    test_load_documents_helper_empty_input()
+    test_load_documents_helper_valid_input()
     print("   ✓ Document loading works")
 
     print("\n2. Testing text splitting...")
@@ -512,15 +535,4 @@ if __name__ == "__main__":
     print("   ✓ Retrieval chains work")
 
     print("\n6. Testing end-to-end QA...")
-    test_end_to_end_qa_pipeline()
-    test_qa_pipeline_with_citations()
-    print("   ✓ End-to-end QA works")
-
-    print("\n7. Testing full workflow...")
-    test_full_rag_workflow_with_temp_files()
-    test_vector_store_persistence()
-    print("   ✓ Full workflow works")
-
-    print("\n" + "=" * 60)
-    print("All tests passed! ✓")
-    print("=" * 60)
+    test_end_to_end_qa_pipeline
