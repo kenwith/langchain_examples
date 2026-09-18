@@ -31,24 +31,29 @@ from langchain_openai import OpenAIEmbeddings
 SAMPLE_DOCUMENTS = [
     Document(
         page_content="LangChain is a framework for developing applications "
-        "powered by language models."
+        "powered by language models.",
+        metadata={"source": "langchain_framework"},
     ),
     Document(
         page_content="Agents use a language model to choose a sequence of "
-        "actions to take to accomplish a goal."
+        "actions to take to accomplish a goal.",
+        metadata={"source": "agents_overview"},
     ),
     Document(
         page_content="Retrieval-augmented generation (RAG) combines a "
         "retrieval step with a generation step to produce answers grounded "
-        "in external knowledge."
+        "in external knowledge.",
+        metadata={"source": "rag_concept"},
     ),
     Document(
         page_content="A retriever tool fetches relevant document chunks from "
-        "a vector store based on a natural language query."
+        "a vector store based on a natural language query.",
+        metadata={"source": "retriever_tool"},
     ),
     Document(
         page_content="The ReAct loop alternates between reasoning (Thought) "
-        "and acting (Action) until a final answer is reached."
+        "and acting (Action) until a final answer is reached.",
+        metadata={"source": "react_loop"},
     ),
 ]
 
@@ -77,7 +82,11 @@ def create_retriever_tool() -> Tool:
                 "topic, and suggest trying a different question or consulting "
                 "the official documentation."
             )
-        return "\n\n".join(doc.page_content for doc in docs)
+        formatted = []
+        for doc in docs:
+            source = doc.metadata.get("source", "unknown")
+            formatted.append(f"{doc.page_content}\n(Source: {source})")
+        return "\n\n".join(formatted)
 
     return Tool.from_function(
         name="search_langchain_docs",
@@ -85,7 +94,8 @@ def create_retriever_tool() -> Tool:
         description=(
             "Search the LangChain documentation for relevant context. "
             "Use this tool when you need to answer questions about LangChain, "
-            "agents, RAG, or related concepts."
+            "agents, RAG, or related concepts. The result includes the source "
+            "name for each retrieved chunk."
         ),
     )
 
@@ -114,6 +124,10 @@ Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
+
+When providing the final answer, always cite the source names from the
+retrieved context. For example: "According to [source name], ..." or
+"Based on [source name], ...". This helps users verify the response.
 
 Begin!
 
