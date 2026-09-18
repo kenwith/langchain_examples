@@ -1,7 +1,7 @@
 import os
 import ast
 import operator
-from typing import Optional, Type
+from typing import Optional, Type, List, Dict
 
 from langchain.tools import BaseTool
 from langchain.agents import initialize_agent, AgentType
@@ -83,6 +83,35 @@ class CalculatorTool(BaseTool):
         raise ValueError(f"Unsupported expression element: {type(node).__name__}")
 
 
+def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
+    """
+    Extract tool call arguments from an agent response dict.
+
+    This helper expects the response returned by an AgentExecutor when
+    `return_intermediate_steps=True`. The response should contain an
+    'intermediate_steps' key with a list of (AgentAction, observation) tuples.
+
+    Args:
+        agent_response: The full response dict from `agent({"input": ...})`.
+
+    Returns:
+        A list of dictionaries, each with 'tool' and 'tool_input' keys.
+
+    Raises:
+        ValueError: If the response does not contain intermediate_steps.
+    """
+    if not isinstance(agent_response, dict) or "intermediate_steps" not in agent_response:
+        raise ValueError(
+            "Expected agent response dict with 'intermediate_steps' key. "
+            "Make sure to set return_intermediate_steps=True on the agent."
+        )
+
+    calls = []
+    for action, _observation in agent_response["intermediate_steps"]:
+        calls.append({"tool": action.tool, "tool_input": action.tool_input})
+    return calls
+
+
 def main():
     """Run a simple agent with the calculator tool."""
     # Load API key from environment - never hardcode credentials
@@ -98,6 +127,7 @@ def main():
         llm,
         agent=AgentType.ZERO_SHOT_REACT_DESCRIPTION,
         verbose=True,
+        return_intermediate_steps=True,  # capture tool calls for inspection
     )
 
     # Example valid queries
@@ -106,6 +136,14 @@ def main():
 
     # Example invalid expression to demonstrate helpful error
     print(agent.run("What is 2 +* 3?"))
+
+    # Show how to extract tool call arguments from the agent's response
+    # (using __call__ to get intermediate steps)
+    response = agent({"input": "What is 12 * 8 + 4?"})
+    calls = extract_tool_call_arguments(response)
+    print("\nExtracted tool calls from agent response:")
+    for call in calls:
+        print(f"  Tool: {call['tool']}, Args: {call['tool_input']}")
 
 
 if __name__ == "__main__":
