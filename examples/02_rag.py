@@ -16,10 +16,34 @@ DATA_PATH = os.getenv("DATA_PATH", "data")
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 0
 
+# Optional cache path for vector store reuse
+VECTORSTORE_CACHE_PATH = os.getenv("VECTORSTORE_CACHE_PATH")
+
 
 def format_docs(docs: list[Document]) -> str:
     """Format a list of documents into a single string for prompt injection."""
     return "\n\n".join(doc.page_content for doc in docs)
+
+
+def load_documents_from_directory(directory_path: str) -> list[Document]:
+    """Load all text documents from a given directory.
+
+    Args:
+        directory_path: Path to the directory containing text files.
+
+    Returns:
+        List of loaded documents.
+
+    Raises:
+        ValueError: If the directory does not exist or contains no text files.
+    """
+    if not os.path.isdir(directory_path):
+        raise ValueError(f"Directory '{directory_path}' does not exist.")
+    loader = DirectoryLoader(directory_path, loader_cls=TextLoader)
+    documents = loader.load()
+    if not documents:
+        raise ValueError(f"No documents found in directory '{directory_path}'.")
+    return documents
 
 
 def load_documents() -> list[Document]:
@@ -30,16 +54,7 @@ def load_documents() -> list[Document]:
     If the directory does not exist, return a small set of built-in example documents.
     """
     if os.path.exists(DATA_PATH):
-        if not os.path.isdir(DATA_PATH):
-            raise ValueError(f"DATA_PATH '{DATA_PATH}' is not a directory.")
-        loader = DirectoryLoader(DATA_PATH, loader_cls=TextLoader)
-        documents = loader.load()
-        if not documents:
-            raise ValueError(
-                f"No documents found in DATA_PATH directory '{DATA_PATH}'. "
-                "Please add files or remove the directory to use built-in examples."
-            )
-        return documents
+        return load_documents_from_directory(DATA_PATH)
     else:
         # Fallback built-in document set so the example runs without external files.
         builtin_texts = [
@@ -52,22 +67,45 @@ def load_documents() -> list[Document]:
         return [Document(page_content=text) for text in builtin_texts]
 
 
-def build_vectorstore() -> FAISS:
-    """Build and return a FAISS vector store from documents.
+def build_vectorstore_from_directory(directory_path: str, cache_path: str = None) -> FAISS:
+    """Build a FAISS vector store from documents in a directory, with optional caching.
 
-    Loads documents using the `load_documents` helper, splits them into chunks,
-    embeds them with OpenAI embeddings, and returns a FAISS vector store.
+    Args:
+        directory_path: Path to the directory containing text files.
+        cache_path: If provided, the vector store will be saved to this path and
+            loaded from it on subsequent calls if it exists.
+
+    Returns:
+        A FAISS vector store built from the documents.
     """
-    documents = load_documents()
+    # Try to load from cache if a cache path is provided and exists
+    if cache_path and os.path.exists(cache_path):
+        embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
+        vectorstore = FAISS.load_local(cache_path, embeddings)
+        return vectorstore
 
-    # Split documents into manageable chunks using the configurable constants
+    # Load documents and split them
+    documents = load_documents_from_directory(directory_path)
     text_splitter = CharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     texts = text_splitter.split_documents(documents)
 
     # Create embeddings and vector store
     embeddings = OpenAIEmbeddings(openai_api_key=os.getenv("OPENAI_API_KEY"))
     vectorstore = FAISS.from_documents(texts, embeddings)
+
+    # Save to cache if requested
+    if cache_path:
+        vectorstore.save_local(cache_path)
+
     return vectorstore
+
+
+def build_vectorstore() -> FAISS:
+    """Build and return a FAISS vector store from documents.
+
+    Uses the global DATA_PATH and optional VECTORSTORE_CACHE_PATH for caching.
+    """
+    return build_vectorstore_from_directory(DATA_PATH, VECTORSTORE_CACHE_PATH)
 
 
 def answer_question(vectorstore: FAISS, query: str) -> str:
