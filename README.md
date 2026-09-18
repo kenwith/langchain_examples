@@ -26,6 +26,8 @@ A collection of practical, runnable examples for building applications with [Lan
 
 This repository contains self-contained examples that show how to use LangChain for common LLM tasks. The examples are written in Python and can be run from the command line, used as references, or adapted into your own projects.
 
+All example scripts live in the `examples/` directory.
+
 ## Quick Start
 
 1. Clone the repository:
@@ -72,56 +74,32 @@ This repository contains self-contained examples that show how to use LangChain 
 
 ### Basic LLM Chain
 
+**Script:** `examples/01_basic_llm_chain.py`
+
 Shows how to create a simple LLM chain that sends a prompt to an LLM and prints the response.
 
 ### Chat Models
+
+**Script:** `examples/02_chat_models.py`
 
 Demonstrates using chat models like `ChatOpenAI` for conversational interactions.
 
 ### Prompt Templates
 
+**Script:** `examples/03_prompt_templates.py`
+
 Explains how to build reusable prompt templates with variables and partial formatting.
 
 ### Output Parsers
+
+**Script:** `examples/04_output_parsers.py`
 
 Shows how to parse LLM output into structured data using Pydantic output parsers.
 
 ### Memory
 
+**Script:** `examples/05_memory.py`
+
 Adds conversation memory so the model can remember previous turns and keep context.
 
 ### Chains
-
-Combines multiple LLM calls into a sequential pipeline for more complex workflows.
-
-### Agents
-
-Builds an agent that dynamically decides which tools to call based on the user's input.
-
-### Tools
-
-Defines custom tools and integrates them with an agent for task-specific actions.
-
-### Embeddings
-
-Generates text embeddings and computes similarity between pieces of text.
-
-### Vector Stores
-
-Indexes documents in a vector store and performs similarity search.
-
-### Document Question Answering
-
-Answers questions over your own documents using retrieval and generation.
-
-### Summarization
-
-Summarizes long text with LangChain's summarization chains.
-
-## Contributing
-
-Contributions are welcome. If you have an example that demonstrates a useful LangChain feature, feel free to open a pull request.
-
-## License
-
-This project is licensed under the MIT License.
