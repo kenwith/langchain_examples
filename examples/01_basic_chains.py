@@ -1,3 +1,25 @@
+"""Basic chain example.
+
+This script demonstrates how to build a simple prompt -> model -> output
+parser chain using LangChain.
+
+Usage:
+    Set the LANGCHAIN_MODEL environment variable to the model you want to
+    use (e.g. gpt-4o-mini, claude-3-5-sonnet, gemini-1.5-pro) and ensure
+    the corresponding API key is set (e.g. OPENAI_API_KEY,
+    ANTHROPIC_API_KEY, GOOGLE_API_KEY). Then run:
+
+        python examples/01_basic_chains.py
+
+    Alternatively, call build_chain(model_name="gpt-4o-mini") from your
+    own code.
+
+Sample output (will vary by model):
+    LangChain is a framework for developing applications powered by
+    language models. It provides standard interfaces for chains, agents,
+    and retrieval, as well as integrations with other tools.
+"""
+
 import os
 
 from langchain.chat_models import init_chat_model
