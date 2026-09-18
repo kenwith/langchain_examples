@@ -11,6 +11,7 @@ This module demonstrates:
 """
 
 import re
+from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from langchain_core.messages import HumanMessage, SystemMessage
@@ -31,6 +32,14 @@ class Person(BaseModel):
     email: Optional[str] = Field(default=None, description="Email address if available")
     skills: List[str] = Field(default_factory=list, description="List of skills")
 
+    @field_validator("name")
+    @classmethod
+    def validate_name_not_empty(cls, v):
+        """Ensure the name is not empty or whitespace-only."""
+        if not v or not v.strip():
+            raise ValueError("Name cannot be empty")
+        return v.strip()
+
     @field_validator("email")
     @classmethod
     def validate_email(cls, v):
@@ -38,6 +47,15 @@ class Person(BaseModel):
         if v is not None and not re.match(r"^[\w\.-]+@[\w\.-]+\.\w+$", v):
             raise ValueError("Invalid email format")
         return v
+
+    @field_validator("skills")
+    @classmethod
+    def validate_skills(cls, v):
+        """Ensure no skill is empty; strip whitespace from each skill."""
+        for skill in v:
+            if not skill or not skill.strip():
+                raise ValueError("Skills cannot contain empty values")
+        return [skill.strip() for skill in v]
 
 
 class Company(BaseModel):
@@ -47,6 +65,32 @@ class Company(BaseModel):
     employees: int = Field(description="Number of employees", ge=1)
     founded_year: Optional[int] = Field(default=None, description="Year founded")
     headquarters: Optional[str] = Field(default=None, description="HQ location")
+
+    @field_validator("name", "industry")
+    @classmethod
+    def validate_non_empty(cls, v):
+        """Ensure required string fields are not empty."""
+        if not v or not v.strip():
+            raise ValueError("Field cannot be empty")
+        return v.strip()
+
+    @field_validator("founded_year")
+    @classmethod
+    def validate_founded_year(cls, v):
+        """Ensure founded year is a plausible historical year."""
+        if v is not None:
+            current_year = datetime.now().year
+            if v < 1800 or v > current_year:
+                raise ValueError(f"Founded year must be between 1800 and {current_year}")
+        return v
+
+    @field_validator("headquarters")
+    @classmethod
+    def validate_headquarters(cls, v):
+        """Ensure headquarters is not empty if provided."""
+        if v is not None and not v.strip():
+            raise ValueError("Headquarters cannot be empty if provided")
+        return v
 
 
 class ExtractionResult(BaseModel):
@@ -318,6 +362,37 @@ def demo_schema_validation(model):
     print(f"Partial input result: {result}")
 
 
+def demo_field_validators():
+    """Demonstrate Pydantic field validators with invalid inputs."""
+    print("\n" + "=" * 60)
+    print("DEMO: Field Validators in Action")
+    print("=" * 60)
+
+    invalid_cases = [
+        ("Person with empty name", {"name": "", "age": 30}),
+        ("Person with invalid email", {"name": "John Doe", "age": 30, "email": "not-an-email"}),
+        ("Person with empty skill", {"name": "John Doe", "age": 30, "skills": ["Python", "", "Go"]}),
+        ("Company with future founded year", {"name": "FutureCorp", "industry": "Tech", "employees": 10, "founded_year": 2999}),
+        ("Company with empty industry", {"name": "Acme", "industry": " ", "employees": 10}),
+    ]
+
+    for label, data in invalid_cases:
+        try:
+            if "Person" in label:
+                Person(**data)
+            else:
+                Company(**data)
+            print(f"  {label}: unexpectedly valid")
+        except ValidationError as e:
+            print(f"  {label}:")
+            print(format_validation_error(e))
+
+    # Show a valid case for contrast
+    print("\n  Valid Person:")
+    valid_person = Person(name="Jane Doe", age=28, email="jane@example.com", skills=["Python", "R"])
+    print(f"  {valid_person}")
+
+
 def demo_validation_error_handling(model):
     """Demonstrate surfacing validation errors from malformed model output."""
     print("\n" + "=" * 60)
@@ -361,6 +436,7 @@ if __name__ == "__main__":
         demo_retry_parsing(model)
         demo_complex_extraction(model)
         demo_schema_validation(model)
+        demo_field_validators()
         demo_validation_error_handling(model)
     except Exception as e:
         print(f"\nError during demo: {e}")
