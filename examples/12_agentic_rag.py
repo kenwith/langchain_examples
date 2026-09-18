@@ -15,6 +15,8 @@ Run:
 """
 
 import os
+import time
+from functools import wraps
 
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.chat_models import init_chat_model
@@ -62,6 +64,37 @@ SAMPLE_DOCUMENTS = [
 # ----------
 
 
+def retry(max_retries=3, base_delay=0.5, backoff_factor=2.0):
+    """Retry a function call on transient exceptions with exponential backoff.
+
+    Args:
+        max_retries: Maximum number of attempts before giving up.
+        base_delay: Initial delay between retries in seconds.
+        backoff_factor: Multiplier applied to the delay after each retry.
+    """
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            delay = base_delay
+            for attempt in range(1, max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except Exception as exc:
+                    if attempt == max_retries:
+                        raise
+                    print(
+                        f"Tool call failed (attempt {attempt}/{max_retries}): "
+                        f"{exc}. Retrying in {delay:.1f}s..."
+                    )
+                    time.sleep(delay)
+                    delay *= backoff_factor
+            # This line is never reached, but satisfies linters that expect
+            # a return statement after the loop.
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
 def create_vectorstore():
     """Create an in-memory FAISS vector store from sample documents."""
     embeddings = OpenAIEmbeddings(model="text-embedding-3-small")
@@ -73,6 +106,7 @@ def create_retriever_tool() -> Tool:
     vectorstore = create_vectorstore()
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
+    @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0)
     def search(query: str) -> str:
         docs = retriever.invoke(query)
         if not docs:
