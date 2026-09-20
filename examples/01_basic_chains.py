@@ -3,11 +3,22 @@
 This script demonstrates how to build a simple prompt -> model -> output
 parser chain using LangChain.
 
+The chain consists of:
+    - A chat prompt template that takes a question.
+    - A chat model initialized via `init_chat_model()`.
+    - A string output parser that extracts the final text.
+
+The model is selected by setting the LANGCHAIN_MODEL environment variable
+or by passing a `model_name` to `build_chain()`. The corresponding API key
+must be available in the environment (e.g. OPENAI_API_KEY, ANTHROPIC_API_KEY,
+GOOGLE_API_KEY). Supported models include:
+    - OpenAI: gpt-4o-mini
+    - Anthropic: claude-3-5-sonnet
+    - Google: gemini-1.5-pro
+
 Usage:
     Set the LANGCHAIN_MODEL environment variable to the model you want to
-    use (e.g. gpt-4o-mini, claude-3-5-sonnet, gemini-1.5-pro) and ensure
-    the corresponding API key is set (e.g. OPENAI_API_KEY,
-    ANTHROPIC_API_KEY, GOOGLE_API_KEY). Then run:
+    use and ensure the corresponding API key is set. Then run:
 
         python examples/01_basic_chains.py
 
@@ -21,6 +32,7 @@ Sample output (will vary by model):
 """
 
 import os
+import textwrap
 
 from langchain.chat_models import init_chat_model
 from langchain_core.output_parsers import StrOutputParser
@@ -64,11 +76,37 @@ def build_chain(model_name=None):
     return chain
 
 
+def format_response(response: str, line_length: int = 80) -> str:
+    """Format the model response for better readability.
+
+    Strips leading/trailing whitespace, normalizes line endings, wraps
+    each paragraph to `line_length`, and ensures paragraphs are separated
+    by a single blank line.
+
+    Args:
+        response: Raw response string from the chain.
+        line_length: Maximum line length for wrapping.
+
+    Returns:
+        A cleaned and wrapped version of the response.
+    """
+    paragraphs = [
+        " ".join(paragraph.split())
+        for paragraph in response.strip().split("\n\n")
+        if paragraph.strip()
+    ]
+    wrapped_paragraphs = [
+        textwrap.fill(paragraph, width=line_length)
+        for paragraph in paragraphs
+    ]
+    return "\n\n".join(wrapped_paragraphs)
+
+
 def run_example():
     """Build the chain and run it with a sample question."""
     chain = build_chain()
     response = chain.invoke({"question": "What is LangChain?"})
-    print(response)
+    print(format_response(response))
 
 
 if __name__ == "__main__":
