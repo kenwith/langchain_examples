@@ -1,13 +1,14 @@
 """
 LangChain evaluation example: criteria-based evaluation plus custom evaluators
-for deterministic checks and reference-answer scoring.
+for deterministic checks, reference-answer scoring, and LLM-as-judge assessment.
 
 This module demonstrates:
 1. LLM-based relevance scoring via LangChain's criteria evaluator.
-2. Deterministic keyword and length checks via a custom StringEvaluator.
-3. Reference-answer token overlap scoring via a custom StringEvaluator.
-4. A simple accuracy scorer for classification-style tasks.
-5. A basic exact-match scorer for generated-response correctness.
+2. A direct LLM-as-judge evaluation with a custom prompt for quality scoring.
+3. Deterministic keyword and length checks via a custom StringEvaluator.
+4. Reference-answer token overlap scoring via a custom StringEvaluator.
+5. A simple accuracy scorer for classification-style tasks.
+6. A basic exact-match scorer for generated-response correctness.
 """
 
 import os
@@ -203,6 +204,72 @@ class ReferenceAnswerEvaluator(StringEvaluator):
         return f1, explanation
 
 
+def llm_judge_evaluate(
+    prompt: str,
+    prediction: str,
+    criteria: str = "helpfulness",
+    llm: Optional[ChatOpenAI] = None,
+) -> dict:
+    """
+    Use an LLM as a judge to assess response quality based on a given criterion.
+
+    This is a basic demonstration of the LLM-as-judge pattern. It constructs a
+    simple instruction for the LLM to rate the response on a scale of 1 to 5,
+    providing a score and a short justification.
+
+    Args:
+        prompt: The original user prompt that generated the response.
+        prediction: The model's response to evaluate.
+        criteria: The quality dimension to judge (e.g., "helpfulness", "correctness", "conciseness").
+        llm: An optional ChatOpenAI instance. If not provided, a default one is created using
+            the OPENAI_API_KEY environment variable.
+
+    Returns:
+        A dictionary with keys:
+            - "score": integer from 1 to 5 (or None if parsing fails)
+            - "explanation": the LLM's textual reasoning
+            - "raw_output": the full LLM output for transparency
+    """
+    if llm is None:
+        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+
+    judge_prompt = f"""You are an impartial judge evaluating the quality of a response.
+Given the user prompt and the model's response, rate the response on a scale of 1 (poor) to 5 (excellent) based on {criteria}.
+
+User prompt: {prompt}
+
+Model response: {prediction}
+
+Return your evaluation in the following format:
+Score: <integer 1-5>
+Explanation: <brief reason for the score>"""
+
+    response = llm.invoke(judge_prompt)
+    raw_output = response.content if hasattr(response, "content") else str(response)
+
+    # Parse score and explanation
+    score = None
+    explanation = ""
+    lines = raw_output.split("\n")
+    for line in lines:
+        if line.lower().startswith("score:"):
+            try:
+                score = int(line.split(":", 1)[1].strip())
+            except ValueError:
+                score = None
+        elif line.lower().startswith("explanation:"):
+            explanation = line.split(":", 1)[1].strip()
+    if not explanation:
+        # Fallback: use the whole output as explanation
+        explanation = raw_output
+
+    return {
+        "score": score,
+        "explanation": explanation,
+        "raw_output": raw_output,
+    }
+
+
 def evaluate_response(
     prediction: str,
     reference: str,
@@ -245,4 +312,44 @@ def evaluate_response(
     )
 
     if keywords is not None and min_length is not None:
-        custom_evaluator = KeywordAndLengthEvalu
+        custom_evaluator = KeywordAndLengthEvaluator(keywords=keywords, min_length=min_length)
+        results["custom_result"] = custom_evaluator.evaluate_strings(prediction=prediction)
+
+    return results
+
+
+# Example usage demonstrating the LLM-as-judge evaluation
+if __name__ == "__main__":
+    # Ensure an OpenAI API key is set
+    if not os.getenv("OPENAI_API_KEY"):
+        print("Please set OPENAI_API_KEY environment variable.")
+        exit(1)
+
+    # Create a sample prompt and response
+    sample_prompt = "What are the benefits of regular exercise?"
+    sample_response = (
+        "Regular exercise improves cardiovascular health, strengthens muscles, "
+        "boosts mental well-being, and helps maintain a healthy weight. "
+        "It also reduces the risk of chronic diseases like diabetes and hypertension."
+    )
+
+    # Use LLM-as-judge to assess helpfulness
+    judge_result = llm_judge_evaluate(
+        prompt=sample_prompt,
+        prediction=sample_response,
+        criteria="helpfulness"
+    )
+    print("LLM-as-judge evaluation:")
+    print(f"  Score: {judge_result['score']}/5")
+    print(f"  Explanation: {judge_result['explanation']}")
+    print()
+
+    # Also demonstrate the criteria evaluator (if desired)
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    criteria_result = load_evaluator("criteria", criteria="relevance", llm=llm).evaluate_strings(
+        prediction=sample_response,
+        input=sample_prompt
+    )
+    print("Criteria-based evaluation (relevance):")
+    print(f"  Score: {criteria_result['score']}")
+    print(f"  Reasoning: {criteria_result['reasoning']}")
