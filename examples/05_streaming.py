@@ -5,6 +5,7 @@ Streaming options:
 - Pass a custom callback handler (e.g., `StreamingCallbackHandler`) to process tokens in real time.
 - Set `streaming=True` on the model constructor to enable streaming for `invoke()` as well.
 - Token usage is extracted from the final chunk's `usage_metadata` when available.
+- Use `stream_to_console()` for a minimal token-by-token console streaming example.
 - Use `stream_response()` for a simple incremental flush example.
 - Use `stream_to_file()` to write streamed tokens directly to a text file.
 - Use `stream_with_events()` with `astream_events` for token streaming, the final stop reason, and event metadata.
@@ -48,6 +49,43 @@ def print_token_usage(metadata):
     print(f"  Prompt tokens: {input_tokens}")
     print(f"  Completion tokens: {output_tokens}")
     print(f"  Total tokens: {total_tokens}")
+
+
+def stream_to_console(model, messages):
+    """Stream tokens directly to the console as they are generated.
+
+    This is the simplest way to see token-by-token streaming. It uses
+    `model.stream()` and prints each content chunk immediately.
+    Falls back to a normal response if the provider does not support streaming.
+    """
+    if not hasattr(model, "stream"):
+        print("The selected provider does not support streaming; falling back to normal response.\n")
+        response = model.invoke(messages)
+        print(response.content)
+        print_token_usage(getattr(response, "usage_metadata", None))
+        return
+
+    print("Streaming response directly to console:\n", flush=True)
+    chunks = []
+    try:
+        for chunk in model.stream(messages):
+            content = getattr(chunk, "content", "")
+            if content:
+                print(content, end="", flush=True)
+            chunks.append(chunk)
+        print("\n", flush=True)
+
+        usage = None
+        for chunk in reversed(chunks):
+            usage = getattr(chunk, "usage_metadata", None)
+            if usage:
+                break
+        print_token_usage(usage)
+    except NotImplementedError:
+        print("\nThe selected provider does not support streaming; falling back to normal response.\n")
+        response = model.invoke(messages)
+        print(response.content)
+        print_token_usage(getattr(response, "usage_metadata", None))
 
 
 def stream_response(model, messages):
@@ -220,6 +258,9 @@ async def stream_with_events(model, messages):
 def main():
     model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
     messages = [HumanMessage(content="What is the capital of France?")]
+
+    # Simplest token-by-token streaming directly to the console
+    stream_to_console(model, messages)
 
     # Use the callback-handler streaming approach
     stream_or_fallback(model, messages)
