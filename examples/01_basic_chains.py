@@ -8,13 +8,20 @@ The chain consists of:
     - A chat model initialized via `init_chat_model()`.
     - A string output parser that extracts the final text.
 
-The model is selected by setting the LANGCHAIN_MODEL environment variable
-or by passing a `model_name` to `build_chain()`. The corresponding API key
-must be available in the environment (e.g. OPENAI_API_KEY, ANTHROPIC_API_KEY,
-GOOGLE_API_KEY). Supported models include:
-    - OpenAI: gpt-4o-mini
-    - Anthropic: claude-3-5-sonnet
-    - Google: gemini-1.5-pro
+Why `init_chat_model`?
+    `init_chat_model()` provides a unified interface for initializing chat
+    models from different providers. This keeps the example provider-agnostic
+    and consistent with other LangChain examples, while still allowing the
+    model to be selected at runtime.
+
+Model selection:
+    The model is selected by setting the LANGCHAIN_MODEL environment variable
+    or by passing a `model_name` to `build_chain()`. The corresponding API key
+    must be available in the environment (e.g. OPENAI_API_KEY, ANTHROPIC_API_KEY,
+    GOOGLE_API_KEY). Supported models include:
+        - OpenAI: gpt-4o-mini
+        - Anthropic: claude-3-5-sonnet
+        - Google: gemini-1.5-pro
 
 Usage:
     Set the LANGCHAIN_MODEL environment variable to the model you want to
@@ -33,18 +40,24 @@ Sample output (will vary by model):
 
 import os
 import textwrap
+from typing import Optional
 
 from langchain.chat_models import init_chat_model
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import Runnable
 
 
-def build_chain(model_name=None):
+def build_chain(model_name: Optional[str] = None) -> Runnable:
     """Build a basic prompt -> model -> output parser chain.
 
     Args:
         model_name: Optional model name. If not provided, the model is
             loaded from the LANGCHAIN_MODEL environment variable.
+
+    Returns:
+        A runnable chain that accepts a dictionary with a "question" key
+        and returns the model's text response.
 
     The model is initialized with `init_chat_model()`, which reads the
     appropriate API key from environment variables. To use a different
@@ -102,7 +115,7 @@ def format_response(response: str, line_length: int = 80) -> str:
     return "\n\n".join(wrapped_paragraphs)
 
 
-def run_example():
+def run_example() -> None:
     """Build the chain and run it with a sample question."""
     chain = build_chain()
     response = chain.invoke({"question": "What is LangChain?"})
