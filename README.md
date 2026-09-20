@@ -7,18 +7,18 @@ A collection of practical, runnable examples for building applications with [Lan
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Examples](#examples)
-  - [Basic LLM Chain](#basic-llm-chain)
-  - [Chat Models](#chat-models)
-  - [Prompt Templates](#prompt-templates)
-  - [Output Parsers](#output-parsers)
-  - [Memory](#memory)
-  - [Chains](#chains)
-  - [Agents](#agents)
-  - [Tools](#tools)
-  - [Embeddings](#embeddings)
-  - [Vector Stores](#vector-stores)
-  - [Document Question Answering](#document-question-answering)
-  - [Summarization](#summarization)
+  - [Basic LLM Chain](#basic-llm-chain): `examples/01_basic_llm_chain.py`
+  - [Chat Models](#chat-models): `examples/02_chat_models.py`
+  - [Prompt Templates](#prompt-templates): `examples/03_prompt_templates.py`
+  - [Output Parsers](#output-parsers): `examples/04_output_parsers.py`
+  - [Memory](#memory): `examples/05_memory.py`
+  - [Chains](#chains): `examples/06_chains.py`
+  - [Agents](#agents): `examples/07_agents.py`
+  - [Tools](#tools): `examples/08_tools.py`
+  - [Embeddings](#embeddings): `examples/09_embeddings.py`
+  - [Vector Stores](#vector-stores): `examples/10_vector_stores.py`
+  - [Document Question Answering](#document-question-answering): `examples/11_document_question_answering.py`
+  - [Summarization](#summarization): `examples/12_summarization.py`
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -76,11 +76,15 @@ All example scripts live in the `examples/` directory.
 
 **Script:** `examples/01_basic_llm_chain.py`
 
+**Run:** `python examples/01_basic_llm_chain.py`
+
 Shows how to create a simple LLM chain that sends a prompt to an LLM and prints the response.
 
 ### Chat Models
 
 **Script:** `examples/02_chat_models.py`
+
+**Run:** `python examples/02_chat_models.py`
 
 Demonstrates using chat models like `ChatOpenAI` for conversational interactions.
 
@@ -88,11 +92,15 @@ Demonstrates using chat models like `ChatOpenAI` for conversational interactions
 
 **Script:** `examples/03_prompt_templates.py`
 
+**Run:** `python examples/03_prompt_templates.py`
+
 Explains how to build reusable prompt templates with variables and partial formatting.
 
 ### Output Parsers
 
 **Script:** `examples/04_output_parsers.py`
+
+**Run:** `python examples/04_output_parsers.py`
 
 Shows how to parse LLM output into structured data using Pydantic output parsers.
 
@@ -100,6 +108,70 @@ Shows how to parse LLM output into structured data using Pydantic output parsers
 
 **Script:** `examples/05_memory.py`
 
+**Run:** `python examples/05_memory.py`
+
 Adds conversation memory so the model can remember previous turns and keep context.
 
 ### Chains
+
+**Script:** `examples/06_chains.py`
+
+**Run:** `python examples/06_chains.py`
+
+Shows how to compose multiple calls or steps into a single LangChain chain.
+
+### Agents
+
+**Script:** `examples/07_agents.py`
+
+**Run:** `python examples/07_agents.py`
+
+Demonstrates using agents to decide which tools to call based on user input.
+
+### Tools
+
+**Script:** `examples/08_tools.py`
+
+**Run:** `python examples/08_tools.py`
+
+Shows how to define and use custom tools so an agent can interact with external APIs or functions.
+
+### Embeddings
+
+**Script:** `examples/09_embeddings.py`
+
+**Run:** `python examples/09_embeddings.py`
+
+Demonstrates generating text embeddings for use in search and similarity tasks.
+
+### Vector Stores
+
+**Script:** `examples/10_vector_stores.py`
+
+**Run:** `python examples/10_vector_stores.py`
+
+Shows how to store embeddings in a vector store and perform similarity search.
+
+### Document Question Answering
+
+**Script:** `examples/11_document_question_answering.py`
+
+**Run:** `python examples/11_document_question_answering.py`
+
+Shows how to load documents, split them, embed them, and answer questions over their content.
+
+### Summarization
+
+**Script:** `examples/12_summarization.py`
+
+**Run:** `python examples/12_summarization.py`
+
+Demonstrates summarizing long documents with LangChain.
+
+## Contributing
+
+Contributions are welcome! Feel free to open an issue or submit a pull request.
+
+## License
+
+This project is licensed under the MIT License.
