@@ -25,3 +25,20 @@ def test_build_chain_uses_patched_model():
         chain = build_chain()
         result = chain.invoke({"topic": "unit testing"})
         assert "Hello from the fake model!" in str(result)
+
+
+def test_build_chain_with_empty_topic():
+    """Test that build_chain handles an empty topic without errors."""
+    with patch("basic_chains.ChatOpenAI", FakeChatModel):
+        chain = build_chain()
+        result = chain.invoke({"topic": ""})
+        assert "Hello from the fake model!" in str(result)
+
+
+def test_build_chain_with_special_characters():
+    """Test that build_chain handles special characters in the topic."""
+    special_topic = "!@#$%^&*()_+{}|:<>?~`-=[]\\;',./\n\t héllo wörld 你好 🎉"
+    with patch("basic_chains.ChatOpenAI", FakeChatModel):
+        chain = build_chain()
+        result = chain.invoke({"topic": special_topic})
+        assert "Hello from the fake model!" in str(result)
