@@ -3,7 +3,7 @@ import os
 from langchain.chains import ConversationChain
 from langchain.chat_models import ChatOpenAI
 from langchain.llms import OpenAI
-from langchain.memory import ConversationBufferMemory
+from langchain.memory import ConversationBufferMemory, ConversationSummaryMemory
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.chat_history import InMemoryChatMessageHistory
 from langchain_core.runnables.history import RunnableWithMessageHistory
@@ -36,6 +36,47 @@ class ConversationSession:
         if not history:
             return "No conversation history yet."
         return f"Conversation history:\n{history}"
+
+
+class ConversationSummarySession:
+    """A session-scoped conversation using ConversationSummaryMemory.
+
+    ConversationSummaryMemory keeps a running summary of the conversation instead
+    of storing the full message history. This is useful for long conversations
+    where you want to reduce token usage while retaining the key context.
+
+    Usage:
+        session = ConversationSummarySession()
+        session.ask("My favorite color is blue.")
+        session.ask("What is my favorite color?")
+        session.format_history()
+        session.clear_history()
+    """
+
+    def __init__(self, model="text-davinci-003", temperature=0.7):
+        self.llm = OpenAI(
+            temperature=temperature,
+            model_name=model,
+            openai_api_key=os.getenv("OPENAI_API_KEY"),
+        )
+        self.memory = ConversationSummaryMemory(llm=self.llm)
+        self.chain = ConversationChain(llm=self.llm, memory=self.memory, verbose=True)
+
+    def ask(self, prompt: str) -> str:
+        """Send a prompt to the conversation and return the AI response."""
+        return self.chain.run(input=prompt)
+
+    def clear_history(self) -> None:
+        """Clear the conversation memory for this session."""
+        self.memory.clear()
+
+    def format_history(self) -> str:
+        """Return a formatted string of the conversation summary."""
+        memory_vars = self.memory.load_memory_variables({})
+        history = memory_vars.get("history", "")
+        if not history:
+            return "No conversation history yet."
+        return f"Conversation summary:\n{history}"
 
 
 class RunnableConversationSession:
@@ -109,6 +150,22 @@ def main() -> None:
     print("\nHistory cleared. The AI now remembers nothing from the previous turns.\n")
 
     print("AI:", session.ask("What is my favorite color?"))
+
+    # ConversationSummaryMemory example with a running summary.
+    print("\n--- ConversationSummaryMemory Example ---\n")
+    summary_session = ConversationSummarySession()
+
+    print("AI:", summary_session.ask("My favorite color is blue."))
+    print("AI:", summary_session.ask("What is my favorite color?"))
+
+    # Show the formatted summary before clearing.
+    print("\n" + summary_session.format_history() + "\n")
+
+    # Clear the session history to start a fresh multi-turn demonstration.
+    summary_session.clear_history()
+    print("\nHistory cleared. The AI now remembers nothing from the previous turns.\n")
+
+    print("AI:", summary_session.ask("What is my favorite color?"))
 
     # RunnableWithMessageHistory example with a simple in-memory chat history store.
     print("\n--- RunnableWithMessageHistory Example ---\n")
