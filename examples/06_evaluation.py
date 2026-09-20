@@ -6,6 +6,7 @@ This module demonstrates:
 1. LLM-based relevance scoring via LangChain's criteria evaluator.
 2. Deterministic keyword and length checks via a custom StringEvaluator.
 3. Reference-answer token overlap scoring via a custom StringEvaluator.
+4. A simple accuracy scorer for classification-style tasks.
 """
 
 import os
@@ -15,6 +16,40 @@ from typing import List, Optional
 from langchain.evaluation import load_evaluator
 from langchain.evaluation.schema import StringEvaluator
 from langchain_openai import ChatOpenAI
+
+
+def accuracy_scorer(predictions: List[str], references: List[str]) -> dict:
+    """
+    Compute simple accuracy and error count for classification tasks.
+
+    Args:
+        predictions: List of predicted labels/strings.
+        references: List of ground truth labels/strings.
+
+    Returns:
+        A dictionary with keys:
+            - "accuracy": fraction of exact matches (0.0 to 1.0)
+            - "error_count": number of mismatches
+            - "total": total number of samples
+
+    Raises:
+        ValueError: If predictions and references have different lengths.
+    """
+    if len(predictions) != len(references):
+        raise ValueError("predictions and references must have the same length")
+
+    total = len(predictions)
+    if total == 0:
+        return {"accuracy": 0.0, "error_count": 0, "total": 0}
+
+    error_count = sum(1 for p, r in zip(predictions, references) if p != r)
+    accuracy = (total - error_count) / total
+
+    return {
+        "accuracy": accuracy,
+        "error_count": error_count,
+        "total": total,
+    }
 
 
 class KeywordAndLengthEvaluator(StringEvaluator):
@@ -269,6 +304,14 @@ def main():
     print(f"Scores: {eval_results['scores']}")
     print(f"Average: {eval_results['average_score']:.2f}")
     print(f"Explanation: {eval_results['explanations'][0]}")
+
+    # 4) Simple accuracy scorer example (classification-style)
+    print("\n=== Accuracy scorer example ===")
+    preds = ["positive", "negative", "positive", "positive"]
+    refs = ["positive", "negative", "positive", "negative"]
+    acc_result = accuracy_scorer(preds, refs)
+    print(f"Accuracy: {acc_result['accuracy']:.2f}")
+    print(f"Error count: {acc_result['error_count']} (out of {acc_result['total']})")
 
 
 if __name__ == "__main__":
