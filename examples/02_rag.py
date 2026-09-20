@@ -70,29 +70,47 @@ def load_documents(directory: str = DATA_PATH) -> List[Document]:
 
     return documents
 
+def load_and_split_documents(directory: str = DATA_PATH, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Document]:
+    """
+    Load documents from the specified directory and split them into chunks.
+
+    This helper combines document loading and splitting for convenience and
+    reusability. It uses RecursiveCharacterTextSplitter with configurable
+    chunk size and overlap.
+
+    Args:
+        directory (str): Path to the directory containing text files.
+                         Defaults to DATA_PATH.
+        chunk_size (int): Maximum size of each chunk. Defaults to 1000.
+        chunk_overlap (int): Number of characters to overlap between chunks.
+                             Defaults to 200.
+
+    Returns:
+        List[Document]: A list of Document chunks ready for embedding.
+    """
+    docs = load_documents(directory)
+    text_splitter = RecursiveCharacterTextSplitter(
+        chunk_size=chunk_size,
+        chunk_overlap=chunk_overlap,
+        length_function=len,
+        separators=["\n\n", "\n", " ", ""]
+    )
+    return text_splitter.split_documents(docs)
+
 def main():
     """
     Main execution function for the RAG example.
 
-    Loads documents, splits them into chunks, creates embeddings, stores them
-    in a vector database, and sets up a retrieval-based QA pipeline.
+    Loads and splits documents, creates embeddings, stores them in a vector
+    database, and sets up a retrieval-based QA pipeline.
     """
-    # 1. Load documents
-    docs = load_documents()
+    # 1. Load and split documents into chunks
+    chunks = load_and_split_documents()
 
-    # 2. Split documents into chunks
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=1000,
-        chunk_overlap=200,
-        length_function=len,
-        separators=["\n\n", "\n", " ", ""]
-    )
-    chunks = text_splitter.split_documents(docs)
-
-    # 3. Create embeddings
+    # 2. Create embeddings
     embeddings = OpenAIEmbeddings()
 
-    # 4. Create vector store (persist to disk)
+    # 3. Create vector store (persist to disk)
     vectorstore = Chroma.from_documents(
         documents=chunks,
         embedding=embeddings,
@@ -100,10 +118,10 @@ def main():
     )
     vectorstore.persist()
 
-    # 5. Set up retriever
+    # 4. Set up retriever
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
-    # 6. Create QA chain
+    # 5. Create QA chain
     llm = OpenAI(temperature=0)
     qa = RetrievalQA.from_chain_type(
         llm=llm,
@@ -112,7 +130,7 @@ def main():
         return_source_documents=True
     )
 
-    # 7. Run a sample query
+    # 6. Run a sample query
     query = "What is LangChain?"
     result = qa({"query": query})
     print(f"Answer: {result['result']}")
