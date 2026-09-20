@@ -7,6 +7,7 @@ This module demonstrates:
 2. Deterministic keyword and length checks via a custom StringEvaluator.
 3. Reference-answer token overlap scoring via a custom StringEvaluator.
 4. A simple accuracy scorer for classification-style tasks.
+5. A basic exact-match scorer for generated-response correctness.
 """
 
 import os
@@ -48,6 +49,50 @@ def accuracy_scorer(predictions: List[str], references: List[str]) -> dict:
     return {
         "accuracy": accuracy,
         "error_count": error_count,
+        "total": total,
+    }
+
+
+def exact_match_scorer(predictions: List[str], references: List[str]) -> dict:
+    """
+    Compute the exact match rate for a set of prediction/reference pairs.
+
+    This is a basic string-equality check and does not apply any
+    normalisation. It is useful for tasks where the output must match a
+    canonical answer exactly.
+
+    Args:
+        predictions: List of predicted strings.
+        references: List of ground truth strings.
+
+    Returns:
+        A dictionary with keys:
+            - "exact_match_rate": fraction of exact matches (0.0 to 1.0)
+            - "exact_matches": number of exact matches
+            - "total": total number of samples
+
+    Raises:
+        ValueError: If predictions and references have different lengths.
+
+    Example:
+        >>> exact_match_scorer(["python", "java"], ["python", "java"])
+        {'exact_match_rate': 1.0, 'exact_matches': 2, 'total': 2}
+
+        >>> exact_match_scorer(["python"], ["Java"])
+        {'exact_match_rate': 0.0, 'exact_matches': 0, 'total': 1}
+    """
+    if len(predictions) != len(references):
+        raise ValueError("predictions and references must have the same length")
+
+    total = len(predictions)
+    if total == 0:
+        return {"exact_match_rate": 0.0, "exact_matches": 0, "total": 0}
+
+    exact_matches = sum(1 for p, r in zip(predictions, references) if p == r)
+
+    return {
+        "exact_match_rate": exact_matches / total,
+        "exact_matches": exact_matches,
         "total": total,
     }
 
@@ -200,119 +245,4 @@ def evaluate_response(
     )
 
     if keywords is not None and min_length is not None:
-        custom_evaluator = KeywordAndLengthEvaluator(
-            keywords=keywords,
-            min_length=min_length,
-        )
-        results["custom_result"] = custom_evaluator.evaluate_strings(
-            prediction=prediction,
-            reference=reference,
-            input=input_prompt,
-        )
-    else:
-        results["custom_result"] = None
-
-    return results
-
-
-def run_evaluation(
-    predictions: List[str],
-    references: List[str],
-    evaluator: Optional[StringEvaluator] = None,
-) -> dict:
-    """
-    Score each prediction/reference pair using the provided evaluator.
-
-    If no evaluator is supplied, uses ReferenceAnswerEvaluator.
-
-    Args:
-        predictions: A list of generated responses.
-        references: A list of reference answers.
-        evaluator: An optional StringEvaluator instance. Defaults to
-            ReferenceAnswerEvaluator.
-
-    Returns:
-        A dictionary with per-pair scores, explanations, and the average score.
-    """
-    if evaluator is None:
-        evaluator = ReferenceAnswerEvaluator()
-
-    if len(predictions) != len(references):
-        raise ValueError("predictions and references must have the same length")
-
-    scores: List[float] = []
-    explanations: List[str] = []
-
-    for prediction, reference in zip(predictions, references):
-        result = evaluator.evaluate_strings(
-            prediction=prediction,
-            reference=reference,
-            input="",
-        )
-        scores.append(result["score"])
-        explanations.append(result["explanation"])
-
-    average_score = sum(scores) / len(scores) if scores else 0.0
-
-    return {
-        "scores": scores,
-        "average_score": average_score,
-        "explanations": explanations,
-    }
-
-
-def main():
-    # Initialise the LLM (used by the criteria evaluator).
-    # The API key is read from the environment only – never hard-code it here.
-    llm = ChatOpenAI(
-        model="gpt-4o-mini",
-        temperature=0.0,
-        openai_api_key=os.getenv("OPENAI_API_KEY"),
-    )
-
-    # Example prediction and reference for demonstration
-    prediction = "I enjoy programming in Python and learning about clean code."
-    reference = "A good answer mentions Python and programming."
-    input_prompt = "What do you think about programming?"
-
-    results = evaluate_response(
-        prediction=prediction,
-        reference=reference,
-        input_prompt=input_prompt,
-        llm=llm,
-        criteria="relevance",
-        keywords=["python", "programming"],
-        min_length=50,
-    )
-
-    # 1) Built‑in criteria evaluation (e.g., relevance)
-    print("=== Criteria (relevance) result ===")
-    for key, value in results["criteria_result"].items():
-        print(f"{key}: {value}")
-
-    # 2) Custom evaluator: keyword presence + length constraint
-    print("\n=== Custom (keyword + length) result ===")
-    for key, value in results["custom_result"].items():
-        print(f"{key}: {value}")
-
-    # 3) Reference-based evaluation
-    print("\n=== Reference answer overlap result ===")
-    eval_results = run_evaluation(
-        predictions=[prediction],
-        references=[reference],
-    )
-    print(f"Scores: {eval_results['scores']}")
-    print(f"Average: {eval_results['average_score']:.2f}")
-    print(f"Explanation: {eval_results['explanations'][0]}")
-
-    # 4) Simple accuracy scorer example (classification-style)
-    print("\n=== Accuracy scorer example ===")
-    preds = ["positive", "negative", "positive", "positive"]
-    refs = ["positive", "negative", "positive", "negative"]
-    acc_result = accuracy_scorer(preds, refs)
-    print(f"Accuracy: {acc_result['accuracy']:.2f}")
-    print(f"Error count: {acc_result['error_count']} (out of {acc_result['total']})")
-
-
-if __name__ == "__main__":
-    main()
+        custom_evaluator = KeywordAndLengthEvalu
