@@ -2,12 +2,20 @@
 Custom tools for LangChain agents.
 
 This example demonstrates how to define and register custom tools with
-an OpenAI-powered agent. Each tool subclasses BaseTool and declares:
+an OpenAI-powered agent. It shows two styles:
+
+1. Subclassing BaseTool (CalculatorTool, StringLengthTool) for tools that
+   need explicit Pydantic schemas or custom validation.
+2. Using the `@tool` decorator (reverse_string) to turn a plain Python
+   function into a tool, letting LangChain infer the schema from the
+   function signature.
+
+Each tool declares:
 - name: a unique identifier the agent can reference.
 - description: a natural-language description the LLM uses to decide when to use it.
-- args_schema: a Pydantic model describing the expected input.
-- _run: the synchronous implementation.
-- _arun: the asynchronous implementation.
+- args_schema: a Pydantic model describing the expected input (for BaseTool subclasses).
+- _run: the synchronous implementation (for BaseTool subclasses).
+- _arun: the asynchronous implementation (for BaseTool subclasses).
 
 Register a tool by adding an instance to the `tools` list passed to
 `initialize_agent`. The agent will then be able to invoke it based on
@@ -18,7 +26,7 @@ import ast
 import operator
 from typing import Optional, Type, List, Dict
 
-from langchain.tools import BaseTool
+from langchain.tools import BaseTool, tool
 from langchain.agents import initialize_agent, AgentType
 from langchain.llms import OpenAI
 from pydantic import BaseModel, Field
@@ -116,6 +124,12 @@ class StringLengthTool(BaseTool):
         return self._run(text)
 
 
+@tool
+def reverse_string(text: str) -> str:
+    """Reverses the given string. Input should be a string."""
+    return text[::-1]
+
+
 def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
     """
     Extract tool call arguments from an agent response dict.
@@ -147,12 +161,13 @@ def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
 
 def main():
     """
-    Run an agent with custom calculator and string-length tools.
+    Run an agent with custom calculator, string-length, and reverse-string tools.
 
     Tool registration is handled by passing tool instances to `initialize_agent`.
-    Each tool is a BaseTool subclass that declares a name, description, and
-    Pydantic input schema. The LLM reads these descriptions to decide when to
-    invoke a tool.
+    The calculator and string-length tools are BaseTool subclasses with explicit
+    Pydantic schemas. The reverse-string tool is a plain function decorated with
+    `@tool`, demonstrating how agents interact with user-defined functions.
+    The LLM reads the tool descriptions to decide when to invoke each tool.
     """
     # Load API key from environment - never hardcode credentials
     api_key = os.getenv("OPENAI_API_KEY")
@@ -160,7 +175,7 @@ def main():
         raise ValueError("Please set the OPENAI_API_KEY environment variable.")
 
     llm = OpenAI(api_key=api_key, temperature=0)
-    tools = [CalculatorTool(), StringLengthTool()]
+    tools = [CalculatorTool(), StringLengthTool(), reverse_string]
 
     agent = initialize_agent(
         tools,
@@ -174,6 +189,7 @@ def main():
     print(agent.run("What is 12 * 8 + 4?"))
     print(agent.run("Calculate (3 + 5) ** 2"))
     print(agent.run("What is the length of the word 'hello'?"))
+    print(agent.run("Reverse the string 'hello'"))
 
     # Example invalid expression to demonstrate helpful error
     print(agent.run("What is 2 +* 3?"))
