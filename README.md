@@ -7,7 +7,7 @@ A collection of practical, runnable examples for building applications with [Lan
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Examples](#examples)
-  - [Basic LLM Chain](#basic-llm-chain): `examples/01_basic_llm_chain.py`
+  - [Basic LLM](#basic-llm): `examples/01_basic_llm.py`
   - [Chat Models](#chat-models): `examples/02_chat_models.py`
   - [Prompt Templates](#prompt-templates): `examples/03_prompt_templates.py`
   - [Output Parsers](#output-parsers): `examples/04_output_parsers.py`
@@ -19,6 +19,8 @@ A collection of practical, runnable examples for building applications with [Lan
   - [Vector Stores](#vector-stores): `examples/10_vector_stores.py`
   - [Document Question Answering](#document-question-answering): `examples/11_document_question_answering.py`
   - [Summarization](#summarization): `examples/12_summarization.py`
+  - [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation): `examples/13_rag.py`
+  - [Streaming](#streaming): `examples/14_streaming.py`
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -67,16 +69,16 @@ All example scripts live in the `examples/` directory.
 5. Run an example:
 
    ```bash
-   python examples/01_basic_llm_chain.py
+   python examples/01_basic_llm.py
    ```
 
 ## Examples
 
-### Basic LLM Chain
+### Basic LLM
 
-**Script:** `examples/01_basic_llm_chain.py`
+**Script:** `examples/01_basic_llm.py`
 
-**Run:** `python examples/01_basic_llm_chain.py`
+**Run:** `python examples/01_basic_llm.py`
 
 Shows how to create a simple LLM chain that sends a prompt to an LLM and prints the response.
 
@@ -167,6 +169,22 @@ Shows how to load documents, split them, embed them, and answer questions over t
 **Run:** `python examples/12_summarization.py`
 
 Demonstrates summarizing long documents with LangChain.
+
+### RAG (Retrieval-Augmented Generation)
+
+**Script:** `examples/13_rag.py`
+
+**Run:** `python examples/13_rag.py`
+
+Combines document retrieval with generation to answer questions based on a custom knowledge base.
+
+### Streaming
+
+**Script:** `examples/14_streaming.py`
+
+**Run:** `python examples/14_streaming.py`
+
+Shows how to stream responses from the LLM token by token for a more interactive experience.
 
 ## Contributing
 
