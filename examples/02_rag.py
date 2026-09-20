@@ -1,3 +1,4 @@
+import argparse
 import os
 
 from langchain.chains import LLMChain
@@ -145,4 +146,7 @@ def main(query: str = "What is RAG?") -> str:
 
 
 if __name__ == "__main__":
-    print(main())
+    parser = argparse.ArgumentParser(description="Run retrieval-augmented generation with an optional query.")
+    parser.add_argument("query", nargs="?", default="What is RAG?", help="Query to ask (default: %(default)s)")
+    args = parser.parse_args()
+    print(main(args.query))
