@@ -62,6 +62,16 @@ def build_vectorstore(documents):
     return InMemoryVectorStore.from_documents(documents, embedding=embeddings)
 
 
+def build_metadata_filter(category=None, year=None):
+    """Build a metadata filter dictionary from optional criteria."""
+    filter_dict = {}
+    if category is not None:
+        filter_dict["category"] = category
+    if year is not None:
+        filter_dict["year"] = year
+    return filter_dict
+
+
 def retrieve_with_filter(vectorstore, query, filter_dict, k=3):
     """Retrieve documents using similarity search with metadata filtering."""
     return vectorstore.similarity_search(query, k=k, filter=filter_dict)
@@ -92,9 +102,14 @@ def main():
     vectorstore = build_vectorstore(docs)
 
     query = "What does JPMorgan Chase do?"
-    filter_dict = {"category": "finance"}
+    filter_dict = build_metadata_filter(category="finance")
 
-    print(f"Retrieving with filter: {filter_dict}")
+    print("Retrieving without filter (first 2 results):")
+    retrieved_no_filter = vectorstore.similarity_search(query, k=2)
+    for doc in retrieved_no_filter:
+        print(f"- {doc.page_content} (category: {doc.metadata['category']})")
+
+    print(f"\nRetrieving with filter: {filter_dict}")
     retrieved = retrieve_with_filter(vectorstore, query, filter_dict, k=2)
 
     print(f"Retrieved {len(retrieved)} documents:")
