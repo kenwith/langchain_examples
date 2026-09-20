@@ -1,3 +1,18 @@
+"""
+Custom tools for LangChain agents.
+
+This example demonstrates how to define and register custom tools with
+an OpenAI-powered agent. Each tool subclasses BaseTool and declares:
+- name: a unique identifier the agent can reference.
+- description: a natural-language description the LLM uses to decide when to use it.
+- args_schema: a Pydantic model describing the expected input.
+- _run: the synchronous implementation.
+- _arun: the asynchronous implementation.
+
+Register a tool by adding an instance to the `tools` list passed to
+`initialize_agent`. The agent will then be able to invoke it based on
+its description.
+"""
 import os
 import ast
 import operator
@@ -83,6 +98,24 @@ class CalculatorTool(BaseTool):
         raise ValueError(f"Unsupported expression element: {type(node).__name__}")
 
 
+class StringLengthInput(BaseModel):
+    text: str = Field(description="The string to measure, e.g. 'hello'")
+
+
+class StringLengthTool(BaseTool):
+    name = "string_length"
+    description = "Useful for when you need to know the number of characters in a string. Input should be a string."
+    args_schema: Type[BaseModel] = StringLengthInput
+
+    def _run(self, text: str) -> str:
+        """Return the length of the input string."""
+        return f"The length of the string is {len(text)} characters."
+
+    async def _arun(self, text: str) -> str:
+        """Async version of _run."""
+        return self._run(text)
+
+
 def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
     """
     Extract tool call arguments from an agent response dict.
@@ -113,14 +146,21 @@ def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
 
 
 def main():
-    """Run a simple agent with the calculator tool."""
+    """
+    Run an agent with custom calculator and string-length tools.
+
+    Tool registration is handled by passing tool instances to `initialize_agent`.
+    Each tool is a BaseTool subclass that declares a name, description, and
+    Pydantic input schema. The LLM reads these descriptions to decide when to
+    invoke a tool.
+    """
     # Load API key from environment - never hardcode credentials
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
         raise ValueError("Please set the OPENAI_API_KEY environment variable.")
 
     llm = OpenAI(api_key=api_key, temperature=0)
-    tools = [CalculatorTool()]
+    tools = [CalculatorTool(), StringLengthTool()]
 
     agent = initialize_agent(
         tools,
@@ -133,6 +173,7 @@ def main():
     # Example valid queries
     print(agent.run("What is 12 * 8 + 4?"))
     print(agent.run("Calculate (3 + 5) ** 2"))
+    print(agent.run("What is the length of the word 'hello'?"))
 
     # Example invalid expression to demonstrate helpful error
     print(agent.run("What is 2 +* 3?"))
