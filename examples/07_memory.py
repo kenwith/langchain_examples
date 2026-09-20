@@ -10,7 +10,12 @@ from langchain_core.runnables.history import RunnableWithMessageHistory
 
 
 class ConversationSession:
-    """A session-scoped conversation with memory and a clear_history helper."""
+    """A session-scoped conversation using ConversationBufferMemory.
+
+    ConversationBufferMemory retains the full chat history across turns, so the
+    model can refer back to earlier messages. This class provides a simple
+    ask/response interface and a clear_history helper.
+    """
 
     def __init__(self, model="text-davinci-003", temperature=0.7):
         self.llm = OpenAI(
@@ -18,6 +23,7 @@ class ConversationSession:
             model_name=model,
             openai_api_key=os.getenv("OPENAI_API_KEY"),
         )
+        # ConversationBufferMemory stores the complete message history in memory.
         self.memory = ConversationBufferMemory()
         self.chain = ConversationChain(llm=self.llm, memory=self.memory, verbose=True)
 
@@ -136,6 +142,9 @@ class RunnableConversationSession:
 
 
 def main() -> None:
+    # ConversationBufferMemory retains the full chat history across turns.
+    print("\n--- ConversationBufferMemory Example ---\n")
+
     # Each ConversationSession has its own isolated memory.
     session = ConversationSession()
 
