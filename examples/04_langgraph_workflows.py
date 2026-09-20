@@ -48,6 +48,16 @@ The data flow is best understood by following the ``steps`` counter and the
 6. If ``steps`` reaches ``max_total_steps``, the graph goes to the ``failed``
    node, which appends an error message and sets status to "failed".
 
+In terms of node transitions, the graph starts at the router. The router's
+conditional edge (``should_continue``) decides the next node based on step
+count. If "research" is chosen, the research node increments steps and appends
+to the answer, then unconditionally transitions to the sentiment node. The
+sentiment node sets the sentiment field and then uses a conditional edge
+(``route_by_sentiment``) to either go to "answer" (if positive) or back to
+"router" (otherwise). From the router, the cycle repeats until step limits are
+reached, leading to "answer" or "failed". Both "answer" and "failed" nodes
+transition to END, terminating the graph.
+
 This modular structure makes it straightforward to add new node types (e.g.,
 a "search" node) by simply adding a new function, adding it to the graph, and
 adjusting the routing logic in the appropriate conditional edge function.
@@ -317,6 +327,9 @@ def build_agent_graph() -> StateGraph:
     # Conditional edges from the router.
     # The should_continue function returns the name of the next node,
     # and the mapping tells LangGraph how to interpret those names.
+    # This edge determines the primary flow: if steps are below max_steps,
+    # go to research; if reached max_steps but not max_total_steps, go to answer;
+    # if reached max_total_steps, go to failed.
     graph.add_conditional_edges(
         "router",
         should_continue,
@@ -330,10 +343,14 @@ def build_agent_graph() -> StateGraph:
     # Normal (unconditional) edges:
     # - research node goes to sentiment analysis.
     # - answer and failed nodes terminate the graph.
+    # After research, we always analyze sentiment before deciding the next step.
     graph.add_edge("research", "sentiment")
 
     # Conditional edges from the sentiment node.
     # route_by_sentiment returns "answer" or "router".
+    # This edge implements the sentiment-based loop: if positive, we skip
+    # further research and answer directly; otherwise, we return to the router
+    # to decide if more research is needed (subject to step limits).
     graph.add_conditional_edges(
         "sentiment",
         route_by_sentiment,
@@ -344,6 +361,7 @@ def build_agent_graph() -> StateGraph:
     )
 
     # Unconditional edges for termination.
+    # Both answer and failed nodes are terminal; they lead to the END node.
     graph.add_edge("answer", END)
     graph.add_edge("failed", END)
 
