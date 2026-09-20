@@ -1,4 +1,4 @@
-"""Stream responses from chat models with a custom callback handler, with fallback for providers that do not support streaming.
+"""Stream responses from chat models with a custom callback handler, with fallback for providers that do not support streaming, and optional text-file output.
 
 Streaming options:
 - Use `model.stream()` to stream tokens as they are generated.
@@ -6,6 +6,7 @@ Streaming options:
 - Set `streaming=True` on the model constructor to enable streaming for `invoke()` as well.
 - Token usage is extracted from the final chunk's `usage_metadata` when available.
 - Use `stream_response()` for a simple incremental flush example.
+- Use `stream_to_file()` to write streamed tokens directly to a text file.
 - Use `stream_with_events()` with `astream_events` for token streaming, the final stop reason, and event metadata.
 """
 
@@ -75,6 +76,48 @@ def stream_response(model, messages):
         print("\nThe selected provider does not support streaming; falling back to normal response.\n")
         response = model.invoke(messages)
         print(response.content)
+        print_token_usage(getattr(response, "usage_metadata", None))
+
+
+def stream_to_file(model, messages, filepath):
+    """Stream response tokens to a text file.
+
+    Writes tokens to `filepath` as they are generated. Falls back to a normal
+    response if the provider does not support streaming.
+    """
+    if not hasattr(model, "stream"):
+        print("The selected provider does not support streaming; falling back to normal response.\n")
+        response = model.invoke(messages)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(response.content)
+        print(f"Response saved to {filepath}")
+        print_token_usage(getattr(response, "usage_metadata", None))
+        return
+
+    print(f"Streaming response to {filepath}:\n", flush=True)
+    chunks = []
+    try:
+        with open(filepath, "w", encoding="utf-8") as f:
+            for chunk in model.stream(messages):
+                content = getattr(chunk, "content", "")
+                if content:
+                    f.write(content)
+                    f.flush()
+                chunks.append(chunk)
+        print(f"\nStreamed response saved to {filepath}", flush=True)
+
+        usage = None
+        for chunk in reversed(chunks):
+            usage = getattr(chunk, "usage_metadata", None)
+            if usage:
+                break
+        print_token_usage(usage)
+    except NotImplementedError:
+        print("\nThe selected provider does not support streaming; falling back to normal response.\n")
+        response = model.invoke(messages)
+        with open(filepath, "w", encoding="utf-8") as f:
+            f.write(response.content)
+        print(f"Response saved to {filepath}")
         print_token_usage(getattr(response, "usage_metadata", None))
 
 
@@ -180,6 +223,9 @@ def main():
 
     # Use the callback-handler streaming approach
     stream_or_fallback(model, messages)
+
+    # Stream tokens to a text file
+    stream_to_file(model, messages, "stream_output.txt")
 
     # Use astream_events for granular metadata handling
     asyncio.run(stream_with_events(model, messages))
