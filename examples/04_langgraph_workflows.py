@@ -20,6 +20,27 @@ of continuing. This prevents infinite loops and provides a clear error message.
 This file also provides a reusable ``run_workflow()`` helper that builds the
 graph, compiles it, runs it with a given initial state, and returns the final
 state. This makes it easy to experiment with different queries and step limits.
+
+State Flow
+----------
+The agent state is a TypedDict that is passed from node to node. Each node
+returns a dictionary (typically only the fields it modifies) that gets merged
+into the current state by LangGraph. This makes it easy to add new fields or
+modify existing ones without affecting unrelated parts of the state.
+
+The data flow is best understood by following the ``steps`` counter:
+
+1. The router node reads the current ``steps`` value and the step limits.
+2. If ``steps`` is below the soft limit ``max_steps``, the graph goes to the
+   ``research`` node, which increments ``steps`` and appends to the answer.
+3. If ``steps`` reaches ``max_steps`` but not ``max_total_steps``, the graph
+   goes to the ``answer`` node, which appends a final answer and sets status.
+4. If ``steps`` reaches ``max_total_steps``, the graph goes to the ``failed``
+   node, which appends an error message and sets status to "failed".
+
+This modular structure makes it straightforward to add new node types (e.g.,
+a "search" node) by simply adding a new function, adding it to the graph, and
+adjusting the routing logic in ``should_continue``.
 """
 
 from typing import Literal, Optional, TypedDict
@@ -38,10 +59,13 @@ class AgentState(TypedDict):
         answer: The accumulated answer text built by the nodes.
         status: The final status of the workflow: "success" or "failed".
     """
+    # Data that is read by the router and used for control flow.
     query: str
     steps: int
     max_steps: int
     max_total_steps: int
+
+    # Data that is modified over the course of the workflow.
     answer: str
     status: str
 
@@ -53,6 +77,10 @@ def router_node(state: AgentState) -> AgentState:
     action. For this example, it simply passes the state through unchanged;
     the actual routing is performed by the conditional edge function
     :func:`should_continue`.
+
+    Reads: ``steps``, ``max_steps``, ``max_total_steps`` (indirectly via the
+           conditional edge function).
+    Updates: None (returns the same state).
 
     Args:
         state: The current agent state.
@@ -70,19 +98,19 @@ def research_node(state: AgentState) -> AgentState:
     note to the ``answer`` field. The updated state is returned so that the
     router can decide whether more research is needed.
 
+    Reads: ``query``, ``steps``, ``max_steps``, ``max_total_steps``, ``answer``,
+           ``status``.
+    Updates: ``steps`` (incremented by 1), ``answer`` (extended with a note).
+
     Args:
         state: The current agent state.
 
     Returns:
-        A new state with ``steps`` incremented and ``answer`` extended.
+        A partial state update with ``steps`` incremented and ``answer`` extended.
     """
     return {
-        "query": state["query"],
         "steps": state["steps"] + 1,
-        "max_steps": state["max_steps"],
-        "max_total_steps": state["max_total_steps"],
         "answer": state["answer"] + f" Research step {state['steps'] + 1};",
-        "status": state["status"],
     }
 
 
@@ -93,17 +121,16 @@ def answer_node(state: AgentState) -> AgentState:
     the status to "success". It does not increment the step counter. The graph
     ends after this node runs.
 
+    Reads: ``answer`` (current accumulated text).
+    Updates: ``answer`` (appends final answer), ``status`` (sets to "success").
+
     Args:
         state: The current agent state.
 
     Returns:
-        A new state with the final answer appended and status set to "success".
+        A partial state update with the final answer and status "success".
     """
     return {
-        "query": state["query"],
-        "steps": state["steps"],
-        "max_steps": state["max_steps"],
-        "max_total_steps": state["max_total_steps"],
         "answer": state["answer"] + " Final answer.",
         "status": "success",
     }
@@ -115,17 +142,16 @@ def failed_node(state: AgentState) -> AgentState:
     This node appends a clear failure message to the ``answer`` field and sets
     the status to "failed". The graph ends after this node runs.
 
+    Reads: ``answer`` (current accumulated text).
+    Updates: ``answer`` (appends failure message), ``status`` (sets to "failed").
+
     Args:
         state: The current agent state.
 
     Returns:
-        A new state with a failure message and status set to "failed".
+        A partial state update with a failure message and status "failed".
     """
     return {
-        "query": state["query"],
-        "steps": state["steps"],
-        "max_steps": state["max_steps"],
-        "max_total_steps": state["max_total_steps"],
         "answer": state["answer"] + " FAILED: Step limit exceeded.",
         "status": "failed",
     }
@@ -141,6 +167,9 @@ def should_continue(state: AgentState) -> Literal["research", "answer", "failed"
     - ``max_steps``: If the step count reaches this soft limit, the workflow
       routes to the ``"answer"`` node to produce a final answer.
     Otherwise, it routes to the ``"research"`` node for another step.
+
+    Reads: ``steps``, ``max_total_steps``, ``max_steps``.
+    Updates: None (returns a routing decision).
 
     Args:
         state: The current agent state.
@@ -164,21 +193,45 @@ def build_agent_graph() -> StateGraph:
     answer, and failed nodes. The research node loops back to the router,
     while the answer and failed nodes terminate at the END node.
 
+    Graph layout::
+
+        +----------+
+        |  router  |
+        +----------+
+            |
+            | conditional (should_continue)
+            |                  |
+      +------+------+----------+
+      |             |          |
+      v             v          v
+  research      answer      failed
+      |             |          |
+      +-------------+          |
+      | (loop back)            |
+      +------------------------+ --> END
+
+    When compiled, this graph will execute the router, then conditionally
+    send the state to one of the three terminal/loop nodes. If research runs,
+    it returns to the router for another cycle.
+
     Returns:
         A fully wired :class:`StateGraph` ready to be compiled.
     """
     graph = StateGraph(AgentState)
 
-    # Add nodes
-    graph.add_node("router", router_node)
-    graph.add_node("research", research_node)
-    graph.add_node("answer", answer_node)
-    graph.add_node("failed", failed_node)
+    # Add nodes. The node functions receive the full state and return a
+    # partial update that is merged back into the state.
+    graph.add_node("router", router_node)     # Routes based on step count
+    graph.add_node("research", research_node) # Increments steps, adds research note
+    graph.add_node("answer", answer_node)     # Appends final answer, status = success
+    graph.add_node("failed", failed_node)     # Appends error, status = failed
 
-    # Set entry point
+    # Set the entry point: the graph always starts at the router.
     graph.set_entry_point("router")
 
-    # Add conditional edges
+    # Conditional edges from the router.
+    # The should_continue function returns the name of the next node,
+    # and the mapping tells LangGraph how to interpret those names.
     graph.add_conditional_edges(
         "router",
         should_continue,
@@ -189,7 +242,9 @@ def build_agent_graph() -> StateGraph:
         }
     )
 
-    # Add normal edges
+    # Normal (unconditional) edges:
+    # - research node returns to the router for another decision cycle.
+    # - answer and failed nodes terminate the graph.
     graph.add_edge("research", "router")
     graph.add_edge("answer", END)
     graph.add_edge("failed", END)
