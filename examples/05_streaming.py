@@ -9,6 +9,11 @@ Streaming options:
 - Use `stream_response()` for a simple incremental flush example.
 - Use `stream_to_file()` to write streamed tokens directly to a text file.
 - Use `stream_with_events()` with `astream_events` for token streaming, the final stop reason, and event metadata.
+
+Streaming configuration:
+- `model.stream()` is the recommended streaming API and works without extra constructor options.
+- Some providers (e.g., OpenAI) also support streaming for `invoke()` when `streaming=True` is set on the model constructor.
+- Token usage may appear in individual chunks via `usage_metadata`; this example prints it as soon as it is found in a chunk.
 """
 
 import asyncio
@@ -51,6 +56,14 @@ def print_token_usage(metadata):
     print(f"  Total tokens: {total_tokens}")
 
 
+def print_chunk_usage_if_present(chunk):
+    """Print token usage from a chunk if it contains usage_metadata."""
+    usage = getattr(chunk, "usage_metadata", None)
+    if usage:
+        print("\n", flush=True)
+        print_token_usage(usage)
+
+
 def stream_to_console(model, messages):
     """Stream tokens directly to the console as they are generated.
 
@@ -73,6 +86,7 @@ def stream_to_console(model, messages):
             if content:
                 print(content, end="", flush=True)
             chunks.append(chunk)
+            print_chunk_usage_if_present(chunk)
         print("\n", flush=True)
 
         usage = None
@@ -80,7 +94,8 @@ def stream_to_console(model, messages):
             usage = getattr(chunk, "usage_metadata", None)
             if usage:
                 break
-        print_token_usage(usage)
+        if not any(getattr(c, "usage_metadata", None) for c in chunks):
+            print_token_usage(usage)
     except NotImplementedError:
         print("\nThe selected provider does not support streaming; falling back to normal response.\n")
         response = model.invoke(messages)
@@ -103,13 +118,15 @@ def stream_response(model, messages):
             if content:
                 print(content, end="", flush=True)
             chunks.append(chunk)
+            print_chunk_usage_if_present(chunk)
         print("\n", flush=True)
         usage = None
         for chunk in reversed(chunks):
             usage = getattr(chunk, "usage_metadata", None)
             if usage:
                 break
-        print_token_usage(usage)
+        if not any(getattr(c, "usage_metadata", None) for c in chunks):
+            print_token_usage(usage)
     except NotImplementedError:
         print("\nThe selected provider does not support streaming; falling back to normal response.\n")
         response = model.invoke(messages)
@@ -142,6 +159,7 @@ def stream_to_file(model, messages, filepath):
                     f.write(content)
                     f.flush()
                 chunks.append(chunk)
+                print_chunk_usage_if_present(chunk)
         print(f"\nStreamed response saved to {filepath}", flush=True)
 
         usage = None
@@ -149,7 +167,8 @@ def stream_to_file(model, messages, filepath):
             usage = getattr(chunk, "usage_metadata", None)
             if usage:
                 break
-        print_token_usage(usage)
+        if not any(getattr(c, "usage_metadata", None) for c in chunks):
+            print_token_usage(usage)
     except NotImplementedError:
         print("\nThe selected provider does not support streaming; falling back to normal response.\n")
         response = model.invoke(messages)
@@ -174,6 +193,7 @@ def stream_or_fallback(model, messages):
         chunks = []
         for chunk in model.stream(messages, callbacks=[handler]):
             chunks.append(chunk)
+            print_chunk_usage_if_present(chunk)
 
         print("\n", flush=True)
 
@@ -182,8 +202,8 @@ def stream_or_fallback(model, messages):
             usage = getattr(chunk, "usage_metadata", None)
             if usage:
                 break
-
-        print_token_usage(usage)
+        if not any(getattr(c, "usage_metadata", None) for c in chunks):
+            print_token_usage(usage)
 
     except NotImplementedError:
         print("\nThe selected provider does not support streaming; falling back to normal response.\n")
@@ -211,6 +231,7 @@ async def stream_with_events(model, messages):
                 if content:
                     print(content, end="", flush=True)
                 chunks.append(chunk)
+                print_chunk_usage_if_present(chunk)
                 if not event_metadata:
                     event_metadata = event.get("metadata", {})
                 # Capture stop reason from final chunk metadata when available
@@ -252,7 +273,8 @@ async def stream_with_events(model, messages):
             usage_metadata = getattr(chunk, "usage_metadata", None)
             if usage_metadata:
                 break
-    print_token_usage(usage_metadata)
+    if not any(getattr(c, "usage_metadata", None) for c in chunks):
+        print_token_usage(usage_metadata)
 
 
 def main():
