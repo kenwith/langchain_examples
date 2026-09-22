@@ -1,3 +1,22 @@
+"""
+Batch inference with LangChain.
+
+This example demonstrates how to run multiple prompts through an LLM in
+batches, limiting the number of concurrent requests. It uses asyncio to
+manage concurrency and includes retry logic with exponential backoff.
+
+Batch size:
+    Set the `batch_size` argument in `run_batch` to control how many
+    prompts are processed concurrently. For example, `batch_size=5`
+    processes at most 5 prompts at a time.
+
+Output format:
+    `run_batch` returns a list of strings with the same length as the
+    input `prompts`. Each element is the model's response for the
+    corresponding prompt. If a prompt fails after all retries, its
+    result is the string `"Error: <message>"`.
+"""
+
 import asyncio
 import random
 from typing import Any, Callable, List, Optional
@@ -45,11 +64,16 @@ async def run_batch(
     Args:
         prompts: List of prompt strings.
         llm: Language model instance. Defaults to OpenAI(temperature=0).
-        batch_size: Number of prompts to process concurrently.
+        batch_size: Maximum number of prompts to process concurrently.
         max_retries: Number of attempts per prompt before failing.
         progress_callback: Optional callback called as (completed, total, error)
             after each prompt completes. `error` is None on success, or the
             error message string on failure.
+
+    Returns:
+        List of strings, one per input prompt, in the same order. On
+        failure after retries, the corresponding string is
+        "Error: <error message>".
     """
     if not prompts:
         return []
