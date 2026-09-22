@@ -24,6 +24,7 @@ Concurrency limits:
 
 import asyncio
 import os
+import time
 
 from langchain.chains import LLMChain
 from langchain.chat_models import init_chat_model
@@ -76,11 +77,14 @@ async def main() -> None:
     # Concurrency limit note: asyncio.gather fires all tasks at once. If you
     # have many prompts, consider wrapping ask_model in an asyncio.Semaphore
     # to limit concurrent API calls and avoid rate limits.
+    start = time.perf_counter()
     try:
         responses = await asyncio.gather(*tasks)
     except Exception as e:
         print(f"One or more concurrent model calls failed: {e}")
         return
+    elapsed = time.perf_counter() - start
+    print(f"Concurrent calls completed in {elapsed:.2f} seconds\n")
 
     for prompt, response in zip(prompts, responses):
         print(f"Prompt: {prompt}\nResponse: {response}\n")
