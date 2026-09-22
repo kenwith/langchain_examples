@@ -6,7 +6,7 @@ Streaming options:
 - Set `streaming=True` on the model constructor to enable streaming for `invoke()` as well.
 - Token usage is extracted from the final chunk's `usage_metadata` when available.
 - Use `stream_to_console()` for a minimal token-by-token console streaming example.
-- Use `stream_response()` for a simple incremental flush example.
+- Use `stream_response()` to yield tokens for custom processing.
 - Use `stream_to_file()` to write streamed tokens directly to a text file.
 - Use `stream_with_events()` with `astream_events` for token streaming, the final stop reason, and event metadata.
 
@@ -104,34 +104,33 @@ def stream_to_console(model, messages):
 
 
 def stream_response(model, messages):
-    """Stream response with incremental flush.
+    """Yield response tokens as they are generated.
 
-    Note: Some providers (e.g., OpenAI) require `streaming=True` on the model
-    constructor for streaming to work. If that's the case, set it when creating
-    the model (e.g., `ChatOpenAI(streaming=True)`).
+    This generator can be used for custom processing of each token. It falls
+    back to yielding the full response content if the provider does not support
+    streaming.
     """
-    print("Streaming response (incremental flush):\n", flush=True)
-    chunks = []
+    if not hasattr(model, "stream"):
+        response = model.invoke(messages)
+        content = response.content
+        if isinstance(content, str):
+            yield content
+        else:
+            yield str(content)
+        return
+
     try:
         for chunk in model.stream(messages):
             content = getattr(chunk, "content", "")
             if content:
-                print(content, end="", flush=True)
-            chunks.append(chunk)
-            print_chunk_usage_if_present(chunk)
-        print("\n", flush=True)
-        usage = None
-        for chunk in reversed(chunks):
-            usage = getattr(chunk, "usage_metadata", None)
-            if usage:
-                break
-        if not any(getattr(c, "usage_metadata", None) for c in chunks):
-            print_token_usage(usage)
+                yield content
     except NotImplementedError:
-        print("\nThe selected provider does not support streaming; falling back to normal response.\n")
         response = model.invoke(messages)
-        print(response.content)
-        print_token_usage(getattr(response, "usage_metadata", None))
+        content = response.content
+        if isinstance(content, str):
+            yield content
+        else:
+            yield str(content)
 
 
 def stream_to_file(model, messages, filepath):
@@ -293,8 +292,11 @@ def main():
     # Use astream_events for granular metadata handling
     asyncio.run(stream_with_events(model, messages))
 
-    # Uncomment to try the simple incremental flush approach instead:
-    # stream_response(model, messages)
+    # Use the stream_response generator to yield tokens for custom processing
+    print("Streaming response with stream_response():\n", flush=True)
+    for token in stream_response(model, messages):
+        print(token, end="", flush=True)
+    print("\n", flush=True)
 
 
 if __name__ == "__main__":
