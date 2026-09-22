@@ -21,6 +21,8 @@ A collection of practical, runnable examples for building applications with [Lan
   - [Summarization](#summarization): `examples/12_summarization.py`
   - [RAG (Retrieval-Augmented Generation)](#rag-retrieval-augmented-generation): `examples/13_rag.py`
   - [Streaming](#streaming): `examples/14_streaming.py`
+  - [LangGraph Agent](#langgraph-agent): `examples/15_langgraph_agent.py`
+  - [LangGraph Chatbot](#langgraph-chatbot): `examples/16_langgraph_chatbot.py`
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -28,7 +30,7 @@ A collection of practical, runnable examples for building applications with [Lan
 
 This repository contains self-contained examples that show how to use LangChain for common LLM tasks. The examples are written in Python and can be run from the command line, used as references, or adapted into your own projects.
 
-All example scripts live in the `examples/` directory.
+All example scripts live in the `examples/` directory. The list above reflects the current set of files; new examples are added regularly.
 
 ## Quick Start
 
@@ -56,6 +58,12 @@ All example scripts live in the `examples/` directory.
 
    ```bash
    pip install langchain openai
+   ```
+
+   For LangGraph examples, also install:
+
+   ```bash
+   pip install langgraph
    ```
 
 4. Set your OpenAI API key:
@@ -185,6 +193,22 @@ Combines document retrieval with generation to answer questions based on a custo
 **Run:** `python examples/14_streaming.py`
 
 Shows how to stream responses from the LLM token by token for a more interactive experience.
+
+### LangGraph Agent
+
+**Script:** `examples/15_langgraph_agent.py`
+
+**Run:** `python examples/15_langgraph_agent.py`
+
+Demonstrates building a reactive agent using LangGraph's graph-based state machine. The agent can call tools and respond to user queries in a loop.
+
+### LangGraph Chatbot
+
+**Script:** `examples/16_langgraph_chatbot.py`
+
+**Run:** `python examples/16_langgraph_chatbot.py`
+
+Shows how to create a stateful conversational chatbot with LangGraph, maintaining conversation history and using conditional logic to route between nodes.
 
 ## Contributing
 
