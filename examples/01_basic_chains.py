@@ -54,8 +54,14 @@ Usage:
 
            python examples/01_basic_chains.py
 
-    Alternatively, call ``build_chain(model_name="gpt-4o-mini")`` from your
-    own code and invoke the returned chain:
+    Alternatively, import the module and call ``run_demo()`` to run the
+    same demo from your own code. Importing the module has no side effects;
+    the demo only executes when ``run_demo()`` is called or when the file is
+    run as a script. ``run_demo()`` is a convenience wrapper that builds the
+    chain and invokes it with a sample question, printing the formatted
+    response.
+
+    You can also build a chain and invoke it directly:
 
         chain = build_chain("gpt-4o-mini")
         response = chain.invoke({"question": "What is LangChain?"})
@@ -160,12 +166,28 @@ def format_response(response: str, line_length: int = 80) -> str:
     return "\n\n".join(wrapped_paragraphs)
 
 
-def run_example() -> None:
-    """Build the chain and run it with a sample question."""
+def run_demo() -> None:
+    """Run the basic chain demo with a sample question.
+
+    This function is the recommended entry point when importing this module.
+    It builds the chain and invokes it with a sample question, printing the
+    formatted response. Calling this function has no side effects beyond
+    making the model call and printing; simply importing the module does
+    nothing.
+    """
     chain: Runnable[dict, str] = build_chain()
     response: str = chain.invoke({"question": "What is LangChain?"})
     print(format_response(response))
 
 
+def run_example() -> None:
+    """Compatibility alias for :func:`run_demo`.
+
+    Previously, this was the main entry point. It is kept so existing
+    callers continue to work; new code should prefer ``run_demo()``.
+    """
+    run_demo()
+
+
 if __name__ == "__main__":
-    run_example()
+    run_demo()
