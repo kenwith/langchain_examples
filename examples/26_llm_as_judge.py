@@ -12,6 +12,7 @@ in the environment (e.g., OPENAI_API_KEY for OpenAI models).
 """
 
 import os
+import re
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -45,12 +46,13 @@ def judge_answer(
     # Instantiate the model
     model = init_chat_model(model_name, model_provider=model_provider)
 
-    # System message sets the evaluation context
+    # System message sets the evaluation context and asks for a rubric-based score
     system_message = SystemMessage(
         content=(
-            "You are an impartial judge. Evaluate the given answer based on the "
-            "provided rubric. Return your response in the following format:\n"
-            "Score: <number>/5\nJustification: <brief explanation>"
+            "You are an impartial judge. Evaluate the given answer strictly according "
+            "to the provided rubric. Return your response in the following format:\n"
+            "Score: <number>/5\nJustification: <brief explanation>\n"
+            "The score must be a number from 0 to 5, where 5 is the best."
         )
     )
 
@@ -66,6 +68,33 @@ def judge_answer(
     # Generate the judgment
     response = model.invoke([system_message, user_message])
     return response.content
+
+
+def parse_score(judgment: str, max_score: int = 5) -> float:
+    """
+    Extract the numeric score from a judgment string like "Score: 4/5".
+
+    Args:
+        judgment: The raw judgment output from the model.
+        max_score: The expected maximum score (default: 5).
+
+    Returns:
+        The numeric score as a float.
+
+    Raises:
+        ValueError: If the score cannot be parsed or the denominator does not match.
+    """
+    pattern = r"Score:\s*(\d+(?:\.\d+)?)\s*/\s*(\d+)"
+    match = re.search(pattern, judgment)
+    if not match:
+        raise ValueError(f"Could not parse score from judgment: {judgment!r}")
+    score = float(match.group(1))
+    total = int(match.group(2))
+    if total != max_score:
+        raise ValueError(
+            f"Parsed denominator {total} does not match expected max_score {max_score}"
+        )
+    return score
 
 
 def main():
@@ -84,6 +113,13 @@ def main():
     judgment = judge_answer(question, generated_answer, rubric)
     print("Judgment:")
     print(judgment)
+
+    # Demonstrate the parse_score helper
+    try:
+        score = parse_score(judgment)
+        print(f"\nParsed Score: {score}/5")
+    except ValueError as e:
+        print(f"\nCould not parse score: {e}")
 
 
 if __name__ == "__main__":
