@@ -9,6 +9,32 @@ This module demonstrates:
 4. Reference-answer token overlap scoring via a custom StringEvaluator.
 5. A simple accuracy scorer for classification-style tasks.
 6. A basic exact-match scorer for generated-response correctness.
+
+How to run:
+    Set your OpenAI API key first:
+        export OPENAI_API_KEY="your-api-key"   # Unix/macOS
+        set OPENAI_API_KEY="your-api-key"      # Windows
+
+    Then run this file directly:
+        python examples/06_evaluation.py
+
+    The script will evaluate a sample response with the LLM-as-judge method
+    and with LangChain's built-in criteria evaluator.
+
+Metrics used:
+    - Criteria score: an LLM-based score from LangChain's criteria evaluator
+      (typically 0/1 for binary criteria or a 1-5 score for scale criteria).
+    - LLM-as-judge score: a 1-5 rating produced by a separate LLM prompt.
+    - Keyword/length score: a deterministic 0/1 score from
+      `KeywordAndLengthEvaluator` that checks required keywords and a minimum length.
+    - Reference F1 score: a deterministic 0-1 score from
+      `ReferenceAnswerEvaluator` based on token overlap between prediction and reference.
+    - Accuracy: fraction of exact matches from `accuracy_scorer`.
+    - Exact match rate: fraction of exact string matches from `exact_match_scorer`.
+
+Reference to evaluator class:
+    Custom evaluators in this module subclass `langchain.evaluation.schema.StringEvaluator`.
+    The built-in criteria evaluator is loaded with `langchain.evaluation.load_evaluator`.
 """
 
 import os
