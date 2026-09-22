@@ -15,6 +15,15 @@ class ConversationSession:
     ConversationBufferMemory retains the full chat history across turns, so the
     model can refer back to earlier messages. This class provides a simple
     ask/response interface and a clear_history helper.
+
+    Memory configuration:
+    - memory_key: the variable name passed into the chain's prompt template.
+      ConversationChain expects this to be "history" by default.
+    - input_key: the input field that contains the user's latest message.
+    - return_messages: set to True to receive history as a list of chat messages
+      (useful with chat models); set to False to receive a formatted string.
+    - human_prefix/ai_prefix: labels used when rendering string history as
+      "Human: ..." and "AI: ...". Override them if you need different labels.
     """
 
     def __init__(self, model="text-davinci-003", temperature=0.7):
@@ -24,7 +33,14 @@ class ConversationSession:
             openai_api_key=os.getenv("OPENAI_API_KEY"),
         )
         # ConversationBufferMemory stores the complete message history in memory.
-        self.memory = ConversationBufferMemory()
+        # memory_key must match the history variable expected by ConversationChain.
+        # return_messages=False keeps the history as a plain string, which is
+        # compatible with the default ConversationChain prompt and OpenAI models.
+        self.memory = ConversationBufferMemory(
+            memory_key="history",
+            input_key="input",
+            return_messages=False,
+        )
         self.chain = ConversationChain(llm=self.llm, memory=self.memory, verbose=True)
 
     def ask(self, prompt: str) -> str:
@@ -143,6 +159,8 @@ class RunnableConversationSession:
 
 def main() -> None:
     # ConversationBufferMemory retains the full chat history across turns.
+    # The ConversationChain uses the configured memory_key "history" to inject
+    # the stored conversation context into the prompt on every call.
     print("\n--- ConversationBufferMemory Example ---\n")
 
     # Each ConversationSession has its own isolated memory.
