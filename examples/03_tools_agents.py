@@ -17,9 +17,10 @@ Each tool declares:
 - _run: the synchronous implementation (for BaseTool subclasses).
 - _arun: the asynchronous implementation (for BaseTool subclasses).
 
-Register a tool by adding an instance to the `tools` list passed to
-`initialize_agent`. The agent will then be able to invoke it based on
-its description.
+Tool registration is handled by passing tool instances to `initialize_agent`.
+The agent will then be able to invoke them based on their descriptions.
+Error handling around tool execution is demonstrated in `main()` with a
+try-except block that provides a fallback message.
 """
 import os
 import ast
@@ -168,6 +169,9 @@ def main():
     Pydantic schemas. The reverse-string tool is a plain function decorated with
     `@tool`, demonstrating how agents interact with user-defined functions.
     The LLM reads the tool descriptions to decide when to invoke each tool.
+
+    Execution of the agent is wrapped in a try-except block to catch any
+    unexpected errors (e.g., LLM parsing failures) and provide a fallback message.
     """
     # Load API key from environment - never hardcode credentials
     api_key = os.getenv("OPENAI_API_KEY")
@@ -185,14 +189,18 @@ def main():
         return_intermediate_steps=True,  # capture tool calls for inspection
     )
 
-    # Example valid queries
-    print(agent.run("What is 12 * 8 + 4?"))
-    print(agent.run("Calculate (3 + 5) ** 2"))
-    print(agent.run("What is the length of the word 'hello'?"))
-    print(agent.run("Reverse the string 'hello'"))
+    try:
+        # Example valid queries
+        print(agent.run("What is 12 * 8 + 4?"))
+        print(agent.run("Calculate (3 + 5) ** 2"))
+        print(agent.run("What is the length of the word 'hello'?"))
+        print(agent.run("Reverse the string 'hello'"))
 
-    # Example invalid expression to demonstrate helpful error
-    print(agent.run("What is 2 +* 3?"))
+        # Example invalid expression to demonstrate helpful error
+        print(agent.run("What is 2 +* 3?"))
+    except Exception as e:
+        print(f"An error occurred while running the agent: {e}")
+        print("Fallback message: Please check the input and try again.")
 
     # Show how to extract tool call arguments from the agent's response
     # (using __call__ to get intermediate steps)
