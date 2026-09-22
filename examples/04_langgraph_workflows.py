@@ -25,6 +25,54 @@ This file also provides a reusable ``run_workflow()`` helper that builds the
 graph, compiles it, runs it with a given initial state, and returns the final
 state. This makes it easy to experiment with different queries and step limits.
 
+Workflow Diagram
+----------------
+The following diagram shows the node layout and the conditional edges:
+
+        +----------+
+        |  router  |
+        +----------+
+            |
+            | should_continue
+            |
+   +--------+--------+--------+
+   |        |        |        |
+   v        v        v        v
+research  answer  failed    (END)
+   |
+   | always
+   v
+sentiment
+   |
+   | route_by_sentiment
+   |
+   +--------+--------+
+   |        |        |
+   v        v        v
+ answer  router   (END)
+   |        |
+   +--------+
+   |
+   v
+ (END)
+
+State Transitions
+-----------------
+The table below summarises every transition in the graph:
+
++----------------+------------------+-----------------------------------------+
+| Current Node   | Next Node(s)     | Condition                              |
++================+==================+=========================================+
+| router         | research         | steps < max_steps                       |
+| router         | answer           | max_steps <= steps < max_total_steps    |
+| router         | failed           | steps >= max_total_steps                |
+| research       | sentiment        | always                                  |
+| sentiment      | answer           | sentiment == "positive"                 |
+| sentiment      | router           | sentiment != "positive"                 |
+| answer         | END              | always                                  |
+| failed         | END              | always                                  |
++----------------+------------------+-----------------------------------------+
+
 State Flow
 ----------
 The agent state is a TypedDict that is passed from node to node. Each node
@@ -105,6 +153,10 @@ def router_node(state: AgentState) -> AgentState:
            conditional edge function).
     Updates: None (returns the same state).
 
+    Transitions:
+        The conditional edge :func:`should_continue` reads ``steps`` and
+        sends the workflow to ``"research"``, ``"answer"``, or ``"failed"``.
+
     Args:
         state: The current agent state.
 
@@ -124,6 +176,9 @@ def research_node(state: AgentState) -> AgentState:
     Reads: ``query``, ``steps``, ``max_steps``, ``max_total_steps``, ``answer``,
            ``status``.
     Updates: ``steps`` (incremented by 1), ``answer`` (extended with a note).
+
+    Transitions:
+        Always transitions to ``"sentiment"``.
 
     Args:
         state: The current agent state.
@@ -146,6 +201,10 @@ def sentiment_analysis_node(state: AgentState) -> AgentState:
 
     Reads: ``query``.
     Updates: ``sentiment`` (set to the classification result).
+
+    Transitions:
+        The conditional edge :func:`route_by_sentiment` sends the workflow to
+        ``"answer"`` if sentiment is positive, otherwise back to ``"router"``.
 
     Args:
         state: The current agent state.
@@ -178,6 +237,9 @@ def answer_node(state: AgentState) -> AgentState:
     Reads: ``answer`` (current accumulated text).
     Updates: ``answer`` (appends final answer), ``status`` (sets to "success").
 
+    Transitions:
+        Unconditionally transitions to ``END``.
+
     Args:
         state: The current agent state.
 
@@ -198,6 +260,9 @@ def failed_node(state: AgentState) -> AgentState:
 
     Reads: ``answer`` (current accumulated text).
     Updates: ``answer`` (appends failure message), ``status`` (sets to "failed").
+
+    Transitions:
+        Unconditionally transitions to ``END``.
 
     Args:
         state: The current agent state.
@@ -278,30 +343,28 @@ def build_agent_graph() -> StateGraph:
         |  router  |
         +----------+
             |
-            | conditional (should_continue)
-            |                  |
-      +------+------+----------+
-      |             |          |
-      v             v          v
-  research      answer      failed
-      |             |          |
-      v             |          |
-  sentiment        |          |
-      |             |          |
-      | conditional |          |
-      | (route_by_  |          |
-      | sentiment)  |          |
-      |             |          |
-      +-------+-----+          |
-              |                |
-      +-------+--------+       |
-      |                |       |
-      v                v       |
-   answer           router     |
-      |                |       |
-      +----------------+       |
-      | (loop back)            |
-      +------------------------+ --> END
+            | should_continue
+            |
+   +--------+--------+--------+
+   |        |        |        |
+   v        v        v        v
+research  answer  failed    (END)
+   |
+   | always
+   v
+sentiment
+   |
+   | route_by_sentiment
+   |
+   +--------+--------+
+   |        |        |
+   v        v        v
+ answer  router   (END)
+   |        |
+   +--------+
+   |
+   v
+ (END)
 
     When compiled, this graph will execute the router, then conditionally
     send the state to one of the three nodes. If research runs, it passes to
@@ -327,9 +390,10 @@ def build_agent_graph() -> StateGraph:
     # Conditional edges from the router.
     # The should_continue function returns the name of the next node,
     # and the mapping tells LangGraph how to interpret those names.
-    # This edge determines the primary flow: if steps are below max_steps,
-    # go to research; if reached max_steps but not max_total_steps, go to answer;
-    # if reached max_total_steps, go to failed.
+    # This edge determines the primary flow:
+    #   - "research" when steps < max_steps
+    #   - "answer" when max_steps <= steps < max_total_steps
+    #   - "failed" when steps >= max_total_steps
     graph.add_conditional_edges(
         "router",
         should_continue,
@@ -341,16 +405,16 @@ def build_agent_graph() -> StateGraph:
     )
 
     # Normal (unconditional) edges:
-    # - research node goes to sentiment analysis.
-    # - answer and failed nodes terminate the graph.
-    # After research, we always analyze sentiment before deciding the next step.
+    # - research node always goes to sentiment analysis.
+    # - answer and failed nodes are terminal and go to END.
     graph.add_edge("research", "sentiment")
 
     # Conditional edges from the sentiment node.
     # route_by_sentiment returns "answer" or "router".
-    # This edge implements the sentiment-based loop: if positive, we skip
-    # further research and answer directly; otherwise, we return to the router
-    # to decide if more research is needed (subject to step limits).
+    # This edge implements the sentiment-based loop:
+    #   - "answer" when sentiment == "positive" (skip further research)
+    #   - "router" otherwise (return to the router for another decision,
+    #     subject to the step limits enforced by should_continue)
     graph.add_conditional_edges(
         "sentiment",
         route_by_sentiment,
