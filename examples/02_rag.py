@@ -1,3 +1,17 @@
+"""
+Retrieval-Augmented Generation (RAG) pipeline example.
+
+This script demonstrates a complete RAG workflow:
+1. Load documents from a local directory.
+2. Split the documents into smaller chunks for precise retrieval.
+3. Generate embeddings for each chunk and index them in a Chroma vector store.
+4. Use the vector store as a retriever to fetch relevant chunks for a query.
+5. Pass the retrieved context to an LLM to generate an answer grounded in the documents.
+
+The pipeline combines indexing (steps 1-3) and querying (steps 4-5). It is designed
+to be a minimal but functional starting point for building RAG applications.
+"""
+
 import os
 from typing import List
 
@@ -39,8 +53,8 @@ def load_documents(directory: str = DATA_PATH) -> List[Document]:
             if filename.endswith(".txt"):
                 filepath = os.path.join(directory, filename)
                 try:
-                    with open(filepath, "r", encoding="utf-8") as f:
-                        text = f.read()
+                    with open(filepath, "r", encoding="utf-8") as input_file:
+                        text = input_file.read()
                     # Create a Document with metadata (source file name)
                     documents.append(Document(page_content=text, metadata={"source": filename}))
                 except UnicodeDecodeError:
@@ -88,43 +102,54 @@ def load_and_split_documents(directory: str = DATA_PATH, chunk_size: int = 1000,
     Returns:
         List[Document]: A list of Document chunks ready for embedding.
     """
-    docs = load_documents(directory)
+    documents = load_documents(directory)
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
         length_function=len,
         separators=["\n\n", "\n", " ", ""]
     )
-    return text_splitter.split_documents(docs)
+    return text_splitter.split_documents(documents)
 
 def main():
     """
     Main execution function for the RAG example.
 
-    Loads and splits documents, creates embeddings, stores them in a vector
-    database, and sets up a retrieval-based QA pipeline.
+    This function runs the full RAG pipeline:
+    - Load and split documents.
+    - Create an embedding model.
+    - Index the document chunks in a Chroma vector store.
+    - Retrieve relevant chunks for a sample query.
+    - Generate an answer using an LLM with the retrieved context.
+
+    The vector store is persisted locally under ./chroma_db, allowing the
+    index to be reused in later runs without re-indexing.
     """
     # 1. Load and split documents into chunks
-    chunks = load_and_split_documents()
+    document_chunks = load_and_split_documents()
 
-    # 2. Create embeddings
-    embeddings = OpenAIEmbeddings()
+    # 2. Create embedding model
+    embedding_model = OpenAIEmbeddings()
 
-    # 3. Create vector store (persist to disk)
-    vectorstore = Chroma.from_documents(
-        documents=chunks,
-        embedding=embeddings,
+    # 3. Create and index the vector store.
+    # Chroma builds an index by computing embeddings for each document chunk and
+    # storing them alongside the original text. This enables efficient similarity
+    # search later. The index is persisted to disk so it can be reused.
+    vector_store = Chroma.from_documents(
+        documents=document_chunks,
+        embedding=embedding_model,
         persist_directory="./chroma_db"
     )
-    vectorstore.persist()
+    vector_store.persist()
 
-    # 4. Set up retriever
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    # 4. Set up retriever using the vector store's index.
+    # The retriever fetches the top k most similar chunks for a given query.
+    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
 
     # 5. Create QA chain
-    llm = OpenAI(temperature=0)
-    qa = RetrievalQA.from_chain_type(
-        llm=llm,
+    language_model = OpenAI(temperature=0)
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=language_model,
         chain_type="stuff",
         retriever=retriever,
         return_source_documents=True
@@ -132,10 +157,10 @@ def main():
 
     # 6. Run a sample query
     query = "What is LangChain?"
-    result = qa({"query": query})
-    print(f"Answer: {result['result']}")
+    response = qa_chain({"query": query})
+    print(f"Answer: {response['result']}")
     print("Sources:")
-    for doc in result["source_documents"]:
+    for doc in response["source_documents"]:
         print(f"- {doc.metadata.get('source', 'unknown')}")
 
 if __name__ == "__main__":
