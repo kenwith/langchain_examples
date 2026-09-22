@@ -3,10 +3,26 @@
 This script demonstrates how to build a simple prompt -> model -> output
 parser chain using LangChain.
 
-The chain consists of:
-    - A chat prompt template that takes a question.
-    - A chat model initialized via `init_chat_model()`.
-    - A string output parser that extracts the final text.
+Chain structure
+---------------
+The chain is composed of three components connected with the ``|`` operator:
+
+    prompt = ChatPromptTemplate.from_template(...)
+    model = init_chat_model(...)
+    parser = StrOutputParser()
+    chain = prompt | model | parser
+
+- ``prompt``: A ``ChatPromptTemplate`` that takes a dictionary with a
+  ``"question"`` key and formats it into a chat message.
+- ``model``: A chat model initialized via ``init_chat_model()``. It receives
+  the formatted prompt and returns an ``AIMessage``.
+- ``parser``: A ``StrOutputParser`` that extracts the text content from the
+  model's output, so the final result is a plain string.
+
+The resulting ``chain`` is a ``Runnable`` that accepts a dictionary with a
+``"question"`` key and returns a string. This is the standard way to compose
+LangChain components: each ``|`` passes the output of the left-hand side as
+the input to the right-hand side.
 
 Why `init_chat_model`?
     `init_chat_model()` provides a unified interface for initializing chat
@@ -24,13 +40,31 @@ Model selection:
         - Google: gemini-1.5-pro
 
 Usage:
-    Set the LANGCHAIN_MODEL environment variable to the model you want to
-    use and ensure the corresponding API key is set. Then run:
+    1. Install LangChain and the provider SDK for the model you want to use.
+       For example, for OpenAI:
 
-        python examples/01_basic_chains.py
+           pip install langchain langchain-openai
 
-    Alternatively, call build_chain(model_name="gpt-4o-mini") from your
-    own code.
+    2. Set the model and API key environment variables:
+
+           export LANGCHAIN_MODEL=gpt-4o-mini
+           export OPENAI_API_KEY=your-api-key
+
+    3. Run the example:
+
+           python examples/01_basic_chains.py
+
+    Alternatively, call ``build_chain(model_name="gpt-4o-mini")`` from your
+    own code and invoke the returned chain:
+
+        chain = build_chain("gpt-4o-mini")
+        response = chain.invoke({"question": "What is LangChain?"})
+
+Input/Output:
+    The chain expects a dictionary with a single ``"question"`` key whose
+    value is a string. It returns the model's answer as a string. The
+    ``format_response`` helper is provided only to make the printed output
+    easier to read; it is not part of the chain itself.
 
 Sample output (will vary by model):
     LangChain is a framework for developing applications powered by
@@ -48,7 +82,7 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 
 
-def build_chain(model_name: Optional[str] = None) -> Runnable:
+def build_chain(model_name: Optional[str] = None) -> Runnable[dict, str]:
     """Build a basic prompt -> model -> output parser chain.
 
     Args:
@@ -58,6 +92,17 @@ def build_chain(model_name: Optional[str] = None) -> Runnable:
     Returns:
         A runnable chain that accepts a dictionary with a "question" key
         and returns the model's text response.
+
+    The chain is built by piping three components together:
+
+        prompt = ChatPromptTemplate.from_template(...)
+        model = init_chat_model(...)
+        chain = prompt | model | StrOutputParser()
+
+    The ``|`` operator composes runnables: the prompt formats the input
+    dictionary into a chat message, the model generates an ``AIMessage``,
+    and the output parser converts it to a string. This means the returned
+    chain can be invoked directly with ``chain.invoke({"question": "..."})``.
 
     The model is initialized with `init_chat_model()`, which reads the
     appropriate API key from environment variables. To use a different
@@ -117,8 +162,8 @@ def format_response(response: str, line_length: int = 80) -> str:
 
 def run_example() -> None:
     """Build the chain and run it with a sample question."""
-    chain = build_chain()
-    response = chain.invoke({"question": "What is LangChain?"})
+    chain: Runnable[dict, str] = build_chain()
+    response: str = chain.invoke({"question": "What is LangChain?"})
     print(format_response(response))
 
 
