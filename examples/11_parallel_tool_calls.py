@@ -4,6 +4,19 @@ This example demonstrates how to use `bind_tools` and a custom
 `dispatch_parallel_tool_calls` helper to execute multiple tool calls in
 parallel, with consistent logging for tool failures.
 
+Execution flow:
+1. The user provides a prompt that requires multiple independent tool calls.
+2. The agent model is invoked with the prompt; because tools are bound, it
+   may return one or more tool calls in a single response.
+3. The `call_tools` node dispatches all tool calls concurrently using a
+   ThreadPoolExecutor.
+4. Each tool call is executed independently; failures are captured as error
+   ToolMessages.
+5. The tool results are sorted by tool name and combined into a summary
+   SystemMessage.
+6. The agent receives the tool results and the summary, then generates a
+   final answer.
+
 | Example | Description |
 |---------|-------------|
 | 11 | Parallel tool calls with `bind_tools` and a custom dispatch helper. |
@@ -17,6 +30,8 @@ from typing import Annotated, TypedDict
 
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import SystemMessage, ToolMessage
+# Use the `tool` decorator from `langchain_core.tools` (not the legacy
+# `Tool` class from `langchain.tools`) to define tools.
 from langchain_core.tools import tool
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
@@ -58,7 +73,9 @@ def dispatch_parallel_tool_calls(tool_calls, tools, logger=None):
 
     tool_by_name = {tool.name: tool for tool in tools}
 
-    # Sort tool calls by name for deterministic output ordering.
+    # Sort tool calls by name for deterministic output ordering. The actual
+    # execution order is concurrent and may differ, but the returned messages
+    # will be in a stable, sorted order.
     sorted_tool_calls = sorted(
         tool_calls, key=lambda tc: tc.get("name") or ""
     )
@@ -103,6 +120,10 @@ def dispatch_parallel_tool_calls(tool_calls, tools, logger=None):
                 status="error",
             )
 
+    # Run tool calls concurrently. The ThreadPoolExecutor submits all calls
+    # and `as_completed` yields futures as they finish. Results are placed
+    # into the preallocated list by the original sorted index, so the final
+    # order is deterministic even though execution is concurrent.
     with ThreadPoolExecutor(max_workers=max(1, len(sorted_tool_calls))) as executor:
         future_to_index = {
             executor.submit(execute_tool_call, i, tc): i
