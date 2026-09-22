@@ -111,6 +111,31 @@ def load_and_split_documents(directory: str = DATA_PATH, chunk_size: int = 1000,
     )
     return text_splitter.split_documents(documents)
 
+def build_vectorstore(document_chunks: List[Document], embedding_model: OpenAIEmbeddings, persist_directory: str = "./chroma_db") -> Chroma:
+    """
+    Create and persist a Chroma vector store from document chunks.
+
+    This helper encapsulates the vector store creation logic so it can be
+    reused and tested independently. It generates embeddings for each document
+    chunk and stores them in a Chroma index, then persists the index to disk.
+
+    Args:
+        document_chunks (List[Document]): Document chunks to index.
+        embedding_model (OpenAIEmbeddings): Embedding model used to vectorize chunks.
+        persist_directory (str): Directory where the Chroma index will be persisted.
+                                 Defaults to "./chroma_db".
+
+    Returns:
+        Chroma: The created and persisted vector store.
+    """
+    vector_store = Chroma.from_documents(
+        documents=document_chunks,
+        embedding=embedding_model,
+        persist_directory=persist_directory
+    )
+    vector_store.persist()
+    return vector_store
+
 def main():
     """
     Main execution function for the RAG example.
@@ -135,12 +160,11 @@ def main():
     # Chroma builds an index by computing embeddings for each document chunk and
     # storing them alongside the original text. This enables efficient similarity
     # search later. The index is persisted to disk so it can be reused.
-    vector_store = Chroma.from_documents(
-        documents=document_chunks,
-        embedding=embedding_model,
+    vector_store = build_vectorstore(
+        document_chunks=document_chunks,
+        embedding_model=embedding_model,
         persist_directory="./chroma_db"
     )
-    vector_store.persist()
 
     # 4. Set up retriever using the vector store's index.
     # The retriever fetches the top k most similar chunks for a given query.
