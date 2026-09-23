@@ -20,6 +20,11 @@ Concurrency limits:
 - `asyncio.gather` starts all tasks at once. With many prompts, this can
   overwhelm the API or hit rate limits. In production, use an
   `asyncio.Semaphore` to cap the number of concurrent requests.
+
+Resilience:
+- Using `asyncio.gather(..., return_exceptions=True)` lets the event loop
+  continue even if some tasks fail, returning exceptions alongside successful
+  results. This is demonstrated by the `run_concurrently` helper.
 """
 
 import asyncio
@@ -60,6 +65,17 @@ async def ask_model(chain, prompt: str) -> str:
         raise
 
 
+async def run_concurrently(chain, prompts: list[str]) -> list:
+    """Run multiple prompts concurrently, returning a list of results.
+
+    Uses `asyncio.gather(..., return_exceptions=True)` so that a single
+    failure doesn't cancel the other tasks. Each element in the returned
+    list is either the response string or an exception instance.
+    """
+    tasks = [ask_model(chain, prompt) for prompt in prompts]
+    return await asyncio.gather(*tasks, return_exceptions=True)
+
+
 async def main() -> None:
     """Run multiple prompts concurrently and print their responses.
 
@@ -72,22 +88,23 @@ async def main() -> None:
     ]
 
     chain = get_chain()
-    tasks = [ask_model(chain, prompt) for prompt in prompts]
 
     # Concurrency limit note: asyncio.gather fires all tasks at once. If you
     # have many prompts, consider wrapping ask_model in an asyncio.Semaphore
     # to limit concurrent API calls and avoid rate limits.
     start = time.perf_counter()
-    try:
-        responses = await asyncio.gather(*tasks)
-    except Exception as e:
-        print(f"One or more concurrent model calls failed: {e}")
-        return
+    results = await run_concurrently(chain, prompts)
     elapsed = time.perf_counter() - start
     print(f"Concurrent calls completed in {elapsed:.2f} seconds\n")
 
-    for prompt, response in zip(prompts, responses):
-        print(f"Prompt: {prompt}\nResponse: {response}\n")
+    # Print each result, handling exceptions gracefully.
+    for prompt, result in zip(prompts, results):
+        print(f"Prompt: {prompt}")
+        if isinstance(result, Exception):
+            print(f"  Error: {result}")
+        else:
+            print(f"Response: {result}")
+        print()
 
     # Demonstrate streaming with astream
     print("Streaming response for 'Explain async/await in one sentence':")
