@@ -9,6 +9,7 @@ This module demonstrates:
 4. Reference-answer token overlap scoring via a custom StringEvaluator.
 5. A simple accuracy scorer for classification-style tasks.
 6. A basic exact-match scorer for generated-response correctness.
+7. A helper to format and summarize prediction/ground-truth pairs.
 
 How to run:
     Set your OpenAI API key first:
@@ -230,6 +231,53 @@ class ReferenceAnswerEvaluator(StringEvaluator):
         return f1, explanation
 
 
+def print_evaluation_report(predictions: List[str], references: List[str]) -> None:
+    """
+    Print a formatted report of prediction/ground-truth pairs and a compact score summary.
+
+    This helper uses `accuracy_scorer`, `exact_match_scorer`, and
+    `ReferenceAnswerEvaluator` to compute and print accuracy, exact-match rate,
+    and average token-overlap F1. Each prediction/reference pair is printed with
+    a match indicator for quick inspection.
+
+    Args:
+        predictions: List of predicted strings.
+        references: List of ground truth strings.
+
+    Raises:
+        ValueError: If predictions and references have different lengths.
+
+    Example:
+        >>> print_evaluation_report(["python", "java"], ["python", "java"])
+        1) Prediction: python | Ground Truth: python | Match: Yes
+        2) Prediction: java | Ground Truth: java | Match: Yes
+        Summary: Accuracy: 1.00 | Exact Match: 1.00 | Avg F1: 1.00 | Total: 2
+    """
+    if len(predictions) != len(references):
+        raise ValueError("predictions and references must have the same length")
+
+    total = len(predictions)
+    f1_scores = []
+    evaluator = ReferenceAnswerEvaluator()
+
+    for i, (pred, ref) in enumerate(zip(predictions, references), start=1):
+        match = "Yes" if pred == ref else "No"
+        print(f"{i}) Prediction: {pred} | Ground Truth: {ref} | Match: {match}")
+        if total > 0:
+            f1, _ = evaluator.evaluate_strings(prediction=pred, reference=ref)
+            f1_scores.append(f1)
+
+    accuracy = accuracy_scorer(predictions, references)
+    exact_match = exact_match_scorer(predictions, references)
+
+    if total > 0:
+        avg_f1 = sum(f1_scores) / total
+    else:
+        avg_f1 = 0.0
+
+    print(f"Summary: Accuracy: {accuracy['accuracy']:.2f} | Exact Match: {exact_match['exact_match_rate']:.2f} | Avg F1: {avg_f1:.2f} | Total: {total}")
+
+
 def llm_judge_evaluate(
     prompt: str,
     prediction: str,
@@ -379,3 +427,16 @@ if __name__ == "__main__":
     print("Criteria-based evaluation (relevance):")
     print(f"  Score: {criteria_result['score']}")
     print(f"  Reasoning: {criteria_result['reasoning']}")
+
+    # Demonstrate the print_evaluation_report helper
+    print()
+    sample_predictions = [
+        "Regular exercise improves cardiovascular health and mental well-being.",
+        "Exercise is good for you."
+    ]
+    sample_references = [
+        "Regular exercise improves cardiovascular health and mental well-being.",
+        "Regular exercise can improve cardiovascular health."
+    ]
+    print("Evaluation report example:")
+    print_evaluation_report(sample_predictions, sample_references)
