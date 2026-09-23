@@ -14,6 +14,18 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_text_splitters import CharacterTextSplitter
 
 
+def deduplicate_sources(source_documents):
+    """Return documents with unique source metadata, preserving first occurrence order."""
+    seen = set()
+    unique_documents = []
+    for doc in source_documents:
+        source = doc.metadata.get("source")
+        if source not in seen:
+            seen.add(source)
+            unique_documents.append(doc)
+    return unique_documents
+
+
 def main():
     # Check for OpenAI API key
     if "OPENAI_API_KEY" not in os.environ:
@@ -74,15 +86,13 @@ def main():
     print("\nSources used:")
 
     # Print unique sources
-    seen = set()
-    for doc in result.get("source_documents", []):
+    unique_docs = deduplicate_sources(result.get("source_documents", []))
+    for doc in unique_docs:
         source = doc.metadata.get("source")
-        if source not in seen:
-            seen.add(source)
-            print(f"- {source}")
-            # Optionally print a snippet
-            snippet = doc.page_content[:100].replace("\n", " ")
-            print(f"  Snippet: {snippet}...")
+        print(f"- {source}")
+        # Optionally print a snippet
+        snippet = doc.page_content[:100].replace("\n", " ")
+        print(f"  Snippet: {snippet}...")
     print()
 
 
