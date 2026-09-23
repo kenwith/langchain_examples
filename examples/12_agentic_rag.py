@@ -134,6 +134,33 @@ def create_retriever_tool() -> Tool:
     )
 
 
+def format_citations(intermediate_steps):
+    """Extract source names from intermediate steps and format them as citations.
+
+    Args:
+        intermediate_steps: List of (AgentAction, observation) tuples from the
+            agent executor when return_intermediate_steps=True.
+
+    Returns:
+        A string like "\\n\\nSources: source1, source2" or an empty string if
+        no sources are found.
+    """
+    import re
+
+    sources = set()
+    for _, observation in intermediate_steps:
+        # The observation is the tool output string, which contains
+        # lines like "(Source: source_name)"
+        matches = re.findall(r"\(Source: ([^)]+)\)", observation)
+        sources.update(matches)
+
+    if not sources:
+        return ""
+
+    citation_list = ", ".join(sorted(sources))
+    return f"\n\nSources: {citation_list}"
+
+
 def build_agent() -> AgentExecutor:
     """Build a ReAct agent with a retriever tool."""
     # Use a provider-agnostic chat model. Set OPENAI_API_KEY or configure
@@ -175,6 +202,7 @@ Thought: {agent_scratchpad}"""
         tools=tools,
         verbose=True,
         handle_parsing_errors=True,
+        return_intermediate_steps=True,  # So we can extract sources later
     )
 
 
@@ -186,7 +214,14 @@ def main():
     question = "What is RAG and how does it relate to agents?"
     print(f"\nQuestion: {question}\n")
     response = agent_executor.invoke({"input": question})
-    print(f"\nAnswer: {response['output']}")
+    answer = response["output"]
+
+    # Append a formatted citation list if the agent didn't already include one
+    citations = format_citations(response.get("intermediate_steps", []))
+    if citations and "Sources:" not in answer:
+        answer += citations
+
+    print(f"\nAnswer: {answer}")
 
 
 if __name__ == "__main__":
