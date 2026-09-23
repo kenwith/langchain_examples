@@ -15,6 +15,9 @@ Output format:
     input `prompts`. Each element is the model's response for the
     corresponding prompt. If a prompt fails after all retries, its
     result is the string `"Error: <message>"`.
+
+    `process_batch` is a convenience wrapper around `run_batch` that
+    prints each result with its original index in the input list.
 """
 
 import asyncio
@@ -114,6 +117,48 @@ async def run_batch(
             completed += 1
             if progress_callback is not None:
                 progress_callback(completed, total, error)
+
+    return results
+
+
+async def process_batch(
+    prompts: List[str],
+    llm: Any = None,
+    batch_size: int = 10,
+    max_retries: int = 3,
+    progress_callback: Optional[Callable[[int, int, Optional[str]], None]] = None,
+) -> List[str]:
+    """Run prompts through an LLM in batches and print each result with its index.
+
+    This is a convenience wrapper around `run_batch` that prints each result
+    alongside its original index in the input list. It returns early if the
+    input list is empty.
+
+    Args:
+        prompts: List of prompt strings.
+        llm: Language model instance. Defaults to OpenAI(temperature=0).
+        batch_size: Maximum number of prompts to process concurrently.
+        max_retries: Number of attempts per prompt before failing.
+        progress_callback: Optional callback called as (completed, total, error)
+            after each prompt completes.
+
+    Returns:
+        List of strings, one per input prompt, in the same order. If `prompts`
+        is empty, returns an empty list.
+    """
+    if not prompts:
+        return []
+
+    results = await run_batch(
+        prompts,
+        llm=llm,
+        batch_size=batch_size,
+        max_retries=max_retries,
+        progress_callback=progress_callback,
+    )
+
+    for idx, result in enumerate(results):
+        print(f"[{idx}] {result}")
 
     return results
 
