@@ -13,7 +13,8 @@ Two async tools are defined: `get_weather` and `get_time`.
 
 1. Bind the tools to a provider-agnostic chat model via `init_chat_model`.
 2. Ask the model a question that should trigger multiple tool calls.
-3. Run all requested tool calls in parallel with `asyncio.gather`.
+3. Run all requested tool calls in parallel with `asyncio.gather`, while
+   bounding concurrency with an `asyncio.Semaphore`.
 4. Print the combined tool results.
 
 ## Environment
@@ -32,6 +33,9 @@ import os
 
 from langchain.chat_models import init_chat_model
 from langchain_core.tools import tool
+
+# Maximum number of tool calls allowed to run concurrently.
+MAX_CONCURRENCY = 2
 
 
 @tool
@@ -63,7 +67,7 @@ async def get_time(city: str) -> str:
 
 
 async def run_parallel_tool_calls() -> str:
-    """Invoke the model and run its tool calls in parallel."""
+    """Invoke the model and run its tool calls in parallel with bounded concurrency."""
     model = init_chat_model(
         os.getenv("MODEL"),
         model_provider=os.getenv("MODEL_PROVIDER"),
@@ -88,8 +92,16 @@ async def run_parallel_tool_calls() -> str:
         "get_time": get_time,
     }
 
+    semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
+
+    async def run_with_semaphore(tool_call):
+        """Run a single tool call, respecting the global concurrency limit."""
+        tool_func = tool_map[tool_call["name"]]
+        async with semaphore:
+            return await tool_func.ainvoke(tool_call["args"])
+
     tasks = [
-        tool_map[tool_call["name"]].ainvoke(tool_call["args"])
+        run_with_semaphore(tool_call)
         for tool_call in response.tool_calls
     ]
 
