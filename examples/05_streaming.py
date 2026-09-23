@@ -7,6 +7,7 @@ Streaming options:
 - Token usage is extracted from the final chunk's `usage_metadata` when available.
 - Use `stream_to_console()` for a minimal token-by-token console streaming example.
 - Use `stream_response()` to yield tokens for custom processing.
+- Use `stream_and_collect()` to yield tokens while also accumulating the full response for post-processing.
 - Use `stream_to_file()` to write streamed tokens directly to a text file.
 - Use `stream_with_events()` with `astream_events` for token streaming, the final stop reason, and event metadata.
 
@@ -131,6 +132,58 @@ def stream_response(model, messages):
             yield content
         else:
             yield str(content)
+
+
+def stream_and_collect(model, messages):
+    """Yield response tokens while accumulating the full response.
+
+    This generator yields each content token as it is generated, and after
+    iteration completes, the full response is available via the generator's
+    return value (StopIteration.value). Falls back to a normal response if
+    streaming is unsupported.
+
+    Example:
+        gen = stream_and_collect(model, messages)
+        full = ""
+        while True:
+            try:
+                token = next(gen)
+                full += token
+                print(token, end="", flush=True)
+            except StopIteration as e:
+                full = e.value
+                break
+        print(full)
+    """
+    full_response = ""
+    if not hasattr(model, "stream"):
+        response = model.invoke(messages)
+        content = response.content
+        if isinstance(content, str):
+            yield content
+            full_response = content
+        else:
+            yield str(content)
+            full_response = str(content)
+        return full_response
+
+    try:
+        for chunk in model.stream(messages):
+            content = getattr(chunk, "content", "")
+            if content:
+                yield content
+                full_response += content
+        return full_response
+    except NotImplementedError:
+        response = model.invoke(messages)
+        content = response.content
+        if isinstance(content, str):
+            yield content
+            full_response = content
+        else:
+            yield str(content)
+            full_response = str(content)
+        return full_response
 
 
 def stream_to_file(model, messages, filepath):
@@ -297,6 +350,20 @@ def main():
     for token in stream_response(model, messages):
         print(token, end="", flush=True)
     print("\n", flush=True)
+
+    # Use the stream_and_collect generator to yield tokens and accumulate the full response
+    print("Streaming response with stream_and_collect():\n", flush=True)
+    gen = stream_and_collect(model, messages)
+    full_response = None
+    while True:
+        try:
+            token = next(gen)
+            print(token, end="", flush=True)
+        except StopIteration as e:
+            full_response = e.value
+            break
+    print("\n", flush=True)
+    print(f"Collected full response ({len(full_response)} chars): {full_response}")
 
 
 if __name__ == "__main__":
