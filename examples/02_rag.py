@@ -136,6 +136,27 @@ def build_vectorstore(document_chunks: List[Document], embedding_model: OpenAIEm
     vector_store.persist()
     return vector_store
 
+def format_docs(docs: List[Document]) -> str:
+    """
+    Format retrieved document chunks into a single context string.
+
+    Each document is prefixed with its source metadata to make it clear where
+    the information originates. This formatted context is used in the prompt
+    template to help the LLM produce a more grounded and traceable answer.
+
+    Args:
+        docs (List[Document]): List of retrieved document chunks.
+
+    Returns:
+        str: A single string containing all documents, separated by blank lines,
+             with source metadata included.
+    """
+    formatted = []
+    for doc in docs:
+        source = doc.metadata.get("source", "unknown")
+        formatted.append(f"Source: {source}\n{doc.page_content}")
+    return "\n\n".join(formatted)
+
 def main():
     """
     Main execution function for the RAG example.
@@ -176,7 +197,23 @@ def main():
         llm=language_model,
         chain_type="stuff",
         retriever=retriever,
-        return_source_documents=True
+        return_source_documents=True,
+        chain_type_kwargs={
+            "prompt": PromptTemplate(
+                input_variables=["context", "question"],
+                template=(
+                    "Use the following pieces of context to answer the question at the end. "
+                    "Each piece includes its source for reference.\n\n"
+                    "{context}\n\n"
+                    "Question: {question}\n"
+                    "Helpful Answer:"
+                ),
+            ),
+            "document_prompt": PromptTemplate(
+                input_variables=["page_content", "source"],
+                template="Source: {source}\n{page_content}",
+            ),
+        },
     )
 
     # 6. Run a sample query
