@@ -19,8 +19,9 @@ Each tool declares:
 
 Tool registration is handled by passing tool instances to `initialize_agent`.
 The agent will then be able to invoke them based on their descriptions.
-Error handling around tool execution is demonstrated in `main()` with a
-try-except block that provides a fallback message.
+Tool inputs are validated against their Pydantic args_schema before the tool's
+_run method is called. Error handling around tool execution is demonstrated
+in `main()` with a try-except block that provides a fallback message.
 """
 import os
 import ast
@@ -46,7 +47,11 @@ ALLOWED_OPERATORS = {
 
 
 class CalculatorInput(BaseModel):
-    expression: str = Field(description="The math expression to evaluate, e.g. '2 + 3 * 4'")
+    expression: str = Field(
+        description="The math expression to evaluate, e.g. '2 + 3 * 4'",
+        min_length=1,
+        max_length=200,
+    )
 
 
 class CalculatorTool(BaseTool):
@@ -108,7 +113,10 @@ class CalculatorTool(BaseTool):
 
 
 class StringLengthInput(BaseModel):
-    text: str = Field(description="The string to measure, e.g. 'hello'")
+    text: str = Field(
+        description="The string to measure, e.g. 'hello'",
+        max_length=100000,
+    )
 
 
 class StringLengthTool(BaseTool):
