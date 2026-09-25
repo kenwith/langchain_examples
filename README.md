@@ -25,6 +25,25 @@ A collection of practical, runnable examples for building applications with [Lan
   - [LangGraph Chatbot](#langgraph-chatbot): `examples/16_langgraph_chatbot.py`
   - [Contextual Compression](#contextual-compression): `examples/17_contextual_compression.py`
   - [Query Rewriting](#query-rewriting): `examples/18_query_rewriting.py`
+  - [Hybrid Search](#hybrid-search): `examples/19_hybrid_search.py`
+  - [Multi-Query Retriever](#multi-query-retriever): `examples/20_multi_query_retriever.py`
+  - [Self-Query Retriever](#self-query-retriever): `examples/21_self_query_retriever.py`
+  - [Ensemble Retriever](#ensemble-retriever): `examples/22_ensemble_retriever.py`
+  - [Web Research](#web-research): `examples/23_web_research.py`
+  - [SQL Agent](#sql-agent): `examples/24_sql_agent.py`
+  - [CSV Agent](#csv-agent): `examples/25_csv_agent.py`
+  - [Pandas Agent](#pandas-agent): `examples/26_pandas_agent.py`
+  - [Function Calling](#function-calling): `examples/27_function_calling.py`
+  - [Structured Output](#structured-output): `examples/28_structured_output.py`
+  - [Async](#async): `examples/29_async.py`
+  - [Caching](#caching): `examples/30_caching.py`
+  - [Callbacks](#callbacks): `examples/31_callbacks.py`
+  - [Token Usage](#token-usage): `examples/32_token_usage.py`
+  - [Guardrails](#guardrails): `examples/33_guardrails.py`
+  - [Evaluation](#evaluation): `examples/34_evaluation.py`
+  - [LangSmith](#langsmith): `examples/35_langsmith.py`
+  - [Agentic RAG](#agentic-rag): `examples/36_agentic_rag.py`
+  - [Graph RAG](#graph-rag): `examples/37_graph_rag.py`
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -227,6 +246,158 @@ Demonstrates using a contextual compression retriever to compress retrieved docu
 **Run:** `python examples/18_query_rewriting.py`
 
 Shows how to rewrite or expand a user query into multiple search variations with an LLM, improving retrieval recall and making RAG results more robust.
+
+### Hybrid Search
+
+**Script:** `examples/19_hybrid_search.py`
+
+**Run:** `python examples/19_hybrid_search.py`
+
+Demonstrates combining keyword and vector search to improve retrieval quality.
+
+### Multi-Query Retriever
+
+**Script:** `examples/20_multi_query_retriever.py`
+
+**Run:** `python examples/20_multi_query_retriever.py`
+
+Shows how to generate multiple query variations and retrieve documents for each to improve recall.
+
+### Self-Query Retriever
+
+**Script:** `examples/21_self_query_retriever.py`
+
+**Run:** `python examples/21_self_query_retriever.py`
+
+Demonstrates using an LLM to infer metadata filters from a natural language query and apply them to retrieval.
+
+### Ensemble Retriever
+
+**Script:** `examples/22_ensemble_retriever.py`
+
+**Run:** `python examples/22_ensemble_retriever.py`
+
+Shows how to combine multiple retrievers with weighted scores to get better results.
+
+### Web Research
+
+**Script:** `examples/23_web_research.py`
+
+**Run:** `python examples/23_web_research.py`
+
+Demonstrates using LangChain to perform web searches and synthesize answers from web content.
+
+### SQL Agent
+
+**Script:** `examples/24_sql_agent.py`
+
+**Run:** `python examples/24_sql_agent.py`
+
+Shows how to create an agent that can query a SQL database using natural language.
+
+### CSV Agent
+
+**Script:** `examples/25_csv_agent.py`
+
+**Run:** `python examples/25_csv_agent.py`
+
+Demonstrates using an agent to answer questions over CSV data.
+
+### Pandas Agent
+
+**Script:** `examples/26_pandas_agent.py`
+
+**Run:** `python examples/26_pandas_agent.py`
+
+Shows how to use an agent to manipulate and analyze data with pandas.
+
+### Function Calling
+
+**Script:** `examples/27_function_calling.py`
+
+**Run:** `python examples/27_function_calling.py`
+
+Demonstrates using OpenAI function calling to extract structured data and trigger actions.
+
+### Structured Output
+
+**Script:** `examples/28_structured_output.py`
+
+**Run:** `python examples/28_structured_output.py`
+
+Shows how to get structured, typed responses from LLMs using output parsers and schemas.
+
+### Async
+
+**Script:** `examples/29_async.py`
+
+**Run:** `python examples/29_async.py`
+
+Demonstrates running LangChain operations asynchronously for better performance.
+
+### Caching
+
+**Script:** `examples/30_caching.py`
+
+**Run:** `python examples/30_caching.py`
+
+Shows how to cache LLM responses to reduce cost and latency.
+
+### Callbacks
+
+**Script:** `examples/31_callbacks.py`
+
+**Run:** `python examples/31_callbacks.py`
+
+Demonstrates using callbacks to monitor and interact with LangChain execution.
+
+### Token Usage
+
+**Script:** `examples/32_token_usage.py`
+
+**Run:** `python examples/32_token_usage.py`
+
+Shows how to track and count token usage for LLM calls.
+
+### Guardrails
+
+**Script:** `examples/33_guardrails.py`
+
+**Run:** `python examples/33_guardrails.py`
+
+Demonstrates adding validation and safety checks to LLM outputs.
+
+### Evaluation
+
+**Script:** `examples/34_evaluation.py`
+
+**Run:** `python examples/34_evaluation.py`
+
+Shows how to evaluate LLM chains and agents with metrics and datasets.
+
+### LangSmith
+
+**Script:** `examples/35_langsmith.py`
+
+**Run:** `python examples/35_langsmith.py`
+
+Demonstrates tracing and monitoring LangChain applications with LangSmith.
+
+### Agentic RAG
+
+**Script:** `examples/36_agentic_rag.py`
+
+**Run:** `python examples/36_agentic_rag.py`
+
+Shows how to build a retrieval-augmented generation agent that can iteratively refine queries and retrieve documents.
+
+### Graph RAG
+
+**Script:** `examples/37_graph_rag.py`
+
+**Run:** `python examples/37_graph_rag.py`
+
+Demonstrates using knowledge graphs to improve retrieval-augmented generation.
 
 ## Contributing
 
