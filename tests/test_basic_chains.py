@@ -4,7 +4,7 @@ from unittest.mock import patch
 
 from langchain_core.messages import AIMessage
 
-from basic_chains import build_chain
+from basic_chains import build_chain, build_prompt
 
 
 class FakeChatModel:
@@ -42,3 +42,10 @@ def test_build_chain_with_special_characters():
         chain = build_chain()
         result = chain.invoke({"topic": special_topic})
         assert "Hello from the fake model!" in str(result)
+
+
+def test_build_prompt_formats_topic():
+    """Test that build_prompt formats the topic into a prompt string."""
+    prompt = build_prompt("unit testing")
+    assert isinstance(prompt, str)
+    assert "unit testing" in prompt
