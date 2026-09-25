@@ -7,7 +7,7 @@ A collection of practical, runnable examples for building applications with [Lan
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Examples](#examples)
-  - [Basic LLM](#basic-llm): `examples/01_basic_llm.py`
+  - [Basic Chains](#basic-chains): `examples/01_basic_chains.py`
   - [Chat Models](#chat-models): `examples/02_chat_models.py`
   - [Prompt Templates](#prompt-templates): `examples/03_prompt_templates.py`
   - [Output Parsers](#output-parsers): `examples/04_output_parsers.py`
@@ -23,6 +23,8 @@ A collection of practical, runnable examples for building applications with [Lan
   - [Streaming](#streaming): `examples/14_streaming.py`
   - [LangGraph Agent](#langgraph-agent): `examples/15_langgraph_agent.py`
   - [LangGraph Chatbot](#langgraph-chatbot): `examples/16_langgraph_chatbot.py`
+  - [Contextual Compression](#contextual-compression): `examples/17_contextual_compression.py`
+  - [Query Rewriting](#query-rewriting): `examples/18_query_rewriting.py`
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -77,16 +79,16 @@ All example scripts live in the `examples/` directory. The list above reflects t
 5. Run an example:
 
    ```bash
-   python examples/01_basic_llm.py
+   python examples/01_basic_chains.py
    ```
 
 ## Examples
 
-### Basic LLM
+### Basic Chains
 
-**Script:** `examples/01_basic_llm.py`
+**Script:** `examples/01_basic_chains.py`
 
-**Run:** `python examples/01_basic_llm.py`
+**Run:** `python examples/01_basic_chains.py`
 
 Shows how to create a simple LLM chain that sends a prompt to an LLM and prints the response.
 
@@ -209,6 +211,22 @@ Demonstrates building a reactive agent using LangGraph's graph-based state machi
 **Run:** `python examples/16_langgraph_chatbot.py`
 
 Shows how to create a stateful conversational chatbot with LangGraph, maintaining conversation history and using conditional logic to route between nodes.
+
+### Contextual Compression
+
+**Script:** `examples/17_contextual_compression.py`
+
+**Run:** `python examples/17_contextual_compression.py`
+
+Demonstrates using a contextual compression retriever to compress retrieved documents down to the information relevant to a query, improving answer quality and reducing token usage.
+
+### Query Rewriting
+
+**Script:** `examples/18_query_rewriting.py`
+
+**Run:** `python examples/18_query_rewriting.py`
+
+Shows how to rewrite or expand a user query into multiple search variations with an LLM, improving retrieval recall and making RAG results more robust.
 
 ## Contributing
 
