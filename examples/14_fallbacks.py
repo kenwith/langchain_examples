@@ -12,6 +12,10 @@ is the primary, the rest are fallbacks. Each model is wrapped with `with_retry`,
 and the chain uses `with_fallbacks`. A warning is logged when the primary model
 fails and another warning is logged when a fallback is triggered. Credentials
 are read from environment variables.
+
+The `fallback_chain` helper builds a runnable chain from a primary model name
+and a list of fallback model names, with clear error handling for model
+initialization failures.
 """
 
 import logging
@@ -60,29 +64,69 @@ def log_fallback(model, fallback_name):
     return RunnableLambda(invoke_with_log)
 
 
-def build_chain_with_fallback():
-    """Build a runnable chain with retries and fallbacks from a list."""
-    model_names = get_model_list()
-    if not model_names:
-        raise ValueError("MODELS environment variable must contain at least one model name")
+def fallback_chain(primary_model_name, fallback_model_names):
+    """Build a runnable chain with retries and fallbacks from model names.
 
-    # Create the primary model with retry and failure logging
-    primary_model = create_model(model_names[0]).with_retry(stop_after_attempt=2)
+    Args:
+        primary_model_name: The primary model name.
+        fallback_model_names: A list of fallback model names.
+
+    Returns:
+        A runnable chain that tries the primary model, then fallbacks.
+    """
+    try:
+        primary_model = create_model(primary_model_name)
+    except Exception as e:
+        raise ValueError(
+            f"Failed to create primary model '{primary_model_name}': {e}"
+        ) from e
+
+    fallback_models = []
+    for name in fallback_model_names:
+        try:
+            model = create_model(name)
+        except Exception as e:
+            logger.warning("Failed to create fallback model '%s': %s", name, e)
+            continue
+        fallback_models.append((model, name))
+
+    if not fallback_models:
+        logger.warning("No valid fallback models configured; using primary only.")
+
+    primary_model = primary_model.with_retry(stop_after_attempt=2)
     primary_model = log_primary_failure(primary_model)
     primary_chain = PROMPT | primary_model | StrOutputParser()
 
-    # Create fallback chains (if any) with retry and logging wrapper
     fallback_chains = []
-    for name in model_names[1:]:
-        model = create_model(name).with_retry(stop_after_attempt=2)
+    for model, name in fallback_models:
+        model = model.with_retry(stop_after_attempt=2)
         fallback_model = log_fallback(model, name)
         fallback_chains.append(PROMPT | fallback_model | StrOutputParser())
 
-    # If no fallbacks, just return the primary chain
     if not fallback_chains:
         return primary_chain
     return primary_chain.with_fallbacks(fallback_chains)
 
 
+def build_chain_with_fallback():
+    """Build a runnable chain from the MODELS environment variable."""
+    model_names = get_model_list()
+    if not model_names:
+        raise ValueError("MODELS environment variable must contain at least one model name")
+    return fallback_chain(model_names[0], model_names[1:])
+
+
 def main():
     """Run a simple demo with the fallback-enabled chain."""
+    topic = sys.argv[1] if len(sys.argv) > 1 else "programming"
+    try:
+        chain = build_chain_with_fallback()
+        response = chain.invoke({"topic": topic})
+        print(response)
+    except Exception as e:
+        logger.error("Chain execution failed: %s", e)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
