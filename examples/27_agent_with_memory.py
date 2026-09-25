@@ -52,6 +52,7 @@ def create_agent_with_memory(model_name: str, model_provider: str, system_prompt
 
 def run_conversation(agent, config: dict, messages: List[str]) -> None:
     """Run a series of user messages through the agent, printing responses."""
+    all_messages = []  # collect all messages for summary
     for user_input in messages:
         print(f"User: {user_input}")
         response = agent.invoke(
@@ -61,19 +62,42 @@ def run_conversation(agent, config: dict, messages: List[str]) -> None:
         # Extract the AI response (last message)
         ai_message = response["messages"][-1]
         print(f"Assistant: {ai_message.content}\n")
+        # Store for summary
+        all_messages.append({"role": "user", "content": user_input})
+        all_messages.append({"role": "assistant", "content": ai_message.content})
+    
+    # Print compact summary after the conversation
+    print_conversation_summary(all_messages)
+
+def print_conversation_summary(messages: List[dict]) -> None:
+    """Print a compact summary of the conversation."""
+    print("\n" + "="*50)
+    print("COMPACT CONVERSATION SUMMARY")
+    print("="*50)
+    for i, msg in enumerate(messages, 1):
+        role = msg["role"].capitalize()
+        content = msg["content"]
+        # Truncate long messages for compactness
+        if len(content) > 80:
+            content = content[:77] + "..."
+        print(f"{i:2d}. {role}: {content}")
+    print("="*50)
 
 # -------------------------------
 # Main Demo
 # -------------------------------
 
 if __name__ == "__main__":
-    # Ensure API key is available (e.g., OPENAI_API_KEY)
-    if not os.getenv("OPENAI_API_KEY"):
-        raise ValueError("OPENAI_API_KEY environment variable not set.")
+    # Provider-agnostic configuration via environment variables
+    # Default to OpenAI, but can be changed by setting MODEL_PROVIDER and MODEL_NAME
+    model_provider = os.getenv("MODEL_PROVIDER", "openai")
+    model_name = os.getenv("MODEL_NAME", "gpt-4o-mini")
     
-    # Use OpenAI by default, but you can change model/provider
-    model_name = "gpt-4o-mini"
-    model_provider = "openai"
+    # Check for API key based on provider (example: OPENAI_API_KEY, ANTHROPIC_API_KEY, etc.)
+    # This is a simplified check; you may need to set the appropriate key for your provider.
+    if not os.getenv("OPENAI_API_KEY") and model_provider == "openai":
+        raise ValueError("OPENAI_API_KEY environment variable not set.")
+    # For other providers, you might want to add similar checks here.
     
     # Create agent with memory
     agent = create_agent_with_memory(model_name, model_provider)
