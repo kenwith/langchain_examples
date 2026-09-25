@@ -9,13 +9,18 @@ from langchain.text_splitter import CharacterTextSplitter
 from langchain.vectorstores import FAISS
 
 
+def format_docs(docs):
+    """Format retrieved documents into a single context string."""
+    return "\n\n".join(doc.page_content for doc in docs)
+
+
 def prepare_response(retriever, query, llm):
     """Generate a response from retriever and LLM, handling empty retrieval."""
     docs = retriever.get_relevant_documents(query)
     if not docs:
         return "I couldn't find any relevant information to answer your question."
 
-    context = "\n\n".join(doc.page_content for doc in docs)
+    context = format_docs(docs)
     prompt = (
         f"Based on the following context, answer the question.\n\n"
         f"Context:\n{context}\n\nQuestion: {query}\nAnswer:"
