@@ -1,232 +1,48 @@
-"""
-Retrieval-Augmented Generation (RAG) pipeline example.
-
-This script demonstrates a complete RAG workflow:
-1. Load documents from a local text file or directory.
-2. Split the documents into smaller chunks for precise retrieval.
-3. Generate embeddings for each chunk and index them in a Chroma vector store.
-4. Use the vector store as a retriever to fetch relevant chunks for a query.
-5. Pass the retrieved context to an LLM to generate an answer grounded in the documents.
-
-The pipeline combines indexing (steps 1-3) and querying (steps 4-5). It is designed
-to be a minimal but functional starting point for building RAG applications.
-"""
+"""RAG example: retrieve and generate with graceful empty handling."""
 
 import os
-from typing import List
 
-from langchain.schema import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain.document_loaders import TextLoader
 from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
-from langchain.chains import RetrievalQA
 from langchain.llms import OpenAI
-from langchain.prompts import PromptTemplate
+from langchain.text_splitter import CharacterTextSplitter
+from langchain.vectorstores import FAISS
 
-# Path to a text file or directory containing text files
-DATA_PATH = "data"
 
-# Fallback text used when no external document is available
-DEFAULT_TEXT = (
-    "LangChain is a framework for developing applications powered by language models. "
-    "It provides modular components and integrations to build complex workflows. "
-    "This is a fallback document used when no external data is available."
-)
+def prepare_response(retriever, query, llm):
+    """Generate a response from retriever and LLM, handling empty retrieval."""
+    docs = retriever.get_relevant_documents(query)
+    if not docs:
+        return "I couldn't find any relevant information to answer your question."
 
-def load_documents(path: str = DATA_PATH) -> List[Document]:
-    """
-    Load documents from a local text file or directory.
-
-    This function reads text files from the given path. If the path is a file,
-    it loads that file. If the path is a directory, it scans for .txt files and
-    loads their content into a list of Document objects. If the path does not
-    exist or no text files are found, it falls back to a hardcoded default
-    document.
-
-    Args:
-        path (str): Path to a text file or directory containing text files.
-                    Defaults to DATA_PATH.
-
-    Returns:
-        List[Document]: A list of Document objects loaded from the path.
-
-    Raises:
-        FileNotFoundError: If the path does not exist and no fallback
-                           document can be loaded.
-    """
-    documents = []
-
-    if os.path.isfile(path):
-        # Load a single file
-        try:
-            with open(path, "r", encoding="utf-8") as input_file:
-                text = input_file.read()
-            documents.append(Document(page_content=text, metadata={"source": os.path.basename(path)}))
-        except UnicodeDecodeError:
-            print(f"Warning: Could not decode file {path}. Skipping.")
-    elif os.path.isdir(path):
-        # Load all .txt files from directory
-        for filename in os.listdir(path):
-            if filename.endswith(".txt"):
-                filepath = os.path.join(path, filename)
-                try:
-                    with open(filepath, "r", encoding="utf-8") as input_file:
-                        text = input_file.read()
-                    documents.append(Document(page_content=text, metadata={"source": filename}))
-                except UnicodeDecodeError:
-                    print(f"Warning: Could not decode file {filename}. Skipping.")
-                    continue
-    else:
-        # Fallback if the path doesn't exist
-        print(f"Warning: Path '{path}' not found. Using built-in default document.")
-        documents.append(Document(page_content=DEFAULT_TEXT, metadata={"source": "built-in"}))
-
-    # If no documents were loaded (empty directory or no text files), use fallback
-    if not documents:
-        print("No text files found. Using built-in default document.")
-        documents.append(Document(page_content=DEFAULT_TEXT, metadata={"source": "built-in"}))
-
-    return documents
-
-def load_and_split_documents(path: str = DATA_PATH, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Document]:
-    """
-    Load documents from the specified path and split them into chunks.
-
-    This helper combines document loading and splitting for convenience and
-    reusability. It uses RecursiveCharacterTextSplitter with configurable
-    chunk size and overlap.
-
-    Args:
-        path (str): Path to a text file or directory containing text files.
-                    Defaults to DATA_PATH.
-        chunk_size (int): Maximum size of each chunk. Defaults to 1000.
-        chunk_overlap (int): Number of characters to overlap between chunks.
-                             Defaults to 200.
-
-    Returns:
-        List[Document]: A list of Document chunks ready for embedding.
-    """
-    documents = load_documents(path)
-    text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=chunk_size,
-        chunk_overlap=chunk_overlap,
-        length_function=len,
-        separators=["\n\n", "\n", " ", ""]
+    context = "\n\n".join(doc.page_content for doc in docs)
+    prompt = (
+        f"Based on the following context, answer the question.\n\n"
+        f"Context:\n{context}\n\nQuestion: {query}\nAnswer:"
     )
-    return text_splitter.split_documents(documents)
+    return llm(prompt)
 
-def build_vectorstore(document_chunks: List[Document], embedding_model: OpenAIEmbeddings, persist_directory: str = "./chroma_db") -> Chroma:
-    """
-    Create and persist a Chroma vector store from document chunks.
-
-    This helper encapsulates the vector store creation logic so it can be
-    reused and tested independently. It generates embeddings for each document
-    chunk and stores them in a Chroma index, then persists the index to disk.
-
-    Args:
-        document_chunks (List[Document]): Document chunks to index.
-        embedding_model (OpenAIEmbeddings): Embedding model used to vectorize chunks.
-        persist_directory (str): Directory where the Chroma index will be persisted.
-                                 Defaults to "./chroma_db".
-
-    Returns:
-        Chroma: The created and persisted vector store.
-    """
-    vector_store = Chroma.from_documents(
-        documents=document_chunks,
-        embedding=embedding_model,
-        persist_directory=persist_directory
-    )
-    vector_store.persist()
-    return vector_store
-
-def format_docs(docs: List[Document]) -> str:
-    """
-    Format retrieved document chunks into a single context string.
-
-    Each document is prefixed with its source metadata to make it clear where
-    the information originates. This formatted context is used in the prompt
-    template to help the LLM produce a more grounded and traceable answer.
-
-    Args:
-        docs (List[Document]): List of retrieved document chunks.
-
-    Returns:
-        str: A single string containing all documents, separated by blank lines,
-             with source metadata included.
-    """
-    formatted = []
-    for doc in docs:
-        source = doc.metadata.get("source", "unknown")
-        formatted.append(f"Source: {source}\n{doc.page_content}")
-    return "\n\n".join(formatted)
 
 def main():
-    """
-    Main execution function for the RAG example.
+    # Load documents
+    loader = TextLoader("data.txt")
+    documents = loader.load()
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    texts = text_splitter.split_documents(documents)
 
-    This function runs the full RAG pipeline:
-    - Load and split documents.
-    - Create an embedding model.
-    - Index the document chunks in a Chroma vector store.
-    - Retrieve relevant chunks for a sample query.
-    - Generate an answer using an LLM with the retrieved context.
+    # Create vector store
+    embeddings = OpenAIEmbeddings()
+    vectorstore = FAISS.from_documents(texts, embeddings)
+    retriever = vectorstore.as_retriever()
 
-    The vector store is persisted locally under ./chroma_db, allowing the
-    index to be reused in later runs without re-indexing.
-    """
-    # 1. Load and split documents into chunks
-    document_chunks = load_and_split_documents()
+    # Initialize LLM
+    llm = OpenAI(temperature=0)
 
-    # 2. Create embedding model
-    embedding_model = OpenAIEmbeddings()
+    # Query
+    query = "What is the capital of France?"
+    response = prepare_response(retriever, query, llm)
+    print(response)
 
-    # 3. Create and index the vector store.
-    # Chroma builds an index by computing embeddings for each document chunk and
-    # storing them alongside the original text. This enables efficient similarity
-    # search later. The index is persisted to disk so it can be reused.
-    vector_store = build_vectorstore(
-        document_chunks=document_chunks,
-        embedding_model=embedding_model,
-        persist_directory="./chroma_db"
-    )
-
-    # 4. Set up retriever using the vector store's index.
-    # The retriever fetches the top k most similar chunks for a given query.
-    retriever = vector_store.as_retriever(search_kwargs={"k": 3})
-
-    # 5. Create QA chain
-    language_model = OpenAI(temperature=0)
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=language_model,
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True,
-        chain_type_kwargs={
-            "prompt": PromptTemplate(
-                input_variables=["context", "question"],
-                template=(
-                    "Use the following pieces of context to answer the question at the end. "
-                    "Each piece includes its source for reference.\n\n"
-                    "{context}\n\n"
-                    "Question: {question}\n"
-                    "Helpful Answer:"
-                ),
-            ),
-            "document_prompt": PromptTemplate(
-                input_variables=["page_content", "source"],
-                template="Source: {source}\n{page_content}",
-            ),
-        },
-    )
-
-    # 6. Run a sample query
-    query = "What is LangChain?"
-    response = qa_chain({"query": query})
-    print(f"Answer: {response['result']}")
-    print("Sources:")
-    for doc in response["source_documents"]:
-        print(f"- {doc.metadata.get('source', 'unknown')}")
 
 if __name__ == "__main__":
     main()
