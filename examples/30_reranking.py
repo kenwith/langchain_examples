@@ -1,132 +1,107 @@
-"""Rerank retrieved documents using a cross-encoder to improve answer quality.
+"""Example: Retrieval with reranking.
 
-This example demonstrates how to use LangChain's ContextualCompressionRetriever
-with a CrossEncoderReranker to reorder documents retrieved by a vector store.
-The reranked documents are then passed to a chat model to generate a grounded answer.
-
-Requirements:
-- Set OPENAI_API_KEY for the chat model (or configure another provider).
-- The embeddings and cross-encoder models are downloaded from HuggingFace Hub.
+This example demonstrates how to add a reranking step to improve retrieval quality.
+It includes a helper function `rerank_documents` and improved output formatting.
 """
 
-import os
+from typing import List, Sequence
 
-from langchain.chat_models import init_chat_model
-from langchain.embeddings import init_embeddings
-from langchain.retrievers import ContextualCompressionRetriever
-from langchain.retrievers.document_compressors import CrossEncoderReranker
-from langchain_community.cross_encoders import HuggingFaceCrossEncoder
 from langchain_core.documents import Document
-from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+from langchain_openai import OpenAIEmbeddings
+
+# Optional: use a cross-encoder for reranking. If not available, fallback.
+try:
+    from sentence_transformers import CrossEncoder
+
+    _CROSS_ENCODER = CrossEncoder("cross-encoder/ms-marco-MiniLM-L-6-v2")
+except ImportError:
+    _CROSS_ENCODER = None
 
 
-# ---------------------------------------------------------------
-# 1. Load and split documents
-# ---------------------------------------------------------------
-def load_documents() -> list[Document]:
-    """Return a small set of sample documents to index."""
-    text = """
-LangChain is a framework for developing applications powered by language models.
-It provides standard interfaces for chains, agents, and retrieval-augmented generation (RAG).
-RAG combines a retrieval step with a generation step to produce answers grounded in external knowledge.
-The retrieval step typically uses a vector store to find relevant documents based on embedding similarity.
-However, embedding similarity can sometimes retrieve documents that are not truly relevant to the query.
-Cross-encoders can rerank the retrieved documents by jointly encoding the query and each document.
-This reranking step often improves the quality of the final answer.
-LangChain integrates with many vector stores and embedding models.
-It also supports various chat models through a unified interface.
-The framework is open-source and has a large community.
-"""
-    # Add an unrelated paragraph to demonstrate reranking.
-    unrelated = """
-The weather today is sunny with a chance of rain in the afternoon.
-Remember to bring an umbrella if you go outside.
-"""
-    return [Document(page_content=text), Document(page_content=unrelated)]
+def rerank_documents(
+    query: str,
+    documents: Sequence[Document],
+    top_k: int = 3,
+) -> List[Document]:
+    """Rerank documents by relevance to the query using a cross-encoder.
+
+    Args:
+        query: The query string.
+        documents: The documents to rerank.
+        top_k: The number of top documents to return.
+
+    Returns:
+        A list of documents sorted by relevance (most relevant first).
+    """
+    if _CROSS_ENCODER is None:
+        # Fallback: return the first top_k documents unchanged.
+        return list(documents[:top_k])
+
+    pairs = [(query, doc.page_content) for doc in documents]
+    scores = _CROSS_ENCODER.predict(pairs)
+
+    # Sort documents by score in descending order.
+    scored = sorted(zip(documents, scores), key=lambda x: x[1], reverse=True)
+    return [doc for doc, _ in scored[:top_k]]
 
 
-def split_documents(documents: list[Document]) -> list[Document]:
-    """Split documents into smaller chunks."""
-    splitter = RecursiveCharacterTextSplitter(chunk_size=100, chunk_overlap=20)
-    return splitter.split_documents(documents)
+def format_documents(documents: Sequence[Document]) -> str:
+    """Format documents for readable output."""
+    lines = []
+    for i, doc in enumerate(documents, start=1):
+        lines.append(f"Document {i}:")
+        lines.append(f"  Source: {doc.metadata.get('source', 'unknown')}")
+        lines.append(f"  Content: {doc.page_content[:200]}...")
+        lines.append("")
+    return "\n".join(lines)
 
 
-# ---------------------------------------------------------------
-# 2. Build a base retriever
-# ---------------------------------------------------------------
-def create_retriever(documents: list[Document]):
-    """Create an in-memory vector store retriever."""
-    embeddings = init_embeddings(
-        os.getenv("EMBEDDINGS_MODEL", "huggingface:sentence-transformers/all-MiniLM-L6-v2")
-    )
-    vectorstore = InMemoryVectorStore.from_documents(documents, embedding=embeddings)
-    return vectorstore.as_retriever(search_kwargs={"k": 4})
-
-
-# ---------------------------------------------------------------
-# 3. Create a cross-encoder reranker
-# ---------------------------------------------------------------
-def create_reranker() -> CrossEncoderReranker:
-    """Create a cross-encoder reranker using a small model."""
-    cross_encoder = HuggingFaceCrossEncoder(
-        model_name="cross-encoder/ms-marco-MiniLM-L-6-v2"
-    )
-    return CrossEncoderReranker(model=cross_encoder, top_n=3)
-
-
-def create_compression_retriever(base_retriever) -> ContextualCompressionRetriever:
-    """Wrap the base retriever with the reranker."""
-    reranker = create_reranker()
-    return ContextualCompressionRetriever(
-        base_compressor=reranker, base_retriever=base_retriever
-    )
-
-
-# ---------------------------------------------------------------
-# 4. Run the example
-# ---------------------------------------------------------------
 def main() -> None:
-    """Run the reranking example end-to-end."""
-    print("Loading and splitting documents...")
-    docs = load_documents()
-    chunks = split_documents(docs)
-    print(f"Created {len(chunks)} chunks.")
-
-    print("Building base retriever...")
-    base_retriever = create_retriever(chunks)
-
-    print("Creating compression retriever with cross-encoder reranker...")
-    compression_retriever = create_compression_retriever(base_retriever)
-
-    query = "What is RAG and why is reranking useful?"
-    print(f"\nQuery: {query}\n")
-
-    print("Retrieved documents (before reranking):")
-    initial_docs = base_retriever.invoke(query)
-    for i, doc in enumerate(initial_docs, 1):
-        print(f"{i}. {doc.page_content[:80]}...")
-
-    print("\nReranked documents:")
-    reranked_docs = compression_retriever.invoke(query)
-    for i, doc in enumerate(reranked_docs, 1):
-        print(f"{i}. {doc.page_content[:80]}...")
-
-    print("\nGenerating answer with chat model...")
-    chat_model = init_chat_model(
-        os.getenv("CHAT_MODEL", "gpt-4o-mini"),
-        model_provider=os.getenv("CHAT_MODEL_PROVIDER", "openai"),
-    )
-    context = "\n\n".join(doc.page_content for doc in reranked_docs)
-    messages = [
-        (
-            "system",
-            "You are a helpful assistant. Answer the question using only the provided context.",
+    # Sample documents
+    documents = [
+        Document(
+            page_content="The quick brown fox jumps over the lazy dog.",
+            metadata={"source": "example1.txt"},
         ),
-        ("human", f"Context:\n{context}\n\nQuestion: {query}"),
+        Document(
+            page_content="A fast brown fox leaps over a sleepy canine.",
+            metadata={"source": "example2.txt"},
+        ),
+        Document(
+            page_content="The weather today is sunny and warm.",
+            metadata={"source": "example3.txt"},
+        ),
+        Document(
+            page_content="Dogs are loyal companions and love to play fetch.",
+            metadata={"source": "example4.txt"},
+        ),
     ]
-    answer = chat_model.invoke(messages)
-    print(f"\nAnswer: {answer.content}")
+
+    # Split documents into smaller chunks (optional)
+    splitter = RecursiveCharacterTextSplitter(chunk_size=50, chunk_overlap=10)
+    chunks = splitter.split_documents(documents)
+
+    # Create a vector store (using OpenAI embeddings)
+    embeddings = OpenAIEmbeddings()
+    vectorstore = FAISS.from_documents(chunks, embeddings)
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 4})
+
+    query = "Tell me about foxes jumping over dogs"
+
+    # Retrieve initial documents
+    initial_docs = retriever.invoke(query)
+
+    print("=== Initial Retrieval ===")
+    print(format_documents(initial_docs))
+    print()
+
+    # Rerank the retrieved documents
+    reranked_docs = rerank_documents(query, initial_docs, top_k=2)
+
+    print("=== After Reranking ===")
+    print(format_documents(reranked_docs))
 
 
 if __name__ == "__main__":
