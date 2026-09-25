@@ -2,6 +2,11 @@
 
 This example demonstrates how to build a custom retriever from an in-memory
 document list using `InMemoryVectorStore`, and how to use it with a chat model.
+
+The custom retriever is implemented as a subclass of `BaseRetriever` and
+delegates the actual similarity search to an `InMemoryVectorStore`. This
+keeps the retriever simple while still allowing custom behaviour to be added
+later.
 """
 
 from typing import List
@@ -18,17 +23,49 @@ import os
 
 
 class SimpleEmbeddings(Embeddings):
-    """Deterministic embeddings for demonstration purposes only."""
+    """Deterministic embeddings for demonstration purposes only.
+
+    This embedding function is intentionally simple and deterministic. It is
+    only meant to illustrate how to plug a custom embedding class into a
+    vector store. Do not use this in production.
+    """
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        """Embed a list of documents.
+
+        Args:
+            texts: List of document texts to embed.
+
+        Returns:
+            List of embedding vectors, one per input text.
+        """
         return [_embed_text(text) for text in texts]
 
     def embed_query(self, text: str) -> List[float]:
+        """Embed a query text.
+
+        Args:
+            text: The query text to embed.
+
+        Returns:
+            The embedding vector for the query.
+        """
         return _embed_text(text)
 
 
 def _embed_text(text: str) -> List[float]:
-    """Create a simple 32-dimensional vector from a text."""
+    """Create a simple 32-dimensional vector from a text.
+
+    This function uses MD5 hashes to produce a deterministic vector for a
+    given text. It is not semantically meaningful, but it is sufficient for
+    demonstrating a custom retriever.
+
+    Args:
+        text: The input text.
+
+    Returns:
+        A list of 32 floats in the range [0, 1].
+    """
     vector = []
     for i in range(32):
         hash_input = f"{text}:{i}".encode()
@@ -37,7 +74,12 @@ def _embed_text(text: str) -> List[float]:
 
 
 def create_documents() -> List[Document]:
-    """Return a small list of in-memory documents."""
+    """Return a small list of in-memory documents.
+
+    Returns:
+        A list of `Document` objects with sample content about LangChain,
+        retrievers, and vector stores.
+    """
     return [
         Document(
             page_content="LangChain is a framework for developing applications "
@@ -59,7 +101,12 @@ def create_documents() -> List[Document]:
 
 
 class InMemoryCustomRetriever(BaseRetriever):
-    """Custom retriever backed by an InMemoryVectorStore."""
+    """Custom retriever backed by an InMemoryVectorStore.
+
+    This retriever stores a reference to an `InMemoryVectorStore` and uses its
+    `similarity_search` method to find relevant documents. The number of
+    documents to return is controlled by the `k` field.
+    """
 
     vector_store: InMemoryVectorStore
     k: int = 3
@@ -67,11 +114,26 @@ class InMemoryCustomRetriever(BaseRetriever):
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
     ) -> List[Document]:
+        """Retrieve documents relevant to the query.
+
+        Args:
+            query: The query string.
+            run_manager: Callback manager for the retriever run. Used for
+                logging and tracing; not used in this simple implementation.
+
+        Returns:
+            A list of `Document` objects sorted by relevance.
+        """
         return self.vector_store.similarity_search(query, k=self.k)
 
 
 def create_custom_retriever() -> BaseRetriever:
-    """Create a custom retriever from an in-memory document list."""
+    """Create a custom retriever from an in-memory document list.
+
+    Returns:
+        An `InMemoryCustomRetriever` instance configured with the sample
+        documents and the deterministic embedding function.
+    """
     documents = create_documents()
     vector_store = InMemoryVectorStore.from_documents(
         documents, embedding=SimpleEmbeddings()
@@ -80,7 +142,12 @@ def create_custom_retriever() -> BaseRetriever:
 
 
 def main() -> None:
-    """Run a simple retrieval-augmented generation demo."""
+    """Run a simple retrieval-augmented generation demo.
+
+    The demo retrieves documents for a sample query, builds a context block
+    from the retrieved documents, and asks a chat model to answer the query
+    based on that context.
+    """
     retriever = create_custom_retriever()
     query = "What is a retriever?"
 
