@@ -9,6 +9,7 @@ The chain flow is as follows:
 5. The chain formats the prompt, sends it to the LLM, and returns the response.
 
 This script provides two functions:
+- build_prompt(): returns a PromptTemplate for the chain.
 - run_chain(topic): runs the chain for a given topic and prints the raw response.
 - run_example(): runs a sample topic and prints a clear, labeled output.
 """
@@ -18,13 +19,18 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
 
-def run_chain(topic: str) -> None:
-    """Run a basic chain for the given topic."""
-    llm = OpenAI(temperature=0.7)
-    prompt = PromptTemplate(
+def build_prompt() -> PromptTemplate:
+    """Build the prompt template for the chain."""
+    return PromptTemplate(
         input_variables=["topic"],
         template="Tell me a fun fact about {topic}.",
     )
+
+
+def run_chain(topic: str) -> None:
+    """Run a basic chain for the given topic."""
+    llm = OpenAI(temperature=0.7)
+    prompt = build_prompt()
     chain = LLMChain(llm=llm, prompt=prompt)
     response = chain.run(topic)
     print(response)
