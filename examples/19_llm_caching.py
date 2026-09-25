@@ -59,6 +59,14 @@ def display_cache_stats(hits: int, misses: int):
         print(f"Hit rate: {hits / total:.1%}")
 
 
+def cache_stats(callback: CacheStatsCallback, total_calls: int):
+    """Calculate and display cache hit/miss statistics from a callback."""
+    misses = callback.llm_calls
+    hits = total_calls - misses
+    display_cache_stats(hits, misses)
+    return hits, misses
+
+
 def demonstrate_caching(cache_type: Optional[str] = None):
     """Demonstrate LLM response caching with the selected cache backend."""
     # Use environment variables for model and provider to remain provider-agnostic.
@@ -91,11 +99,9 @@ def demonstrate_caching(cache_type: Optional[str] = None):
     assert first_response == second_response, "Cached response should match the original."
     print("\n✅ Cache verified: identical response returned without a new API call.")
 
-    # Compute cache stats from the callback
+    # Compute and display cache stats from the callback
     total_calls = 2
-    misses = stats_callback.llm_calls
-    hits = total_calls - misses
-    display_cache_stats(hits, misses)
+    cache_stats(stats_callback, total_calls)
 
 
 if __name__ == "__main__":
