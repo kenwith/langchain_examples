@@ -20,18 +20,27 @@ Each tool declares:
 Tool registration is handled by passing tool instances to `initialize_agent`.
 The agent will then be able to invoke them based on their descriptions.
 Tool inputs are validated against their Pydantic args_schema before the tool's
-_run method is called. Error handling around tool execution is demonstrated
-in `main()` with a try-except block that provides a fallback message.
+_run method is called. Each tool is designed to gracefully handle errors by
+catching exceptions and returning a meaningful message, so the agent can
+recover and try alternative approaches.
+
+Error handling around the entire agent execution is demonstrated in `main()`
+with a try-except block that provides a fallback message.
 """
 import os
 import ast
 import operator
+import logging
 from typing import Optional, Type, List, Dict
 
 from langchain.tools import BaseTool, tool
 from langchain.agents import initialize_agent, AgentType
 from langchain.llms import OpenAI
 from pydantic import BaseModel, Field
+
+# Configure logging for better visibility of errors
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 # Allowed AST operators for safe evaluation
 ALLOWED_OPERATORS = {
@@ -66,18 +75,21 @@ class CalculatorTool(BaseTool):
             tree = ast.parse(expression, mode="eval")
             result = self._eval_node(tree.body)
             return f"The result is {result}"
-        except SyntaxError:
+        except SyntaxError as e:
+            logger.error(f"Syntax error in calculator expression '{expression}': {e}")
             return (
                 f"Invalid math expression: '{expression}'. "
                 "Please use a valid mathematical expression with numbers and operators "
                 "like +, -, *, /, **, and parentheses."
             )
         except (ValueError, ZeroDivisionError, TypeError) as e:
+            logger.error(f"Evaluation error in calculator expression '{expression}': {e}")
             return (
                 f"Error evaluating expression '{expression}': {str(e)}. "
                 "Please check your math expression."
             )
         except Exception as e:
+            logger.error(f"Unexpected error in calculator expression '{expression}': {e}")
             return (
                 f"Unexpected error evaluating expression '{expression}': {str(e)}. "
                 "Please try a simpler expression."
@@ -125,8 +137,12 @@ class StringLengthTool(BaseTool):
     args_schema: Type[BaseModel] = StringLengthInput
 
     def _run(self, text: str) -> str:
-        """Return the length of the input string."""
-        return f"The length of the string is {len(text)} characters."
+        """Return the length of the input string, handling any unexpected errors."""
+        try:
+            return f"The length of the string is {len(text)} characters."
+        except Exception as e:
+            logger.error(f"Error in string_length tool: {e}")
+            return f"Error computing string length: {str(e)}. Please provide a valid string."
 
     async def _arun(self, text: str) -> str:
         """Async version of _run."""
@@ -136,7 +152,11 @@ class StringLengthTool(BaseTool):
 @tool
 def reverse_string(text: str) -> str:
     """Reverses the given string. Input should be a string."""
-    return text[::-1]
+    try:
+        return text[::-1]
+    except Exception as e:
+        logger.error(f"Error in reverse_string tool: {e}")
+        return f"Error reversing string: {str(e)}. Please provide a valid string."
 
 
 def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
@@ -178,6 +198,10 @@ def main():
     `@tool`, demonstrating how agents interact with user-defined functions.
     The LLM reads the tool descriptions to decide when to invoke each tool.
 
+    Each tool's `_run` method contains try/except blocks to gracefully handle
+    errors and return meaningful messages, ensuring the agent can continue
+    processing even if a tool fails.
+
     Execution of the agent is wrapped in a try-except block to catch any
     unexpected errors (e.g., LLM parsing failures) and provide a fallback message.
     """
@@ -207,6 +231,7 @@ def main():
         # Example invalid expression to demonstrate helpful error
         print(agent.run("What is 2 +* 3?"))
     except Exception as e:
+        logger.error(f"Agent execution error: {e}")
         print(f"An error occurred while running the agent: {e}")
         print("Fallback message: Please check the input and try again.")
 
