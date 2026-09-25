@@ -21,6 +21,22 @@ except ImportError:
 
 from langchain.chat_models import init_chat_model
 
+# For tracking cache hits/misses via callbacks
+try:
+    from langchain.callbacks.base import BaseCallbackHandler
+except ImportError:
+    from langchain_core.callbacks import BaseCallbackHandler
+
+
+class CacheStatsCallback(BaseCallbackHandler):
+    """Counts the number of actual LLM calls (i.e., cache misses)."""
+
+    def __init__(self):
+        self.llm_calls = 0
+
+    def on_llm_start(self, serialized, prompts, **kwargs):
+        self.llm_calls += 1
+
 
 def select_cache(cache_type: Optional[str] = None):
     """Return a LangChain cache instance based on user input or environment."""
@@ -33,6 +49,14 @@ def select_cache(cache_type: Optional[str] = None):
 
     print("Using InMemoryCache (non-persistent)")
     return InMemoryCache()
+
+
+def display_cache_stats(hits: int, misses: int):
+    """Print cache hit/miss statistics after the example finishes."""
+    total = hits + misses
+    print(f"\nCache stats: {hits} hits, {misses} misses (total {total} invocations).")
+    if total > 0:
+        print(f"Hit rate: {hits / total:.1%}")
 
 
 def demonstrate_caching(cache_type: Optional[str] = None):
@@ -49,6 +73,10 @@ def demonstrate_caching(cache_type: Optional[str] = None):
     cache = select_cache(cache_type)
     llm.cache = cache
 
+    # Attach a callback to count actual LLM calls (cache misses)
+    stats_callback = CacheStatsCallback()
+    llm.callbacks = [stats_callback]
+
     prompt = "What is the capital of France?"
 
     print("First call (cache miss on a fresh cache, or possible hit with a persistent cache):")
@@ -62,6 +90,12 @@ def demonstrate_caching(cache_type: Optional[str] = None):
     # Verify that the responses are identical, proving the cache was used.
     assert first_response == second_response, "Cached response should match the original."
     print("\n✅ Cache verified: identical response returned without a new API call.")
+
+    # Compute cache stats from the callback
+    total_calls = 2
+    misses = stats_callback.llm_calls
+    hits = total_calls - misses
+    display_cache_stats(hits, misses)
 
 
 if __name__ == "__main__":
