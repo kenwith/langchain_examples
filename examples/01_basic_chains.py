@@ -8,10 +8,11 @@ The chain flow is as follows:
 4. Run the chain by passing a value for the input variable (e.g., a topic).
 5. The chain formats the prompt, sends it to the LLM, and returns the response.
 
-This script provides two functions:
+This script provides the following functions:
 - build_prompt(): returns a PromptTemplate for the chain.
 - run_chain(topic): runs the chain for a given topic and prints the raw response.
 - run_example(): runs a sample topic and prints a clear, labeled output.
+- main(): entry point that calls run_example().
 """
 
 from langchain.llms import OpenAI
@@ -44,5 +45,10 @@ def run_example() -> None:
     print("-----------------------------")
 
 
-if __name__ == "__main__":
+def main() -> None:
+    """Run the example."""
     run_example()
+
+
+if __name__ == "__main__":
+    main()
