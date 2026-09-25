@@ -65,9 +65,18 @@ class TokenUsageCallbackHandler(BaseCallbackHandler):
             self.token_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
             self.token_usage["completion_tokens"] += usage.get("completion_tokens", 0)
             self.token_usage["total_tokens"] += usage.get("total_tokens", 0)
+        else:
+            print("[callback] No token usage found in LLM output")
 
     def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
         self._record_event("on_llm_error")
+
+    def print_usage_summary(self) -> None:
+        """Print a formatted summary of accumulated token usage."""
+        print("\n--- Token Usage Summary ---")
+        print(f"Prompt tokens: {self.token_usage['prompt_tokens']}")
+        print(f"Completion tokens: {self.token_usage['completion_tokens']}")
+        print(f"Total tokens: {self.token_usage['total_tokens']}")
 
 
 def main() -> None:
@@ -89,11 +98,10 @@ def main() -> None:
     for i, event in enumerate(callback.event_order, 1):
         print(f"{i}. {event}")
 
-    print("\n--- Accumulated Token Usage ---")
-    print(callback.token_usage)
+    callback.print_usage_summary()
 
     print("\n--- Result ---")
-    print(result["text"])
+    print(result)
 
 
 if __name__ == "__main__":
