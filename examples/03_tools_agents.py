@@ -6,8 +6,8 @@ an OpenAI-powered agent. It shows two styles:
 
 1. Subclassing BaseTool (CalculatorTool, StringLengthTool) for tools that
    need explicit Pydantic schemas or custom validation.
-2. Using the `@tool` decorator (reverse_string) to turn a plain Python
-   function into a tool, letting LangChain infer the schema from the
+2. Using the `@tool` decorator (reverse_string, word_count) to turn plain
+   Python functions into tools, letting LangChain infer the schema from the
    function signature.
 
 Each tool declares:
@@ -159,6 +159,17 @@ def reverse_string(text: str) -> str:
         return f"Error reversing string: {str(e)}. Please provide a valid string."
 
 
+@tool
+def word_count(text: str) -> str:
+    """Counts the number of words in the given text. Input should be a string."""
+    try:
+        words = text.split()
+        return f"The text contains {len(words)} words."
+    except Exception as e:
+        logger.error(f"Error in word_count tool: {e}")
+        return f"Error counting words: {str(e)}. Please provide a valid string."
+
+
 def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
     """
     Extract tool call arguments from an agent response dict.
@@ -190,13 +201,13 @@ def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
 
 def main():
     """
-    Run an agent with custom calculator, string-length, and reverse-string tools.
+    Run an agent with custom calculator, string-length, reverse-string, and word-count tools.
 
     Tool registration is handled by passing tool instances to `initialize_agent`.
     The calculator and string-length tools are BaseTool subclasses with explicit
-    Pydantic schemas. The reverse-string tool is a plain function decorated with
-    `@tool`, demonstrating how agents interact with user-defined functions.
-    The LLM reads the tool descriptions to decide when to invoke each tool.
+    Pydantic schemas. The reverse-string and word-count tools are plain functions
+    decorated with `@tool`, demonstrating how agents interact with user-defined
+    functions. The LLM reads the tool descriptions to decide when to invoke each tool.
 
     Each tool's `_run` method contains try/except blocks to gracefully handle
     errors and return meaningful messages, ensuring the agent can continue
@@ -211,7 +222,7 @@ def main():
         raise ValueError("Please set the OPENAI_API_KEY environment variable.")
 
     llm = OpenAI(api_key=api_key, temperature=0)
-    tools = [CalculatorTool(), StringLengthTool(), reverse_string]
+    tools = [CalculatorTool(), StringLengthTool(), reverse_string, word_count]
 
     agent = initialize_agent(
         tools,
@@ -227,6 +238,7 @@ def main():
         print(agent.run("Calculate (3 + 5) ** 2"))
         print(agent.run("What is the length of the word 'hello'?"))
         print(agent.run("Reverse the string 'hello'"))
+        print(agent.run("How many words are in the sentence 'The quick brown fox jumps over the lazy dog'?"))
 
         # Example invalid expression to demonstrate helpful error
         print(agent.run("What is 2 +* 3?"))
