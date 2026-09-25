@@ -44,6 +44,7 @@ A collection of practical, runnable examples for building applications with [Lan
   - [LangSmith](#langsmith): `examples/35_langsmith.py`
   - [Agentic RAG](#agentic-rag): `examples/36_agentic_rag.py`
   - [Graph RAG](#graph-rag): `examples/37_graph_rag.py`
+  - [HyDE](#hyde): `examples/38_hyde.py`
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -398,6 +399,14 @@ Shows how to build a retrieval-augmented generation agent that can iteratively r
 **Run:** `python examples/37_graph_rag.py`
 
 Demonstrates using knowledge graphs to improve retrieval-augmented generation.
+
+### HyDE
+
+**Script:** `examples/38_hyde.py`
+
+**Run:** `python examples/38_hyde.py`
+
+Demonstrates Hypothetical Document Embeddings (HyDE), a technique that generates a synthetic answer document from the query and uses its embedding to retrieve documents that are more likely to be relevant.
 
 ## Contributing
 
