@@ -2,7 +2,7 @@
 Retrieval-Augmented Generation (RAG) pipeline example.
 
 This script demonstrates a complete RAG workflow:
-1. Load documents from a local directory.
+1. Load documents from a local text file or directory.
 2. Split the documents into smaller chunks for precise retrieval.
 3. Generate embeddings for each chunk and index them in a Chroma vector store.
 4. Use the vector store as a retriever to fetch relevant chunks for a query.
@@ -21,80 +21,84 @@ from langchain.embeddings import OpenAIEmbeddings
 from langchain.vectorstores import Chroma
 from langchain.chains import RetrievalQA
 from langchain.llms import OpenAI
+from langchain.prompts import PromptTemplate
 
-# Path to the directory containing your document files
+# Path to a text file or directory containing text files
 DATA_PATH = "data"
 
-def load_documents(directory: str = DATA_PATH) -> List[Document]:
-    """
-    Load documents from the specified directory.
+# Fallback text used when no external document is available
+DEFAULT_TEXT = (
+    "LangChain is a framework for developing applications powered by language models. "
+    "It provides modular components and integrations to build complex workflows. "
+    "This is a fallback document used when no external data is available."
+)
 
-    This function scans the given directory for text files and loads their
-    content into a list of Document objects. If the directory does not exist
-    or contains no text files, it falls back to a hardcoded default document.
+def load_documents(path: str = DATA_PATH) -> List[Document]:
+    """
+    Load documents from a local text file or directory.
+
+    This function reads text files from the given path. If the path is a file,
+    it loads that file. If the path is a directory, it scans for .txt files and
+    loads their content into a list of Document objects. If the path does not
+    exist or no text files are found, it falls back to a hardcoded default
+    document.
 
     Args:
-        directory (str): Path to the directory containing text files.
-                         Defaults to DATA_PATH.
+        path (str): Path to a text file or directory containing text files.
+                    Defaults to DATA_PATH.
 
     Returns:
-        List[Document]: A list of Document objects loaded from the directory.
+        List[Document]: A list of Document objects loaded from the path.
 
     Raises:
-        FileNotFoundError: If the directory does not exist and no fallback
+        FileNotFoundError: If the path does not exist and no fallback
                            document can be loaded.
     """
     documents = []
 
-    # Check if the directory exists
-    if os.path.isdir(directory):
-        # Iterate through all files in the directory
-        for filename in os.listdir(directory):
+    if os.path.isfile(path):
+        # Load a single file
+        try:
+            with open(path, "r", encoding="utf-8") as input_file:
+                text = input_file.read()
+            documents.append(Document(page_content=text, metadata={"source": os.path.basename(path)}))
+        except UnicodeDecodeError:
+            print(f"Warning: Could not decode file {path}. Skipping.")
+    elif os.path.isdir(path):
+        # Load all .txt files from directory
+        for filename in os.listdir(path):
             if filename.endswith(".txt"):
-                filepath = os.path.join(directory, filename)
+                filepath = os.path.join(path, filename)
                 try:
                     with open(filepath, "r", encoding="utf-8") as input_file:
                         text = input_file.read()
-                    # Create a Document with metadata (source file name)
                     documents.append(Document(page_content=text, metadata={"source": filename}))
                 except UnicodeDecodeError:
-                    # Skip files that cannot be decoded, but log a warning
                     print(f"Warning: Could not decode file {filename}. Skipping.")
                     continue
     else:
-        # Fallback if the directory doesn't exist
-        print(f"Warning: Directory '{directory}' not found. Using built-in default document.")
-        # A small embedded default document to keep the script functional
-        fallback_text = (
-            "LangChain is a framework for developing applications powered by language models. "
-            "It provides modular components and integrations to build complex workflows. "
-            "This is a fallback document used when no external data is available."
-        )
-        documents.append(Document(page_content=fallback_text, metadata={"source": "built-in"}))
+        # Fallback if the path doesn't exist
+        print(f"Warning: Path '{path}' not found. Using built-in default document.")
+        documents.append(Document(page_content=DEFAULT_TEXT, metadata={"source": "built-in"}))
 
     # If no documents were loaded (empty directory or no text files), use fallback
     if not documents:
         print("No text files found. Using built-in default document.")
-        fallback_text = (
-            "LangChain is a framework for developing applications powered by language models. "
-            "It provides modular components and integrations to build complex workflows. "
-            "This is a fallback document used when no external data is available."
-        )
-        documents.append(Document(page_content=fallback_text, metadata={"source": "built-in"}))
+        documents.append(Document(page_content=DEFAULT_TEXT, metadata={"source": "built-in"}))
 
     return documents
 
-def load_and_split_documents(directory: str = DATA_PATH, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Document]:
+def load_and_split_documents(path: str = DATA_PATH, chunk_size: int = 1000, chunk_overlap: int = 200) -> List[Document]:
     """
-    Load documents from the specified directory and split them into chunks.
+    Load documents from the specified path and split them into chunks.
 
     This helper combines document loading and splitting for convenience and
     reusability. It uses RecursiveCharacterTextSplitter with configurable
     chunk size and overlap.
 
     Args:
-        directory (str): Path to the directory containing text files.
-                         Defaults to DATA_PATH.
+        path (str): Path to a text file or directory containing text files.
+                    Defaults to DATA_PATH.
         chunk_size (int): Maximum size of each chunk. Defaults to 1000.
         chunk_overlap (int): Number of characters to overlap between chunks.
                              Defaults to 200.
@@ -102,7 +106,7 @@ def load_and_split_documents(directory: str = DATA_PATH, chunk_size: int = 1000,
     Returns:
         List[Document]: A list of Document chunks ready for embedding.
     """
-    documents = load_documents(directory)
+    documents = load_documents(path)
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=chunk_size,
         chunk_overlap=chunk_overlap,
