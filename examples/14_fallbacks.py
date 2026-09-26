@@ -13,9 +13,10 @@ and the chain uses `with_fallbacks`. A warning is logged when the primary model
 fails and another warning is logged when a fallback is triggered. Credentials
 are read from environment variables.
 
-The `fallback_chain` helper builds a runnable chain from a primary model name
-and a list of fallback model names, with clear error handling for model
-initialization failures.
+The special model name `fail` creates a model that always raises an exception.
+The default `MODELS` value uses `fail` as the primary model, so running the
+example demonstrates the fallback behavior without requiring you to inject a
+failure manually.
 """
 
 import logging
@@ -34,14 +35,26 @@ logger = logging.getLogger(__name__)
 PROMPT = ChatPromptTemplate.from_template("Tell me a short joke about {topic}")
 
 
+def _always_fail(_):
+    """Raises an exception to simulate a model failure."""
+    raise RuntimeError("Deliberate failure for demonstration")
+
+
 def create_model(model_name):
-    """Create a chat model from a model name string."""
+    """Create a chat model from a model name string.
+
+    The special model name "fail" returns a Runnable that always raises,
+    allowing the fallback behavior to be demonstrated without external
+    failure injection.
+    """
+    if model_name == "fail":
+        return RunnableLambda(_always_fail)
     return init_chat_model(model_name, temperature=0)
 
 
 def get_model_list():
     """Read the model list from the MODELS environment variable."""
-    models = os.getenv("MODELS", "openai/gpt-4o-mini,anthropic/claude-3-haiku-20240307")
+    models = os.getenv("MODELS", "fail,openai/gpt-4o-mini,anthropic/claude-3-haiku-20240307")
     return [m.strip() for m in models.split(",") if m.strip()]
 
 
