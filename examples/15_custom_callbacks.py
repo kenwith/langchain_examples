@@ -6,6 +6,7 @@ This example demonstrates how to implement a custom callback handler in LangChai
 The handler:
 - Accumulates token usage metadata across all LLM calls in a chain.
 - Logs the order of callback lifecycle events as they occur.
+- Prints token usage for each LLM response in on_llm_end.
 
 Typical callback lifecycle for an LLMChain:
 1. on_chain_start
@@ -37,38 +38,54 @@ class TokenUsageCallbackHandler(BaseCallbackHandler):
         self.event_order: List[str] = []
 
     def _record_event(self, event_name: str) -> None:
+        """Append an event name to the order log and print it."""
         self.event_order.append(event_name)
         print(f"[callback] {event_name}")
 
     def on_chain_start(
         self, serialized: Dict[str, Any], inputs: Dict[str, Any], **kwargs: Any
     ) -> None:
+        """Log the start of a chain."""
         self._record_event("on_chain_start")
 
     def on_chain_end(self, outputs: Dict[str, Any], **kwargs: Any) -> None:
+        """Log the end of a chain."""
         self._record_event("on_chain_end")
 
     def on_chain_error(self, error: BaseException, **kwargs: Any) -> None:
+        """Log an error raised during a chain."""
         self._record_event("on_chain_error")
 
     def on_llm_start(
         self, serialized: Dict[str, Any], prompts: List[str], **kwargs: Any
     ) -> None:
+        """Log the start of an LLM call."""
         self._record_event("on_llm_start")
 
     def on_llm_end(self, response: LLMResult, **kwargs: Any) -> None:
+        """Log the end of an LLM call and print/accumulate token usage."""
         self._record_event("on_llm_end")
 
-        # Accumulate token usage from the LLM result
+        # Print token usage from the LLM response for this call
         if response.llm_output and "token_usage" in response.llm_output:
             usage = response.llm_output["token_usage"]
-            self.token_usage["prompt_tokens"] += usage.get("prompt_tokens", 0)
-            self.token_usage["completion_tokens"] += usage.get("completion_tokens", 0)
-            self.token_usage["total_tokens"] += usage.get("total_tokens", 0)
+            prompt_tokens = usage.get("prompt_tokens", 0)
+            completion_tokens = usage.get("completion_tokens", 0)
+            total_tokens = usage.get("total_tokens", 0)
+            print(
+                f"[callback] Token usage - prompt: {prompt_tokens}, "
+                f"completion: {completion_tokens}, total: {total_tokens}"
+            )
+
+            # Accumulate token usage across all LLM calls
+            self.token_usage["prompt_tokens"] += prompt_tokens
+            self.token_usage["completion_tokens"] += completion_tokens
+            self.token_usage["total_tokens"] += total_tokens
         else:
             print("[callback] No token usage found in LLM output")
 
     def on_llm_error(self, error: BaseException, **kwargs: Any) -> None:
+        """Log an error raised during an LLM call."""
         self._record_event("on_llm_error")
 
     def print_usage_summary(self) -> None:
