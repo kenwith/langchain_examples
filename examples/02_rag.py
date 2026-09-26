@@ -28,17 +28,21 @@ def prepare_response(retriever, query, llm):
     return llm(prompt)
 
 
-def main():
-    # Load documents
-    loader = TextLoader("data.txt")
+def load_and_index_documents(file_path):
+    """Load documents, split them, and create a retriever from the vector store."""
+    loader = TextLoader(file_path)
     documents = loader.load()
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
     texts = text_splitter.split_documents(documents)
 
-    # Create vector store
     embeddings = OpenAIEmbeddings()
     vectorstore = FAISS.from_documents(texts, embeddings)
-    retriever = vectorstore.as_retriever()
+    return vectorstore.as_retriever()
+
+
+def main():
+    # Load, split, and index documents
+    retriever = load_and_index_documents("data.txt")
 
     # Initialize LLM
     llm = OpenAI(temperature=0)
