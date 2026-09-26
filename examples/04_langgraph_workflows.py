@@ -12,7 +12,14 @@ from langgraph.graph.state import StateGraph as SG
 
 # Define the state schema as a TypedDict
 class WorkflowState(TypedDict, total=False):
-    """State passed between nodes in the workflow."""
+    """State passed between nodes in the workflow.
+
+    Attributes:
+        input_data: Raw input string provided by the user.
+        processed_data: Transformed version of input_data (e.g., uppercased).
+        validation_result: Boolean indicating whether processed_data is valid.
+        final_output: Final string produced after validation and finalization.
+    """
     input_data: str
     processed_data: Optional[str]
     validation_result: Optional[bool]
@@ -75,7 +82,9 @@ def should_continue(state: WorkflowState) -> str:
     Returns:
         String indicating next node name.
     """
-    return "finalize" if state.get("validation_result") else "finalize"  # For simplicity, always finalize
+    # For simplicity, always route to finalize. In a more complex graph,
+    # this could return "finalize" or "end" based on validation_result.
+    return "finalize" if state.get("validation_result") else "finalize"
 
 
 # Build the graph
@@ -93,10 +102,20 @@ def build_workflow() -> StateGraph:
     workflow.add_node("validate", validate_data)
     workflow.add_node("finalize", finalize)
 
-    # Define edges: start -> process -> validate -> conditional -> finalize -> end
+    # --- Graph structure ---
+    # process -> validate -> (conditional) -> finalize -> END
+    # The conditional edge always routes to finalize in this example.
+
+    # Entry point: process
     workflow.set_entry_point("process")
+
+    # process -> validate
     workflow.add_edge("process", "validate")
-    # Use conditional edge from validate to finalize (or end, but we always go to finalize)
+
+    # validate -> (conditional) -> finalize
+    # The should_continue function determines which branch to take.
+    # Currently it always returns "finalize", so the graph always proceeds
+    # to the finalize node after validation.
     workflow.add_conditional_edges(
         "validate",
         should_continue,
@@ -105,6 +124,8 @@ def build_workflow() -> StateGraph:
             # If we had an end node, we could route there; here we always finalize
         },
     )
+
+    # finalize -> END
     workflow.add_edge("finalize", END)
 
     # Compile and return
