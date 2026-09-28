@@ -2,8 +2,23 @@
 Example: Agentic RAG
 
 This example demonstrates how to combine a retriever tool with an agent
-to answer questions using a ReAct loop. The agent uses a retriever tool
-to fetch relevant document chunks and then reasons over them.
+to answer questions using a ReAct loop.
+
+The retriever tool loop works as follows:
+
+1. The user provides a question.
+2. The agent (powered by an LLM) decides whether it needs more context.
+3. If needed, the agent emits an Action that calls the retriever tool with a
+   search query.
+4. The retriever tool searches an in-memory FAISS vector store and returns
+   the most relevant document chunks as the Observation.
+5. The agent reads the Observation and either:
+   - calls the retriever tool again with a refined query, or
+   - produces a Final Answer grounded in the retrieved context.
+
+This Thought/Action/Observation cycle continues until the agent has enough
+information to answer the question. The retriever tool is wrapped with a
+retry decorator to handle transient failures.
 
 Prerequisites:
 - Set OPENAI_API_KEY environment variable (or another supported provider)
@@ -102,7 +117,12 @@ def create_vectorstore():
 
 
 def create_retriever_tool() -> Tool:
-    """Create a retriever tool that searches the vector store."""
+    """Create a retriever tool that searches the vector store.
+
+    The tool is called by the agent during the ReAct loop. It embeds the
+    query, retrieves the top-k matching documents from FAISS, and returns
+    the formatted chunks as the observation for the agent to reason over.
+    """
     vectorstore = create_vectorstore()
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 
@@ -161,15 +181,12 @@ def format_citations(intermediate_steps):
     return f"\n\nSources: {citation_list}"
 
 
-def build_agent() -> AgentExecutor:
-    """Build a ReAct agent with a retriever tool."""
-    # Use a provider-agnostic chat model. Set OPENAI_API_KEY or configure
-    # another provider via init_chat_model.
-    llm = init_chat_model("gpt-4o-mini", temperature=0)
+def create_agent(llm, tools):
+    """Create a ReAct agent with the given LLM and tools.
 
-    retriever_tool = create_retriever_tool()
-    tools = [retriever_tool]
-
+    The prompt instructs the model to use the ReAct format: Thought, Action,
+    Action Input, Observation, and repeat until a Final Answer is reached.
+    """
     prompt = PromptTemplate.from_template(
         """You are an assistant with access to the following tools:
 
@@ -195,8 +212,24 @@ Begin!
 Question: {input}
 Thought: {agent_scratchpad}"""
     )
+    return create_react_agent(llm, tools, prompt)
 
-    agent = create_react_agent(llm, tools, prompt)
+
+def build_agent() -> AgentExecutor:
+    """Build an AgentExecutor that runs a ReAct agent with a retriever tool.
+
+    The agent is created via create_agent() and wrapped in an AgentExecutor
+    with verbose logging, parsing error handling, and intermediate steps
+    enabled for later citation extraction.
+    """
+    # Use a provider-agnostic chat model. Set OPENAI_API_KEY or configure
+    # another provider via init_chat_model.
+    llm = init_chat_model("gpt-4o-mini", temperature=0)
+
+    retriever_tool = create_retriever_tool()
+    tools = [retriever_tool]
+
+    agent = create_agent(llm, tools)
     return AgentExecutor(
         agent=agent,
         tools=tools,
