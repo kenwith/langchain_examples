@@ -14,17 +14,11 @@ story and a poem about that topic, and finally a combine node merges both
 pieces into a single response.
 """
 
+import os
 from typing import TypedDict
 
 from langchain.chat_models import init_chat_model
 from langgraph.graph import END, START, StateGraph
-
-# Use a provider-agnostic model; configure via environment variables.
-# Example: export MODEL="gpt-4o-mini" (or "anthropic:claude-3-5-sonnet-20240620")
-model = init_chat_model(
-    model=os.getenv("MODEL", "gpt-4o-mini"),
-    temperature=0.7,
-)
 
 
 class GraphState(TypedDict):
@@ -37,8 +31,13 @@ class GraphState(TypedDict):
 
 def generate_topic(state: GraphState) -> dict:
     """Generate a creative topic if none is provided."""
-    if "topic" in state and state["topic"]:
+    if state.get("topic"):
         return {"topic": state["topic"]}
+    # Initialize the model lazily inside the node to avoid side effects on import
+    model = init_chat_model(
+        model=os.getenv("MODEL", "gpt-4o-mini"),
+        temperature=0.7,
+    )
     response = model.invoke(
         "Suggest a single, interesting topic for a short story and a poem. "
         "Return only the topic name, no extra text."
@@ -48,6 +47,10 @@ def generate_topic(state: GraphState) -> dict:
 
 def write_story(state: GraphState) -> dict:
     """Write a short story about the topic."""
+    model = init_chat_model(
+        model=os.getenv("MODEL", "gpt-4o-mini"),
+        temperature=0.7,
+    )
     prompt = f"Write a short story (2-3 sentences) about: {state['topic']}"
     response = model.invoke(prompt)
     return {"story": response.content.strip()}
@@ -55,6 +58,10 @@ def write_story(state: GraphState) -> dict:
 
 def write_poem(state: GraphState) -> dict:
     """Write a short poem about the topic."""
+    model = init_chat_model(
+        model=os.getenv("MODEL", "gpt-4o-mini"),
+        temperature=0.7,
+    )
     prompt = f"Write a short poem (2-3 lines) about: {state['topic']}"
     response = model.invoke(prompt)
     return {"poem": response.content.strip()}
