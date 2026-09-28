@@ -1,192 +1,148 @@
+#!/usr/bin/env python3
 """
-Batch inference with LangChain.
+Module for batch inference.
 
-This example demonstrates how to run multiple prompts through an LLM in
-batches, limiting the number of concurrent requests. It uses asyncio to
-manage concurrency and includes retry logic with exponential backoff.
+This module provides a utility function `batch_infer` that processes multiple
+inputs concurrently using asyncio, which is useful for improving throughput
+when calling LLM APIs. The module demonstrates how to use asyncio with
+LangChain models to process a list of prompts efficiently.
 
-Batch size:
-    Set the `batch_size` argument in `run_batch` to control how many
-    prompts are processed concurrently. For example, `batch_size=5`
-    processes at most 5 prompts at a time.
-
-Output format:
-    `run_batch` returns a list of strings with the same length as the
-    input `prompts`. Each element is the model's response for the
-    corresponding prompt. If a prompt fails after all retries, its
-    result is the string `"Error: <message>"`.
-
-    `process_batch` is a convenience wrapper around `run_batch` that
-    prints each result with its original index in the input list.
+Example usage:
+    python 08_batch_inference.py
 """
 
 import asyncio
-import random
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable, List, TypeVar
 
-from langchain.chains import LLMChain
-from langchain.llms import OpenAI
-from langchain.prompts import PromptTemplate
-
-
-def chunk_list(items: List[Any], chunk_size: int) -> List[List[Any]]:
-    """Split a list into equal-sized chunks."""
-    if chunk_size <= 0:
-        raise ValueError("chunk_size must be positive")
-    return [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
+# Type variable for input and output types
+T = TypeVar("T")
+U = TypeVar("U")
 
 
-async def _run_with_retry(
-    chain: LLMChain,
-    prompt: str,
-    max_retries: int = 3,
-    base_delay: float = 1.0,
-) -> str:
-    """Run a single prompt with retries and exponential backoff."""
-    for attempt in range(max_retries):
-        try:
-            return await chain.arun(prompt=prompt)
-        except Exception as e:
-            if attempt == max_retries - 1:
-                raise
-            delay = base_delay * (2 ** attempt) + random.uniform(0, 0.5)
-            print(f"Error processing prompt, retrying in {delay:.2f}s: {e}")
-            await asyncio.sleep(delay)
-    raise RuntimeError("Unreachable retry state")  # pragma: no cover
+async def _async_infer(
+    infer_func: Callable[[T], U], input_item: T, semaphore: asyncio.Semaphore
+) -> U:
+    """Run a single inference, respecting a semaphore limit."""
+    async with semaphore:
+        # Run the synchronous inference function in a thread to avoid blocking
+        # the event loop.
+        return await asyncio.to_thread(infer_func, input_item)
 
 
-async def run_batch(
-    prompts: List[str],
-    llm: Any = None,
-    batch_size: int = 10,
-    max_retries: int = 3,
-    progress_callback: Optional[Callable[[int, int, Optional[str]], None]] = None,
-) -> List[str]:
-    """Run prompts through an LLM in batches, guarding against empty input.
+async def _batch_infer_async(
+    infer_func: Callable[[T], U],
+    inputs: List[T],
+    max_concurrency: int = 10,
+) -> List[U]:
+    """Asynchronous implementation of batch inference.
 
     Args:
-        prompts: List of prompt strings.
-        llm: Language model instance. Defaults to OpenAI(temperature=0).
-        batch_size: Maximum number of prompts to process concurrently.
-        max_retries: Number of attempts per prompt before failing.
-        progress_callback: Optional callback called as (completed, total, error)
-            after each prompt completes. `error` is None on success, or the
-            error message string on failure.
+        infer_func: A synchronous function that takes a single input and returns
+            an output.
+        inputs: A list of inputs to process.
+        max_concurrency: Maximum number of concurrent inference calls.
 
     Returns:
-        List of strings, one per input prompt, in the same order. On
-        failure after retries, the corresponding string is
-        "Error: <error message>".
+        A list of outputs in the same order as inputs.
     """
-    if not prompts:
-        return []
+    semaphore = asyncio.Semaphore(max_concurrency)
+    tasks = [
+        asyncio.ensure_future(_async_infer(infer_func, item, semaphore))
+        for item in inputs
+    ]
+    results: List[U] = []
 
-    if llm is None:
-        llm = OpenAI(temperature=0)
+    # Use as_completed to process results as they finish, but ensure ordering
+    # by mapping each completed task to its original position.
+    pending = {task: idx for idx, task in enumerate(tasks)}
+    for completed_task in asyncio.as_completed(tasks):
+        # Find the original index of this task
+        idx = None
+        for task, i in list(pending.items()):
+            if task is completed_task:
+                idx = i
+                del pending[task]
+                break
+        if idx is None:
+            raise RuntimeError("Task not found in pending mapping")
 
-    prompt_template = PromptTemplate(
-        input_variables=["prompt"],
-        template="Answer the following question:\n{prompt}",
-    )
-    chain = LLMChain(llm=llm, prompt=prompt_template)
+        result = await completed_task
+        # Place result in the correct position (we'll build a list with None
+        # placeholders for now)
+        results.append((idx, result))
 
-    results: List[str] = [""] * len(prompts)
-    completed = 0
-    total = len(prompts)
-
-    for batch_start in range(0, len(prompts), batch_size):
-        batch = prompts[batch_start:batch_start + batch_size]
-        batch_indices = list(range(batch_start, batch_start + len(batch)))
-
-        tasks = {}
-        for idx, prompt in zip(batch_indices, batch):
-            task = asyncio.ensure_future(
-                _run_with_retry(chain, prompt, max_retries)
-            )
-            tasks[task] = idx
-
-        for completed_task in asyncio.as_completed(tasks):
-            idx = tasks[completed_task]
-            error = None
-            try:
-                result = await completed_task
-                results[idx] = result
-            except Exception as e:
-                error = str(e)
-                results[idx] = f"Error: {e}"
-            completed += 1
-            if progress_callback is not None:
-                progress_callback(completed, total, error)
-
-    return results
+    # Sort results by index to restore order
+    results.sort(key=lambda x: x[0])
+    return [res for _, res in results]
 
 
-async def process_batch(
-    prompts: List[str],
-    llm: Any = None,
-    batch_size: int = 10,
-    max_retries: int = 3,
-    progress_callback: Optional[Callable[[int, int, Optional[str]], None]] = None,
-) -> List[str]:
-    """Run prompts through an LLM in batches and print each result with its index.
+def batch_infer(
+    infer_func: Callable[[T], U],
+    inputs: List[T],
+    max_concurrency: int = 10,
+) -> List[U]:
+    """Process multiple inputs concurrently using asyncio.
 
-    This is a convenience wrapper around `run_batch` that prints each result
-    alongside its original index in the input list. It returns early if the
-    input list is empty.
+    This is a blocking function that runs an asyncio event loop to execute
+    `infer_func` on each input concurrently. The `infer_func` should be a
+    synchronous function (e.g., a LangChain model's `invoke` method). If your
+    inference function is already async, you can pass it directly, but this
+    wrapper is designed for synchronous callables.
 
     Args:
-        prompts: List of prompt strings.
-        llm: Language model instance. Defaults to OpenAI(temperature=0).
-        batch_size: Maximum number of prompts to process concurrently.
-        max_retries: Number of attempts per prompt before failing.
-        progress_callback: Optional callback called as (completed, total, error)
-            after each prompt completes.
+        infer_func: A synchronous function that maps a single input to an output.
+        inputs: A list of inputs to be processed.
+        max_concurrency: Maximum number of simultaneous inference calls. Useful
+            for rate limiting or resource management.
 
     Returns:
-        List of strings, one per input prompt, in the same order. If `prompts`
-        is empty, returns an empty list.
+        A list of outputs, preserving the order of `inputs`.
+
+    Raises:
+        Exception: If any inference call fails, the exception is propagated.
+
+    Example:
+        >>> from my_langchain_model import model
+        >>> results = batch_infer(model.invoke, ["Hello", "World"], max_concurrency=5)
     """
-    if not prompts:
-        return []
-
-    results = await run_batch(
-        prompts,
-        llm=llm,
-        batch_size=batch_size,
-        max_retries=max_retries,
-        progress_callback=progress_callback,
-    )
-
-    for idx, result in enumerate(results):
-        print(f"[{idx}] {result}")
-
-    return results
+    return asyncio.run(_batch_infer_async(infer_func, inputs, max_concurrency))
 
 
-async def main():
-    prompts = [
+# --- Example usage ---------------------------------------------------------
+def example_infer(text: str) -> str:
+    """Mock inference function for demonstration purposes.
+
+    In a real scenario, this would call an LLM or model. Here we just simulate
+    asynchronous work by sleeping a bit.
+    """
+    import random
+    import time
+
+    delay = random.uniform(0.1, 0.5)
+    time.sleep(delay)  # Simulate synchronous I/O-bound work
+    return f"Processed: {text} (slept {delay:.2f}s)"
+
+
+def main():
+    """Run a simple demonstration of batch_infer."""
+    inputs = [
         "What is the capital of France?",
-        "Explain quantum computing in simple terms.",
-        "Write a haiku about Python.",
-        "What are the benefits of using LangChain?",
-        "Tell me a fun fact about space.",
+        "Explain quantum computing.",
+        "Write a poem about a tree.",
+        "What's the weather today?",
+        "Give me three good books.",
+        "How to make pasta?",
+        "Who is Nikola Tesla?",
+        "Define artificial intelligence.",
     ]
 
-    def show_progress(done: int, total: int, error: Optional[str] = None) -> None:
-        if error:
-            print(f"Progress: {done}/{total} (error: {error})")
-        else:
-            print(f"Progress: {done}/{total}")
+    # Use a smaller concurrency to illustrate the semaphore effect
+    results = batch_infer(example_infer, inputs, max_concurrency=3)
 
-    results = await run_batch(
-        prompts,
-        batch_size=2,
-        progress_callback=show_progress,
-    )
-
-    for prompt, result in zip(prompts, results):
-        print(f"Q: {prompt}\nA: {result}\n")
+    # Print results
+    for original, processed in zip(inputs, results):
+        print(f"Input: {original}\nOutput: {processed}\n")
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
