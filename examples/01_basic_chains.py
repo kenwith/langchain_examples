@@ -15,8 +15,24 @@ Environment variables:
 - MODEL_NAME: (optional) The model identifier, e.g., "gpt-3.5-turbo". Defaults to "gpt-3.5-turbo".
 - {PROVIDER}_API_KEY: The API key for the selected provider (e.g., OPENAI_API_KEY). Must be set.
 
+Usage:
+    Set the required API key for your chosen provider first. For example:
+
+    export OPENAI_API_KEY="your-api-key"
+    python examples/01_basic_chains.py
+
+    Or use a different provider:
+
+    export MODEL_PROVIDER="anthropic"
+    export ANTHROPIC_API_KEY="your-api-key"
+    export MODEL_NAME="claude-3-5-sonnet-20240620"
+    python examples/01_basic_chains.py
+
+    The script will print a fun fact about "space" by default.
+
 This script provides the following functions:
 - build_prompt(): returns a PromptTemplate for the chain.
+- get_response(topic): builds and runs the chain, returning the raw response as a string.
 - run_chain(topic): runs the chain for a given topic and prints the raw response.
 - run_example(): runs a sample topic and prints a clear, labeled output.
 - main(): entry point that calls run_example().
@@ -36,8 +52,8 @@ def build_prompt() -> PromptTemplate:
     )
 
 
-def run_chain(topic: str) -> None:
-    """Run a basic chain for the given topic."""
+def get_response(topic: str) -> str:
+    """Build and run the chain for the given topic, returning the response."""
     provider = os.getenv("MODEL_PROVIDER", "openai")
     model_name = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
     api_key = os.getenv(f"{provider.upper()}_API_KEY")
@@ -52,7 +68,12 @@ def run_chain(topic: str) -> None:
     )
     prompt = build_prompt()
     chain = LLMChain(llm=llm, prompt=prompt)
-    response = chain.run(topic)
+    return chain.run(topic)
+
+
+def run_chain(topic: str) -> None:
+    """Run a basic chain for the given topic and print the response."""
+    response = get_response(topic)
     print(response)
 
 
