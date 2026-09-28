@@ -12,6 +12,7 @@ Key Concepts
 - Automatically retry on transient errors using `with_retry`.
 - Use exponential backoff and jitter to avoid overwhelming the provider during retries.
 - Consistent error handling and graceful degradation.
+- Async invocation with retry using asyncio to complement synchronous usage.
 
 | Concept          | Implementation                                  |
 |------------------|-------------------------------------------------|
@@ -19,11 +20,13 @@ Key Concepts
 | Timeout          | `model.with_timeout(30)`                        |
 | Retry            | `model.with_retry(stop_after_attempt=3, ...)`   |
 | Backoff          | `wait_exponential_jitter=True`                  |
-| Error handling   | try/except around `model.invoke(...)`           |
+| Sync error handling | try/except around `model.invoke(...)`        |
+| Async error handling | try/except around `await model.ainvoke(...)` |
 
 Run the example with: `python examples/18_timeout_and_retry.py`
 """
 
+import asyncio
 import os
 from langchain.chat_models import init_chat_model
 
@@ -79,8 +82,49 @@ def ask_question(question: str, model) -> None:
         print(f"Error after retries: {e}\n")
 
 
+async def ainvoke_with_retry(question: str, model) -> str:
+    """
+    Asynchronously ask a question using the model, relying on the configured retry policy.
+
+    This is the async complement to `ask_question`; it uses `await model.ainvoke(...)`
+    to leverage the same timeout and retry configuration.
+
+    Args:
+        question: The prompt to send to the model.
+        model: The configured chat model (wrapped with timeout and retry).
+
+    Returns:
+        str: The model's response content.
+
+    Raises:
+        Exception: If the call fails after all retries.
+    """
+    response = await model.ainvoke(question)
+    return response.content
+
+
+async def async_main() -> None:
+    """Demonstrate the same model with async invocation and retry."""
+    model = get_model_with_retry()
+    print(f"Async using model: {model}\n")
+
+    questions = [
+        "What is LangChain?",
+        "Explain the benefits of retrying transient errors.",
+    ]
+
+    for q in questions:
+        try:
+            content = await ainvoke_with_retry(q, model)
+            print(f"Q: {q}")
+            print(f"A: {content}\n")
+        except Exception as e:
+            print(f"Q: {q}")
+            print(f"Error after async retries: {e}\n")
+
+
 def main() -> None:
-    """Demonstrate a model with timeout and retry."""
+    """Demonstrate a model with timeout and retry (synchronous)."""
     model = get_model_with_retry()
     print(f"Using model: {model}\n")
 
@@ -95,3 +139,5 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+    print("--- Running async example ---\n")
+    asyncio.run(async_main())
