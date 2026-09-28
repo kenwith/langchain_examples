@@ -9,6 +9,11 @@ The retrieved context is passed to a chat model to generate an answer.
 The chat model is created with ``init_chat_model``, which is provider-agnostic.
 Set the appropriate environment variable for your chosen provider (e.g.,
 ``OPENAI_API_KEY`` for OpenAI) before running this example.
+
+This example also showcases the ``build_filtered_retriever`` function, which
+centralizes metadata filtering by constructing a retriever with the appropriate
+search kwargs. This makes it easy to reuse the same filtering logic across
+different queries.
 """
 
 # ------------------------------------------------------------------
@@ -72,9 +77,13 @@ def build_metadata_filter(category=None, year=None):
     return filter_dict
 
 
-def retrieve_with_filter(vectorstore, query, filter_dict, k=3):
-    """Retrieve documents using similarity search with metadata filtering."""
-    return vectorstore.similarity_search(query, k=k, filter=filter_dict)
+def build_filtered_retriever(vectorstore, filter_dict, k=3):
+    """Build a retriever that applies metadata filtering.
+
+    This centralizes the metadata filter configuration. The returned retriever
+    will use the given filter and top-k value for all its searches.
+    """
+    return vectorstore.as_retriever(search_kwargs={"filter": filter_dict, "k": k})
 
 
 def generate_answer(query, context_documents):
@@ -109,8 +118,11 @@ def main():
     for doc in retrieved_no_filter:
         print(f"- {doc.page_content} (category: {doc.metadata['category']})")
 
-    print(f"\nRetrieving with filter: {filter_dict}")
-    retrieved = retrieve_with_filter(vectorstore, query, filter_dict, k=2)
+    print(f"\nBuilding filtered retriever with filter: {filter_dict}")
+    filtered_retriever = build_filtered_retriever(vectorstore, filter_dict, k=2)
+
+    print("Retrieving with filter using the retriever:")
+    retrieved = filtered_retriever.invoke(query)
 
     print(f"Retrieved {len(retrieved)} documents:")
     for doc in retrieved:
