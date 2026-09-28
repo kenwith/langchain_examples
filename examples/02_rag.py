@@ -1,6 +1,5 @@
 """RAG example: retrieve and generate with graceful empty handling."""
 
-import os
 from typing import Callable, List
 
 from langchain.document_loaders import TextLoader
@@ -45,21 +44,49 @@ def build_rag_chain(
     return rag_chain
 
 
-def load_and_index_documents(file_path: str) -> BaseRetriever:
-    """Load documents, split them, and create a retriever from the vector store."""
+def load_documents(file_path: str) -> List[Document]:
+    """Load documents from a file and split them into chunks.
+
+    Args:
+        file_path: Path to the text file to load.
+
+    Returns:
+        A list of split Document objects ready for indexing.
+    """
     loader = TextLoader(file_path)
     documents = loader.load()
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-    texts = text_splitter.split_documents(documents)
+    return text_splitter.split_documents(documents)
 
+
+def build_retriever(documents: List[Document]) -> BaseRetriever:
+    """Build a vector store retriever from a list of documents.
+
+    Args:
+        documents: Documents to embed and index.
+
+    Returns:
+        A retriever backed by a FAISS vector store.
+    """
     embeddings = OpenAIEmbeddings()
-    vectorstore = FAISS.from_documents(texts, embeddings)
+    vectorstore = FAISS.from_documents(documents, embeddings)
     return vectorstore.as_retriever()
+
+
+def load_and_index_documents(file_path: str) -> BaseRetriever:
+    """Load, split, and index documents into a retriever.
+
+    This is a convenience wrapper around :func:`load_documents` and
+    :func:`build_retriever`.
+    """
+    documents = load_documents(file_path)
+    return build_retriever(documents)
 
 
 def main() -> None:
     # Load, split, and index documents
-    retriever = load_and_index_documents("data.txt")
+    documents = load_documents("data.txt")
+    retriever = build_retriever(documents)
 
     # Initialize LLM
     llm = OpenAI(temperature=0)
