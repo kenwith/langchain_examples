@@ -1,14 +1,23 @@
-"""Basic chain example with provider-agnostic setup.
+"""Basic chain example with provider-agnostic setup using LCEL.
 
-This module demonstrates the simplest usage of LangChain: creating an LLMChain.
+This module demonstrates the simplest usage of LangChain with the LangChain
+Expression Language (LCEL). It builds a chain that takes a topic and returns a
+fun fact about that topic.
+
 The chain flow is as follows:
-1. Initialize a language model using `init_chat_model`, which supports multiple providers
-   (e.g., OpenAI, Anthropic) without changing the core logic. The provider and model name
-   are read from environment variables, defaulting to OpenAI's GPT-3.5 Turbo.
-2. Define a PromptTemplate that specifies the input variables and the template string.
-3. Combine the LLM and prompt into an LLMChain.
-4. Run the chain by passing a value for the input variable (e.g., a topic).
-5. The chain formats the prompt, sends it to the LLM, and returns the response.
+1. Initialize a language model using `init_chat_model`, which supports multiple
+   providers (e.g., OpenAI, Anthropic) without changing the core logic. The
+   provider and model name are read from environment variables, defaulting to
+   OpenAI's GPT-3.5 Turbo.
+2. Define a PromptTemplate that specifies the input variables and the template
+   string.
+3. Compose the prompt, the model, and an output parser into an LCEL chain using
+   the pipe operator (`|`). LCEL makes it easy to combine components, add
+   retries, fallbacks, and streaming, and to inspect the chain's steps.
+4. Run the chain by calling `invoke` with a dictionary of input variables
+   (e.g., `{"topic": "space"}`).
+5. The chain formats the prompt, sends it to the LLM, parses the model output
+   into a string, and returns the response.
 
 Environment variables:
 - MODEL_PROVIDER: (optional) The provider name, e.g., "openai" or "anthropic". Defaults to "openai".
@@ -32,8 +41,8 @@ Usage:
 
 This script provides the following functions:
 - build_prompt(): returns a PromptTemplate for the chain.
-- get_response(topic): builds and runs the chain, returning the raw response as a string.
-- run_chain(topic): runs the chain for a given topic and prints the raw response.
+- get_response(topic): builds and runs the LCEL chain, returning the response as a string.
+- run_chain(topic): runs the chain for a given topic and prints the response.
 - run_example(): runs a sample topic and prints a clear, labeled output.
 - main(): entry point that calls run_example().
 """
@@ -41,7 +50,7 @@ This script provides the following functions:
 import os
 from langchain.chat_models import init_chat_model
 from langchain.prompts import PromptTemplate
-from langchain.chains import LLMChain
+from langchain_core.output_parsers import StrOutputParser
 
 
 def build_prompt() -> PromptTemplate:
@@ -53,7 +62,7 @@ def build_prompt() -> PromptTemplate:
 
 
 def get_response(topic: str) -> str:
-    """Build and run the chain for the given topic, returning the response."""
+    """Build and run the LCEL chain for the given topic, returning the response."""
     provider = os.getenv("MODEL_PROVIDER", "openai")
     model_name = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
     api_key = os.getenv(f"{provider.upper()}_API_KEY")
@@ -67,8 +76,8 @@ def get_response(topic: str) -> str:
         temperature=0.7,
     )
     prompt = build_prompt()
-    chain = LLMChain(llm=llm, prompt=prompt)
-    return chain.run(topic)
+    chain = prompt | llm | StrOutputParser()
+    return chain.invoke({"topic": topic})
 
 
 def run_chain(topic: str) -> None:
