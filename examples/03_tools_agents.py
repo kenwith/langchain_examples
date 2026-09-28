@@ -151,7 +151,24 @@ class StringLengthTool(BaseTool):
 
 @tool
 def reverse_string(text: str) -> str:
-    """Reverses the given string. Input should be a string."""
+    """Reverses the given string.
+
+    This tool is useful when the agent needs to reverse the characters in a text value.
+
+    Args:
+        text: The string to reverse. Must be a plain string.
+
+    Returns:
+        The reversed string. If the input is not a string or an unexpected error
+        occurs, returns a descriptive error message so the agent can recover.
+    """
+    if not isinstance(text, str):
+        logger.error(f"reverse_string received non-string input: {type(text).__name__}")
+        return (
+            f"Error reversing string: expected a string but got {type(text).__name__}. "
+            "Please provide a valid string."
+        )
+
     try:
         return text[::-1]
     except Exception as e:
@@ -161,7 +178,26 @@ def reverse_string(text: str) -> str:
 
 @tool
 def word_count(text: str) -> str:
-    """Counts the number of words in the given text. Input should be a string."""
+    """Counts the number of words in the given text.
+
+    This tool is useful when the agent needs to know how many words are in a
+    sentence or paragraph. Words are separated by whitespace.
+
+    Args:
+        text: The text to count words in. Must be a plain string.
+
+    Returns:
+        A string describing the word count. If the input is not a string or an
+        unexpected error occurs, returns a descriptive error message so the
+        agent can recover.
+    """
+    if not isinstance(text, str):
+        logger.error(f"word_count received non-string input: {type(text).__name__}")
+        return (
+            f"Error counting words: expected a string but got {type(text).__name__}. "
+            "Please provide a valid string."
+        )
+
     try:
         words = text.split()
         return f"The text contains {len(words)} words."
