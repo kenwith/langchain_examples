@@ -12,6 +12,14 @@ Streaming options:
 - Use `stream_to_file()` to write streamed tokens directly to a text file.
 - Use `stream_with_events()` with `astream_events` for token streaming, the final stop reason, and event metadata.
 
+How token-by-token streaming works:
+- Chat models expose a `stream()` method that returns an iterator of chunks.
+- Each chunk is a message-like object with a `.content` attribute containing the text generated since the previous chunk.
+- By iterating over `model.stream(messages)`, you receive partial content as soon as it is available.
+- The first chunk may contain an empty string; always check `if content:` before printing.
+- Some providers also emit `usage_metadata` on the final chunk; this example prints it when found.
+- If a provider does not implement streaming, `model.stream()` may raise `NotImplementedError`; the helpers here catch that and fall back to `model.invoke()`.
+
 Streaming configuration:
 - `model.stream()` is the recommended streaming API and works without extra constructor options.
 - Some providers (e.g., OpenAI) also support streaming for `invoke()` when `streaming=True` is set on the model constructor.
@@ -111,6 +119,11 @@ def stream_response(model, messages):
     This generator can be used for custom processing of each token. It falls
     back to yielding the full response content if the provider does not support
     streaming.
+
+    How it works:
+    - `model.stream(messages)` returns an iterator of chunks.
+    - Each chunk's `.content` is the next piece of the response.
+    - `yield content` hands that piece to the caller as soon as it arrives.
     """
     if not hasattr(model, "stream"):
         response = model.invoke(messages)
