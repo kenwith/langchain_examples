@@ -41,6 +41,7 @@ Usage:
 
 This script provides the following functions:
 - build_prompt(): returns a PromptTemplate for the chain.
+- build_chain(): builds the LCEL chain from the prompt, model, and output parser.
 - get_response(topic): builds and runs the LCEL chain, returning the response as a string.
 - run_chain(topic): runs the chain for a given topic and prints the response.
 - run_example(): runs a sample topic and prints a clear, labeled output.
@@ -51,6 +52,7 @@ import os
 from langchain.chat_models import init_chat_model
 from langchain.prompts import PromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.runnables import Runnable
 
 
 def build_prompt() -> PromptTemplate:
@@ -61,8 +63,8 @@ def build_prompt() -> PromptTemplate:
     )
 
 
-def get_response(topic: str) -> str:
-    """Build and run the LCEL chain for the given topic, returning the response."""
+def build_chain() -> Runnable:
+    """Build the LCEL chain: prompt -> model -> string parser."""
     provider = os.getenv("MODEL_PROVIDER", "openai")
     model_name = os.getenv("MODEL_NAME", "gpt-3.5-turbo")
     api_key = os.getenv(f"{provider.upper()}_API_KEY")
@@ -76,7 +78,12 @@ def get_response(topic: str) -> str:
         temperature=0.7,
     )
     prompt = build_prompt()
-    chain = prompt | llm | StrOutputParser()
+    return prompt | llm | StrOutputParser()
+
+
+def get_response(topic: str) -> str:
+    """Build and run the LCEL chain for the given topic, returning the response."""
+    chain = build_chain()
     return chain.invoke({"topic": topic})
 
 
