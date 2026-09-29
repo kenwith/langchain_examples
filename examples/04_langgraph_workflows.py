@@ -5,7 +5,7 @@ It includes type hints for function signatures and inline comments to clarify th
 state flow through the graph.
 """
 
-from typing import Dict, List, Any, TypedDict, Optional, Callable
+from typing import Any, Optional, TypedDict
 from langgraph.graph import StateGraph, END
 
 
@@ -93,8 +93,8 @@ def should_continue(state: WorkflowState) -> str:
 
 
 # Build the graph
-def build_workflow() -> StateGraph:
-    """Construct the LangGraph state graph.
+def build_graph() -> Any:
+    """Construct and compile the LangGraph state graph.
 
     Returns:
         Compiled graph ready for execution.
@@ -152,16 +152,18 @@ def build_workflow() -> StateGraph:
     return workflow.compile()
 
 
-def run_workflow(initial_state: WorkflowState) -> WorkflowState:
-    """Build and run the workflow, returning the final state.
+def invoke_graph(initial_state: WorkflowState, app: Optional[Any] = None) -> WorkflowState:
+    """Run the workflow using an optionally pre-built graph.
 
     Args:
         initial_state: Starting state for the workflow.
+        app: Optional compiled graph. If not provided, build_graph() is called.
 
     Returns:
         Final state after graph execution.
     """
-    app = build_workflow()
+    if app is None:
+        app = build_graph()
     return app.invoke(initial_state)
 
 
@@ -170,7 +172,7 @@ if __name__ == "__main__":
     initial_state: WorkflowState = {"input_data": "Hello LangGraph"}
 
     # Run the workflow using the helper
-    result = run_workflow(initial_state)
+    result = invoke_graph(initial_state)
 
     # Print the final output
     print("Final output:", result.get("final_output"))
