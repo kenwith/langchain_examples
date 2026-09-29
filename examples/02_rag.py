@@ -12,18 +12,32 @@ from langchain.vectorstores import FAISS
 
 
 def format_docs(docs: List[Document]) -> str:
-    """Format retrieved documents into a single context string."""
+    """Format retrieved documents into a single context string.
+
+    Args:
+        docs: List of documents retrieved for a query.
+
+    Returns:
+        A newline-separated string combining the content of each document.
+        Returns an empty string when ``docs`` is empty.
+    """
+    if not docs:
+        return ""
     return "\n\n".join(doc.page_content for doc in docs)
 
 
 def build_rag_chain(
-    retriever: BaseRetriever, llm: BaseLLM
+    retriever: BaseRetriever,
+    llm: BaseLLM,
+    document_formatter: Callable[[List[Document]], str] = format_docs,
 ) -> Callable[[str], str]:
     """Build a RAG chain that retrieves documents and generates an answer.
 
     Args:
         retriever: A retriever with a ``get_relevant_documents`` method.
         llm: A language model instance used to generate the final answer.
+        document_formatter: Optional callable that turns retrieved documents
+            into a single context string. Defaults to :func:`format_docs`.
 
     Returns:
         A function that accepts a query string and returns the generated answer.
@@ -34,7 +48,7 @@ def build_rag_chain(
         if not docs:
             return "I couldn't find any relevant information to answer your question."
 
-        context = format_docs(docs)
+        context = document_formatter(docs)
         prompt = (
             f"Based on the following context, answer the question.\n\n"
             f"Context:\n{context}\n\nQuestion: {query}\nAnswer:"
