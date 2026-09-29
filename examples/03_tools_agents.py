@@ -1,14 +1,14 @@
 """
 Custom tools for LangChain agents.
 
-This example demonstrates how to define and register custom tools with
-an OpenAI-powered agent. It shows two styles:
+This example demonstrates how to define and register custom tools with an
+OpenAI-powered agent. It shows two idiomatic styles:
 
-1. Subclassing BaseTool (CalculatorTool, StringLengthTool) for tools that
-   need explicit Pydantic schemas or custom validation.
+1. Subclassing `BaseTool` (CalculatorTool, StringLengthTool) for tools that
+   need explicit Pydantic schemas, custom validation, or async support.
 2. Using the `@tool` decorator (reverse_string, word_count) to turn plain
    Python functions into tools, letting LangChain infer the schema from the
-   function signature.
+   function signature and docstring.
 
 Each tool declares:
 - name: a unique identifier the agent can reference.
@@ -24,8 +24,23 @@ _run method is called. Each tool is designed to gracefully handle errors by
 catching exceptions and returning a meaningful message, so the agent can
 recover and try alternative approaches.
 
+The example also demonstrates how to inspect the intermediate steps of an agent
+execution by setting `return_intermediate_steps=True` and using a helper function
+(`extract_tool_call_arguments`) to parse the tool calls from the response.
+
+Requirements:
+- Set the OPENAI_API_KEY environment variable to your OpenAI API key.
+- Install the required dependencies: `pip install langchain openai pydantic`.
+
+Usage:
+    python examples/03_tools_agents.py
+
 Error handling around the entire agent execution is demonstrated in `main()`
-with a try-except block that provides a fallback message.
+with a try-except block that provides a fallback message if the agent fails.
+
+Security note:
+- Never hardcode API keys or other secrets. Always load credentials from
+  environment variables or a secure secret manager.
 """
 import os
 import ast
@@ -149,6 +164,8 @@ class StringLengthTool(BaseTool):
         return self._run(text)
 
 
+# Using the @tool decorator to turn plain Python functions into LangChain tools.
+# LangChain infers the schema from the function signature and docstring.
 @tool
 def reverse_string(text: str) -> str:
     """Reverses the given string.
@@ -268,9 +285,12 @@ def main():
         return_intermediate_steps=True,  # capture tool calls for inspection
     )
 
+    sample_query = "What is 12 * 8 + 4?"
+
     try:
         # Example valid queries
-        print(agent.run("What is 12 * 8 + 4?"))
+        print(f"Sample query: {sample_query}")
+        print(agent.run(sample_query))
         print(agent.run("Calculate (3 + 5) ** 2"))
         print(agent.run("What is the length of the word 'hello'?"))
         print(agent.run("Reverse the string 'hello'"))
@@ -285,7 +305,7 @@ def main():
 
     # Show how to extract tool call arguments from the agent's response
     # (using __call__ to get intermediate steps)
-    response = agent({"input": "What is 12 * 8 + 4?"})
+    response = agent({"input": sample_query})
     calls = extract_tool_call_arguments(response)
     print("\nExtracted tool calls from agent response:")
     for call in calls:
