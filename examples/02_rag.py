@@ -59,8 +59,8 @@ def load_documents(file_path: str) -> List[Document]:
     return text_splitter.split_documents(documents)
 
 
-def build_retriever(documents: List[Document]) -> BaseRetriever:
-    """Build a vector store retriever from a list of documents.
+def create_retriever(documents: List[Document]) -> BaseRetriever:
+    """Create a vector store retriever from a list of documents.
 
     Args:
         documents: Documents to embed and index.
@@ -68,8 +68,14 @@ def build_retriever(documents: List[Document]) -> BaseRetriever:
     Returns:
         A retriever backed by a FAISS vector store.
     """
+    # Create embeddings to convert document chunks into vector representations.
     embeddings = OpenAIEmbeddings()
+
+    # Build a FAISS vector store from the documents and their embeddings.
+    # FAISS is a library for efficient similarity search and clustering of dense vectors.
     vectorstore = FAISS.from_documents(documents, embeddings)
+
+    # Return a retriever interface that can be used to query the vector store.
     return vectorstore.as_retriever()
 
 
@@ -77,16 +83,16 @@ def load_and_index_documents(file_path: str) -> BaseRetriever:
     """Load, split, and index documents into a retriever.
 
     This is a convenience wrapper around :func:`load_documents` and
-    :func:`build_retriever`.
+    :func:`create_retriever`.
     """
     documents = load_documents(file_path)
-    return build_retriever(documents)
+    return create_retriever(documents)
 
 
 def main() -> None:
     # Load, split, and index documents
     documents = load_documents("data.txt")
-    retriever = build_retriever(documents)
+    retriever = create_retriever(documents)
 
     # Initialize LLM
     llm = OpenAI(temperature=0)
