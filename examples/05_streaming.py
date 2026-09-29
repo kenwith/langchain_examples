@@ -5,6 +5,7 @@ using a generator function. The generator yields each piece of the response
 as it arrives, allowing the caller to process the stream incrementally.
 """
 
+import sys
 from collections.abc import Iterator
 
 from langchain_core.language_models import BaseLanguageModel
@@ -26,16 +27,23 @@ def stream_response(
         The next token delta (a string) from the model's response.
 
     If the model does not support streaming, a fallback message is printed
-    and the full response is yielded as a single delta.
+    to stderr and the full response is yielded as a single delta.
     """
     if hasattr(llm, "stream"):
         for chunk in llm.stream(messages):
-            content = getattr(chunk, "content", None)
+            # ChatGenerationChunk wraps the actual message in a `.message`
+            # attribute, while some models may yield the message directly.
+            message = getattr(chunk, "message", chunk)
+            content = getattr(message, "content", None)
             if content:
                 yield content
     else:
         # Fallback for providers that do not support streaming.
-        print("The selected provider does not support streaming; falling back to normal response")
+        print(
+            "The selected provider does not support streaming; "
+            "falling back to normal response",
+            file=sys.stderr,
+        )
         response = llm.invoke(messages)
         yield response.content
 
