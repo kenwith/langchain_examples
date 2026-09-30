@@ -157,6 +157,16 @@ class RunnableConversationSession:
         return "Conversation history:\n" + "\n".join(lines)
 
 
+def print_conversation(session, **kwargs) -> None:
+    """Print the conversation history for a session.
+
+    Args:
+        session: A session object with a format_history method.
+        **kwargs: Additional arguments forwarded to format_history, such as session_id.
+    """
+    print("\n" + session.format_history(**kwargs) + "\n")
+
+
 def main() -> None:
     # ConversationBufferMemory retains the full chat history across turns.
     # The ConversationChain uses the configured memory_key "history" to inject
@@ -170,7 +180,7 @@ def main() -> None:
     print("AI:", session.ask("What is my favorite color?"))
 
     # Show the formatted history before clearing.
-    print("\n" + session.format_history() + "\n")
+    print_conversation(session)
 
     # Clear the session history to start a fresh multi-turn demonstration.
     session.clear_history()
@@ -186,7 +196,7 @@ def main() -> None:
     print("AI:", summary_session.ask("What is my favorite color?"))
 
     # Show the formatted summary before clearing.
-    print("\n" + summary_session.format_history() + "\n")
+    print_conversation(summary_session)
 
     # Clear the session history to start a fresh multi-turn demonstration.
     summary_session.clear_history()
@@ -202,7 +212,7 @@ def main() -> None:
     print("AI:", runnable_session.ask("What is my favorite color?", session_id="user-1"))
 
     # Show the formatted history before clearing.
-    print("\n" + runnable_session.format_history(session_id="user-1") + "\n")
+    print_conversation(runnable_session, session_id="user-1")
 
     # Clear the session history for user-1.
     runnable_session.clear_history(session_id="user-1")
