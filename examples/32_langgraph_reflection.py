@@ -125,11 +125,16 @@ def revise_answer(state: ReflectionState) -> dict:
 # Conditional edge
 # ---------------------------------------------------------------------------
 
+# Hard upper bound to prevent infinite loops even if state is misconfigured.
+MAX_REVISION_LIMIT = 10
+
+
 def should_continue(state: ReflectionState) -> str:
     """Decide whether to revise again or finish."""
     if state["critique"] == "PASS":
         return "end"
-    if state["revision_count"] >= state["max_revisions"]:
+    max_revisions = min(state.get("max_revisions", MAX_REVISION_LIMIT), MAX_REVISION_LIMIT)
+    if state["revision_count"] >= max_revisions:
         return "end"
     return "revise"
 
