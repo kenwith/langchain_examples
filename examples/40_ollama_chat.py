@@ -8,7 +8,7 @@ variable to specify a custom Ollama server URL.
 ## Prerequisites
 
 - Ollama installed and running (default: http://localhost:11434)
-- Pull the model: `ollama pull llama3.2`
+- Pull the required model: `ollama pull llama3.2`
 
 ## Setup
 
@@ -52,9 +52,20 @@ def main():
 
     try:
         llm = init_chat_model(model, model_provider="ollama", **kwargs)
+    except ConnectionError:
+        # Friendly message when the Ollama server is unreachable
+        print("Error: Cannot connect to the Ollama server.")
+        if base_url:
+            print(f"  Tried to reach: {base_url}")
+        else:
+            print("  Default URL: http://localhost:11434")
+        print("Make sure Ollama is installed and running.")
+        print("If it's not running, start it with: `ollama serve`")
+        return
     except Exception as e:
         print(f"An error occurred while initializing the model: {e}")
-        print("Make sure Ollama is running and the model 'llama3.2' is pulled.")
+        print(f"Make sure the model '{model}' is pulled. You can pull it with: `ollama pull {model}`")
+        print("Also verify that the Ollama server is reachable.")
         return
 
     print("Ollama chat initialized. Type 'exit' or 'quit' to end the conversation.")
