@@ -13,6 +13,10 @@ as a script.
 The test suite also explicitly requires at least two Ollama example files
 and verifies that they satisfy the same syntax, docstring, and import rules.
 
+Example files are discovered dynamically at test collection time using
+``pytest_generate_tests``, so new examples are tested automatically without
+maintaining a hardcoded list.
+
 | Test | Description |
 |------|-------------|
 | test_example_syntax | Parse every example file with ``ast`` and verify it has a module docstring, a main guard, and valid imports. |
@@ -91,11 +95,14 @@ def test_examples_directory_has_ollama_files():
     )
 
 
-@pytest.mark.parametrize(
-    "example_path",
-    _example_files(),
-    ids=lambda p: p.relative_to(EXAMPLES_DIR).as_posix(),
-)
+def pytest_generate_tests(metafunc):
+    """Generate test parameters dynamically from the examples directory."""
+    if "example_path" in metafunc.fixturenames:
+        example_files = _example_files()
+        ids = [p.relative_to(EXAMPLES_DIR).as_posix() for p in example_files]
+        metafunc.parametrize("example_path", example_files, ids=ids)
+
+
 def test_example_syntax(example_path):
     """Assert that the example file has valid Python syntax, a module docstring,
     an ``if __name__ == '__main__':`` guard, and valid imports.
