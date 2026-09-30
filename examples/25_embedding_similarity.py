@@ -3,12 +3,18 @@
 This example demonstrates how to initialize a provider-agnostic embeddings model
 (using init_embeddings_model, the embeddings counterpart to init_chat_model)
 and rank a small set of documents by cosine similarity to a query.
+
+The :func:`cosine_similarity` function is a standalone utility that can be
+imported and reused in other modules.
 """
 
 import math
 import os
+from typing import List, Sequence, Tuple
 
 from langchain.embeddings import init_embeddings_model
+
+__all__ = ["cosine_similarity", "rank_documents"]
 
 
 # ---------------------------------------------------------------------------
@@ -16,18 +22,48 @@ from langchain.embeddings import init_embeddings_model
 # ---------------------------------------------------------------------------
 
 
-def cosine_similarity(vec_a, vec_b):
-    """Compute the cosine similarity between two vectors."""
+def cosine_similarity(vec_a: Sequence[float], vec_b: Sequence[float]) -> float:
+    """Compute the cosine similarity between two vectors.
+
+    Args:
+        vec_a: First vector.
+        vec_b: Second vector.
+
+    Returns:
+        Cosine similarity between -1 and 1. Returns 0.0 if either vector
+        has zero magnitude.
+
+    Raises:
+        ValueError: If the vectors have different lengths.
+    """
+    if len(vec_a) != len(vec_b):
+        raise ValueError("Vectors must have the same length")
+
     dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
     norm_a = math.sqrt(sum(a * a for a in vec_a))
     norm_b = math.sqrt(sum(b * b for b in vec_b))
+
     if norm_a == 0 or norm_b == 0:
         return 0.0
+
     return dot_product / (norm_a * norm_b)
 
 
-def rank_documents(query, documents, embeddings):
-    """Rank documents by cosine similarity to the query."""
+def rank_documents(
+    query: str, documents: List[str], embeddings
+) -> List[Tuple[int, float, str]]:
+    """Rank documents by cosine similarity to the query.
+
+    Args:
+        query: The query string.
+        documents: A list of document strings.
+        embeddings: An embeddings model with ``embed_query`` and
+            ``embed_documents`` methods.
+
+    Returns:
+        A list of tuples ``(index, score, document)`` sorted by score
+        in descending order.
+    """
     query_vec = embeddings.embed_query(query)
     doc_vecs = embeddings.embed_documents(documents)
 
