@@ -8,6 +8,8 @@ Example 44: Async Streaming Chat with Ollama
 
 This example demonstrates how to use LangChain's provider-agnostic
 `init_chat_model` to stream responses asynchronously from an Ollama model.
+It also shows how to run multiple chat calls concurrently using `asyncio.gather`
+and print completion messages as each response finishes.
 """
 
 import asyncio
@@ -27,22 +29,28 @@ def get_model():
 
 
 async def stream_chat(model, prompt: str) -> None:
-    """Send a prompt and stream the model's response to stdout."""
+    """Send a prompt, stream the response, and print a completion message."""
+    print(f"\n--- Prompt: {prompt} ---")
     async for chunk in model.astream([HumanMessage(content=prompt)]):
         print(chunk.content, end="", flush=True)
-    print()
+    print(f"\n[Completed: {prompt}]")
 
 
 async def main() -> None:
-    """Run the async streaming chat example."""
+    """Run multiple async streaming chat calls concurrently."""
     model = get_model()
-    prompt = os.getenv(
-        "OLLAMA_PROMPT",
-        "Explain the concept of async programming in one sentence.",
-    )
-    print(f"Prompt: {prompt}")
-    print("Streaming response:")
-    await stream_chat(model, prompt)
+    prompts = [
+        os.getenv(
+            "OLLAMA_PROMPT",
+            "Explain the concept of async programming in one sentence.",
+        ),
+        "What is the capital of France?",
+        "Give me a brief history of the internet.",
+    ]
+
+    # Create a task for each prompt and run them concurrently
+    tasks = [stream_chat(model, prompt) for prompt in prompts]
+    await asyncio.gather(*tasks)
 
 
 if __name__ == "__main__":
