@@ -21,8 +21,6 @@ def format_docs(docs: List[Document]) -> str:
         A newline-separated string combining the content of each document.
         Returns an empty string when ``docs`` is empty.
     """
-    if not docs:
-        return ""
     return "\n\n".join(doc.page_content for doc in docs)
 
 
