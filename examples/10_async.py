@@ -15,6 +15,9 @@ Async patterns:
   all of them to finish.
 - `chain.astream(...)` returns an async iterator that yields chunks as they
   are generated, enabling streaming responses.
+- To print results in completion order, attach a done callback to each task
+  before passing the tasks to `asyncio.gather`. The callback runs as soon as
+  that task finishes, so output appears in the order requests complete.
 
 Async best practices:
 - Prefer `ainvoke` over the legacy `arun` for new code. `ainvoke` is the
@@ -43,6 +46,9 @@ Resilience:
 - Using `asyncio.gather(..., return_exceptions=True)` lets the event loop
   continue even if some tasks fail, returning exceptions alongside successful
   results. This is demonstrated by the `run_concurrently` helper.
+- The `run_concurrently` helper also accepts an `on_result` callback so that
+  results can be printed immediately as each task completes, rather than
+  waiting for all calls to finish.
 """
 
 import asyncio
@@ -88,14 +94,30 @@ async def ask_model(chain, prompt: str, semaphore: asyncio.Semaphore | None = No
         raise
 
 
-async def run_concurrently(chain, prompts: list[str], semaphore: asyncio.Semaphore | None = None) -> list:
+async def run_concurrently(
+    chain,
+    prompts: list[str],
+    semaphore: asyncio.Semaphore | None = None,
+    on_result=None,
+) -> list:
     """Run multiple prompts concurrently, returning a list of results.
 
     Uses `asyncio.gather(..., return_exceptions=True)` so that a single
     failure doesn't cancel the other tasks. Each element in the returned
     list is either the response string or an exception instance.
+
+    If `on_result` is provided, it is called with the prompt and the
+    completed task as soon as each task finishes, allowing results to be
+    printed in completion order.
     """
-    tasks = [ask_model(chain, prompt, semaphore) for prompt in prompts]
+    tasks = []
+    for prompt in prompts:
+        task = asyncio.ensure_future(ask_model(chain, prompt, semaphore))
+        if on_result is not None:
+            task.add_done_callback(
+                lambda t, p=prompt: on_result(p, t)
+            )
+        tasks.append(task)
     return await asyncio.gather(*tasks, return_exceptions=True)
 
 
@@ -115,19 +137,22 @@ async def main() -> None:
     # Limit to 3 concurrent requests to avoid overwhelming the API.
     semaphore = asyncio.Semaphore(3)
 
+    def print_result(prompt: str, task: asyncio.Task) -> None:
+        """Print a single result as soon as its task completes."""
+        try:
+            result = task.result()
+            print(f"Prompt: {prompt}")
+            print(f"Response: {result}")
+            print()
+        except Exception as e:
+            print(f"Prompt: {prompt}")
+            print(f"  Error: {e}")
+            print()
+
     start = time.perf_counter()
-    results = await run_concurrently(chain, prompts, semaphore)
+    await run_concurrently(chain, prompts, semaphore, on_result=print_result)
     elapsed = time.perf_counter() - start
     print(f"Concurrent calls completed in {elapsed:.2f} seconds\n")
-
-    # Print each result, handling exceptions gracefully.
-    for prompt, result in zip(prompts, results):
-        print(f"Prompt: {prompt}")
-        if isinstance(result, Exception):
-            print(f"  Error: {result}")
-        else:
-            print(f"Response: {result}")
-        print()
 
     # Demonstrate streaming with astream
     print("Streaming response for 'Explain async/await in one sentence':")
