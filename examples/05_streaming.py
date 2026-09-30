@@ -3,6 +3,8 @@
 This example demonstrates how to stream token deltas from a chat model
 using a generator function. The generator yields each piece of the response
 as it arrives, allowing the caller to process the stream incrementally.
+It also includes a wrapper generator that flushes each token to the terminal
+so the streaming is visible immediately.
 """
 
 import sys
@@ -48,6 +50,30 @@ def stream_response(
         yield response.content
 
 
+def stream_tokens(
+    llm: BaseLanguageModel,
+    messages: list[BaseMessage],
+) -> Iterator[str]:
+    """Yield token deltas and flush them to standard output.
+
+    This generator wraps :func:`stream_response` and writes each token to
+    stdout immediately, followed by a flush. This makes streaming visible
+    in the terminal while still yielding the tokens for any caller that
+    wants to process them.
+
+    Args:
+        llm: The language model to use.
+        messages: The chat messages to send.
+
+    Yields:
+        The next token delta (a string) from the model's response.
+    """
+    for token in stream_response(llm, messages):
+        sys.stdout.write(token)
+        sys.stdout.flush()
+        yield token
+
+
 def main() -> None:
     """Run the streaming example."""
     # Create a chat model with streaming enabled.
@@ -62,9 +88,10 @@ def main() -> None:
         print(f"  {message.content}")
     print("\nStreaming response:")
 
-    # Consume the generator and print each delta as it arrives.
-    for delta in stream_response(llm, messages):
-        print(delta, end="", flush=True)
+    # The stream_tokens generator writes and flushes each token to stdout;
+    # we only need to add the final newline after the stream ends.
+    for _ in stream_tokens(llm, messages):
+        pass
     print()
 
 
