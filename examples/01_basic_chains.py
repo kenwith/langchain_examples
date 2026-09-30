@@ -39,6 +39,13 @@ Usage:
 
     The script will print a fun fact about "space" by default.
 
+Expected output:
+    The output will look similar to the following (the actual fact will vary):
+
+    --- Fun fact about space ---
+    Did you know that space is completely silent because sound waves need a medium to travel through?
+    -----------------------------
+
 This script provides the following functions:
 - build_prompt(): returns a PromptTemplate for the chain.
 - build_chain(): builds the LCEL chain from the prompt, model, and output parser.
