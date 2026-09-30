@@ -13,10 +13,10 @@ and the chain uses `with_fallbacks`. A warning is logged when the primary model
 fails and another warning is logged when a fallback is triggered. Credentials
 are read from environment variables.
 
-The special model name `fail` creates a model that always raises an exception.
-The default `MODELS` value uses `fail` as the primary model, so running the
-example demonstrates the fallback behavior without requiring you to inject a
-failure manually.
+The special model name `fail` creates a model that always raises a
+`RateLimitError`. The default `MODELS` value uses `fail` as the primary model,
+so running the example demonstrates the fallback behavior without requiring you
+to inject a failure manually.
 """
 
 import logging
@@ -24,6 +24,7 @@ import os
 import sys
 
 from langchain.chat_models import init_chat_model
+from langchain_core.exceptions import RateLimitError
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnableLambda
@@ -36,8 +37,8 @@ PROMPT = ChatPromptTemplate.from_template("Tell me a short joke about {topic}")
 
 
 def _always_fail(_):
-    """Raises an exception to simulate a model failure."""
-    raise RuntimeError("Deliberate failure for demonstration")
+    """Raises a RateLimitError to simulate a model failure."""
+    raise RateLimitError("Deliberate failure for demonstration")
 
 
 def create_model(model_name):
@@ -118,7 +119,10 @@ def fallback_chain(primary_model_name, fallback_model_names):
 
     if not fallback_chains:
         return primary_chain
-    return primary_chain.with_fallbacks(fallback_chains)
+
+    # Custom exception fallback: only trigger fallback models on RateLimitError.
+    # This ensures a different model is used when the primary model is rate limited.
+    return primary_chain.with_fallbacks(fallback_chains, exceptions=(RateLimitError,))
 
 
 def build_chain_with_fallback():
