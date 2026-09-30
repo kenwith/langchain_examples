@@ -101,11 +101,16 @@ def create_documents() -> List[Document]:
 
 
 class InMemoryCustomRetriever(BaseRetriever):
-    """Custom retriever backed by an InMemoryVectorStore.
+    """Custom retriever backed by an in-memory vector store.
 
-    This retriever stores a reference to an `InMemoryVectorStore` and uses its
-    `similarity_search` method to find relevant documents. The number of
-    documents to return is controlled by the `k` field.
+    This retriever wraps an `InMemoryVectorStore` and delegates the retrieval
+    logic to its `similarity_search` method. It is designed to be a minimal
+    example of how to implement a custom retriever by subclassing
+    `BaseRetriever`.
+
+    Attributes:
+        vector_store: The in-memory vector store used for similarity search.
+        k: The number of documents to retrieve for each query.
     """
 
     vector_store: InMemoryVectorStore
@@ -116,13 +121,19 @@ class InMemoryCustomRetriever(BaseRetriever):
     ) -> List[Document]:
         """Retrieve documents relevant to the query.
 
+        This method is called by `BaseRetriever.invoke` and should return a
+        list of documents most relevant to the query. In this implementation,
+        it simply delegates to the underlying vector store's similarity search.
+
         Args:
-            query: The query string.
-            run_manager: Callback manager for the retriever run. Used for
-                logging and tracing; not used in this simple implementation.
+            query: The query string to search for.
+            run_manager: Callback manager for the retriever run. Provided by
+                the framework for logging, tracing, and other callbacks. This
+                implementation does not use it, but it is required by the
+                `BaseRetriever` interface.
 
         Returns:
-            A list of `Document` objects sorted by relevance.
+            A list of `Document` objects sorted by relevance to the query.
         """
         return self.vector_store.similarity_search(query, k=self.k)
 
