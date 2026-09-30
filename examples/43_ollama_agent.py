@@ -4,15 +4,27 @@ This example demonstrates how to create a tool-calling agent using Ollama
 with the provider-agnostic `init_chat_model` function. The agent uses
 Ollama's tool-calling support to decide when to invoke arithmetic tools.
 
+How the agent selects tools:
+    The `create_tool_calling_agent` function registers the provided tools
+    (add and multiply) with the model. The model receives the user's request
+    and the tool schemas, then decides whether to call a tool based on the
+    conversation. If it chooses to call a tool, the `AgentExecutor` invokes
+    the tool and feeds the result back to the model.
+
 Setup:
     Install Ollama from https://ollama.com and pull a tool-capable model:
         ollama pull llama3.1
 
+Environment variables:
+    OLLAMA_MODEL: model name (default: llama3.1)
+    OLLAMA_BASE_URL: Ollama server URL (default: http://localhost:11434)
+
 Run:
-    python examples/43_ollama_agent.py
+    python examples/43_ollama_agent.py [query]
 """
 
 import os
+import sys
 
 from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.chat_models import init_chat_model
@@ -61,12 +73,13 @@ def build_agent():
 
 
 # ## Main
-def main():
+def main(query: str = "What is 17 * 23? Use the multiply tool."):
     """Run the agent with a sample query."""
     agent = build_agent()
-    response = agent.invoke({"input": "What is 17 * 23? Use the multiply tool."})
+    response = agent.invoke({"input": query})
     print(response["output"])
 
 
 if __name__ == "__main__":
-    main()
+    query = sys.argv[1] if len(sys.argv) > 1 else "What is 17 * 23? Use the multiply tool."
+    main(query)
