@@ -53,6 +53,27 @@ class Person(BaseModel):
         return cleaned
 
 
+def validate_response(data: dict) -> Person:
+    """Parse and validate structured output into a Person.
+
+    Args:
+        data: Dictionary containing person fields.
+
+    Returns:
+        A validated Person instance.
+
+    Raises:
+        ValueError: If the data fails validation, with a clear message.
+    """
+    try:
+        return Person(**data)
+    except ValidationError as e:
+        errors = "; ".join(
+            f"{'.'.join(map(str, err['loc']))}: {err['msg']}" for err in e.errors()
+        )
+        raise ValueError(f"Invalid structured output: {errors}") from e
+
+
 def main() -> None:
     """Demonstrate schema definition and validation."""
     # Valid input
@@ -87,6 +108,30 @@ def main() -> None:
         Person(name="Bob", age=30, email="bob@example.com", tags=["admin", ""])
     except ValidationError as e:
         print("Validation error:", e)
+
+    # Using validate_response helper
+    valid_data = {
+        "name": "Charlie",
+        "age": 25,
+        "email": "charlie@example.com",
+        "tags": ["user"],
+    }
+    try:
+        validated_person = validate_response(valid_data)
+        print("Validated person:", validated_person)
+    except ValueError as e:
+        print("Validation helper error:", e)
+
+    invalid_data = {
+        "name": "Dave",
+        "age": -1,
+        "email": "dave@example.com",
+        "tags": ["user"],
+    }
+    try:
+        validate_response(invalid_data)
+    except ValueError as e:
+        print("Validation helper error:", e)
 
 
 if __name__ == "__main__":
