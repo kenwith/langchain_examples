@@ -2,12 +2,25 @@
 """
 Module for batch inference.
 
-This module provides a utility function `batch_infer` that processes multiple
-inputs concurrently using asyncio, which is useful for improving throughput
-when calling LLM APIs. The module demonstrates how to use asyncio with
-LangChain models to process a list of prompts efficiently.
+This module provides reusable helper functions for running batch inference
+concurrently using asyncio. It is particularly useful for improving throughput
+when calling LLM APIs, as multiple prompts can be processed in parallel without
+blocking the event loop.
+
+The main public function is `batch_infer`, which takes a synchronous inference
+function and a list of inputs, and returns the outputs in the same order as the
+inputs. A convenience wrapper `batch_predict` is also provided for LangChain-style
+models that expose an `invoke` method.
 
 Example usage:
+    from my_model import model
+    prompts = ["Hello", "World"]
+    results = batch_infer(model.invoke, prompts, max_concurrency=5)
+
+    # Or with batch_predict:
+    results = batch_predict(model, prompts, max_concurrency=5)
+
+Run the demo with:
     python 08_batch_inference.py
 """
 
@@ -46,34 +59,12 @@ async def _batch_infer_async(
         A list of outputs in the same order as inputs.
     """
     semaphore = asyncio.Semaphore(max_concurrency)
-    tasks = [
-        asyncio.ensure_future(_async_infer(infer_func, item, semaphore))
-        for item in inputs
-    ]
-    results: List[U] = []
 
-    # Use as_completed to process results as they finish, but ensure ordering
-    # by mapping each completed task to its original position.
-    pending = {task: idx for idx, task in enumerate(tasks)}
-    for completed_task in asyncio.as_completed(tasks):
-        # Find the original index of this task
-        idx = None
-        for task, i in list(pending.items()):
-            if task is completed_task:
-                idx = i
-                del pending[task]
-                break
-        if idx is None:
-            raise RuntimeError("Task not found in pending mapping")
+    async def bounded_infer(item: T) -> U:
+        return await _async_infer(infer_func, item, semaphore)
 
-        result = await completed_task
-        # Place result in the correct position (we'll build a list with None
-        # placeholders for now)
-        results.append((idx, result))
-
-    # Sort results by index to restore order
-    results.sort(key=lambda x: x[0])
-    return [res for _, res in results]
+    # asyncio.gather preserves the order of the inputs.
+    return await asyncio.gather(*(bounded_infer(item) for item in inputs))
 
 
 def batch_infer(
@@ -106,6 +97,33 @@ def batch_infer(
         >>> results = batch_infer(model.invoke, ["Hello", "World"], max_concurrency=5)
     """
     return asyncio.run(_batch_infer_async(infer_func, inputs, max_concurrency))
+
+
+def batch_predict(
+    model: Any,
+    prompts: List[str],
+    max_concurrency: int = 10,
+) -> List[Any]:
+    """Run batch predictions using a LangChain-style model.
+
+    This is a convenience wrapper around `batch_infer` for models that expose
+    an `invoke` method. It allows you to pass the model object directly instead
+    of binding the method manually.
+
+    Args:
+        model: An object with an `invoke` method that takes a single prompt
+            and returns a prediction.
+        prompts: A list of prompt strings.
+        max_concurrency: Maximum number of concurrent predictions.
+
+    Returns:
+        A list of predictions in the same order as `prompts`.
+
+    Example:
+        >>> from my_langchain_model import model
+        >>> results = batch_predict(model, ["Hello", "World"], max_concurrency=5)
+    """
+    return batch_infer(model.invoke, prompts, max_concurrency)
 
 
 # --- Example usage ---------------------------------------------------------
