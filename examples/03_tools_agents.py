@@ -35,8 +35,9 @@ Requirements:
 Usage:
     python examples/03_tools_agents.py
 
-Error handling around the entire agent execution is demonstrated in `main()`
-with a try-except block that provides a fallback message if the agent fails.
+Error handling around tool execution is demonstrated in `run_agent()`, a helper
+that wraps each call to the agent, catches any exceptions, and returns a readable
+error message so the user always gets a clear response.
 
 Security note:
 - Never hardcode API keys or other secrets. Always load credentials from
@@ -252,6 +253,33 @@ def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
     return calls
 
 
+def run_agent(agent, query: str) -> str:
+    """
+    Run a single query through the agent and return a readable response.
+
+    This helper wraps tool execution so that any exception raised while the
+    agent is running (including tool errors, parsing failures, or API issues)
+    is caught and converted into a readable error message. This ensures the
+    caller always receives a string response instead of an unhandled exception.
+
+    Args:
+        agent: The initialized LangChain agent.
+        query: The user query to send to the agent.
+
+    Returns:
+        The agent's response as a string, or a readable error message if the
+        agent execution fails.
+    """
+    try:
+        return agent.run(query)
+    except Exception as e:
+        logger.error(f"Agent execution error for query '{query}': {e}")
+        return (
+            f"An error occurred while processing your request: {type(e).__name__}: {e}. "
+            "Please check the input and try again."
+        )
+
+
 def main():
     """
     Run an agent with custom calculator, string-length, reverse-string, and word-count tools.
@@ -266,8 +294,9 @@ def main():
     errors and return meaningful messages, ensuring the agent can continue
     processing even if a tool fails.
 
-    Execution of the agent is wrapped in a try-except block to catch any
-    unexpected errors (e.g., LLM parsing failures) and provide a fallback message.
+    Each agent call is wrapped by the `run_agent()` helper, which catches any
+    unexpected exceptions and returns a readable error message instead of
+    crashing the script.
     """
     # Load API key from environment - never hardcode credentials
     api_key = os.getenv("OPENAI_API_KEY")
@@ -287,21 +316,16 @@ def main():
 
     sample_query = "What is 12 * 8 + 4?"
 
-    try:
-        # Example valid queries
-        print(f"Sample query: {sample_query}")
-        print(agent.run(sample_query))
-        print(agent.run("Calculate (3 + 5) ** 2"))
-        print(agent.run("What is the length of the word 'hello'?"))
-        print(agent.run("Reverse the string 'hello'"))
-        print(agent.run("How many words are in the sentence 'The quick brown fox jumps over the lazy dog'?"))
+    # Example valid queries
+    print(f"Sample query: {sample_query}")
+    print(run_agent(agent, sample_query))
+    print(run_agent(agent, "Calculate (3 + 5) ** 2"))
+    print(run_agent(agent, "What is the length of the word 'hello'?"))
+    print(run_agent(agent, "Reverse the string 'hello'"))
+    print(run_agent(agent, "How many words are in the sentence 'The quick brown fox jumps over the lazy dog'?"))
 
-        # Example invalid expression to demonstrate helpful error
-        print(agent.run("What is 2 +* 3?"))
-    except Exception as e:
-        logger.error(f"Agent execution error: {e}")
-        print(f"An error occurred while running the agent: {e}")
-        print("Fallback message: Please check the input and try again.")
+    # Example invalid expression to demonstrate helpful error handling
+    print(run_agent(agent, "What is 2 +* 3?"))
 
     # Show how to extract tool call arguments from the agent's response
     # (using __call__ to get intermediate steps)
