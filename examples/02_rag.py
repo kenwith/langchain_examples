@@ -32,13 +32,15 @@ def main():
     retriever = build_retriever()
 
     prompt = ChatPromptTemplate.from_template(
-        "Answer the question based on the following context:\n{context}\n\nQuestion: {question}"
+        "Answer the question based on the following context:\n{{ format_docs(docs) }}\n\nQuestion: {{ question }}",
+        template_format="jinja2",
+        partial_variables={"format_docs": format_docs},
     )
 
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
     rag_chain = (
-        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        {"docs": retriever, "question": RunnablePassthrough()}
         | prompt
         | llm
         | StrOutputParser()
