@@ -154,16 +154,19 @@ def create_retriever_tool() -> Tool:
     )
 
 
-def format_citations(intermediate_steps):
-    """Extract source names from intermediate steps and format them as citations.
+def format_sources(intermediate_steps):
+    """Render retrieved sources as a formatted citation list.
+
+    Extracts source names from the tool observations in the agent's
+    intermediate steps and returns them as a bulleted "Sources:" section.
 
     Args:
         intermediate_steps: List of (AgentAction, observation) tuples from the
             agent executor when return_intermediate_steps=True.
 
     Returns:
-        A string like "\\n\\nSources: source1, source2" or an empty string if
-        no sources are found.
+        A string like "\\n\\nSources:\\n- source1\\n- source2" or an empty
+        string if no sources are found.
     """
     import re
 
@@ -177,8 +180,8 @@ def format_citations(intermediate_steps):
     if not sources:
         return ""
 
-    citation_list = ", ".join(sorted(sources))
-    return f"\n\nSources: {citation_list}"
+    source_lines = "\n".join(f"- {source}" for source in sorted(sources))
+    return f"\n\nSources:\n{source_lines}"
 
 
 def create_agent(llm, tools):
@@ -249,10 +252,10 @@ def main():
     response = agent_executor.invoke({"input": question})
     answer = response["output"]
 
-    # Append a formatted citation list if the agent didn't already include one
-    citations = format_citations(response.get("intermediate_steps", []))
-    if citations and "Sources:" not in answer:
-        answer += citations
+    # Append a formatted source list if the agent didn't already include one
+    sources = format_sources(response.get("intermediate_steps", []))
+    if sources and "Sources:" not in answer:
+        answer += sources
 
     print(f"\nAnswer: {answer}")
 
