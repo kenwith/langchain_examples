@@ -26,7 +26,7 @@ class ConversationSession:
       "Human: ..." and "AI: ...". Override them if you need different labels.
     """
 
-    def __init__(self, model="text-davinci-003", temperature=0.7):
+    def __init__(self, model="text-davinci-003", temperature=0.7, max_messages=6):
         self.llm = OpenAI(
             temperature=temperature,
             model_name=model,
@@ -41,15 +41,24 @@ class ConversationSession:
             input_key="input",
             return_messages=False,
         )
+        self.max_messages = max_messages
         self.chain = ConversationChain(llm=self.llm, memory=self.memory, verbose=True)
 
     def ask(self, prompt: str) -> str:
         """Send a prompt to the conversation and return the AI response."""
+        self.trim_history()
         return self.chain.run(input=prompt)
 
     def clear_history(self) -> None:
         """Clear the conversation memory for this session."""
         self.memory.clear()
+
+    def trim_history(self) -> None:
+        """Trim the conversation memory to the last max_messages messages."""
+        messages = self.memory.chat_memory.messages
+        if len(messages) > self.max_messages:
+            # Keep only the most recent messages.
+            self.memory.chat_memory.messages = messages[-self.max_messages :]
 
     def format_history(self) -> str:
         """Return a formatted string of the conversation history."""
@@ -75,22 +84,29 @@ class ConversationSummarySession:
         session.clear_history()
     """
 
-    def __init__(self, model="text-davinci-003", temperature=0.7):
+    def __init__(self, model="text-davinci-003", temperature=0.7, max_summary_chars=500):
         self.llm = OpenAI(
             temperature=temperature,
             model_name=model,
             openai_api_key=os.getenv("OPENAI_API_KEY"),
         )
         self.memory = ConversationSummaryMemory(llm=self.llm)
+        self.max_summary_chars = max_summary_chars
         self.chain = ConversationChain(llm=self.llm, memory=self.memory, verbose=True)
 
     def ask(self, prompt: str) -> str:
         """Send a prompt to the conversation and return the AI response."""
+        self.trim_history()
         return self.chain.run(input=prompt)
 
     def clear_history(self) -> None:
         """Clear the conversation memory for this session."""
         self.memory.clear()
+
+    def trim_history(self) -> None:
+        """Trim the conversation summary to a maximum number of characters."""
+        if len(self.memory.summary) > self.max_summary_chars:
+            self.memory.summary = self.memory.summary[: self.max_summary_chars].rstrip() + "..."
 
     def format_history(self) -> str:
         """Return a formatted string of the conversation summary."""
@@ -104,7 +120,7 @@ class ConversationSummarySession:
 class RunnableConversationSession:
     """A session-scoped conversation using RunnableWithMessageHistory and an in-memory store."""
 
-    def __init__(self, model="gpt-3.5-turbo", temperature=0.7):
+    def __init__(self, model="gpt-3.5-turbo", temperature=0.7, max_messages=6):
         self.llm = ChatOpenAI(
             temperature=temperature,
             model_name=model,
@@ -119,6 +135,7 @@ class RunnableConversationSession:
         )
         self.chain = self.prompt | self.llm
         self.store = {}
+        self.max_messages = max_messages
         self.history = RunnableWithMessageHistory(
             self.chain,
             self.get_session_history,
@@ -133,6 +150,7 @@ class RunnableConversationSession:
 
     def ask(self, prompt: str, session_id: str = "default") -> str:
         """Send a prompt to the conversation and return the AI response."""
+        self.trim_history(session_id)
         response = self.history.invoke(
             {"input": prompt},
             config={"configurable": {"session_id": session_id}},
@@ -142,6 +160,12 @@ class RunnableConversationSession:
     def clear_history(self, session_id: str = "default") -> None:
         """Clear the conversation memory for a session."""
         self.store.pop(session_id, None)
+
+    def trim_history(self, session_id: str = "default") -> None:
+        """Trim the conversation history for a session to the last max_messages messages."""
+        history = self.store.get(session_id)
+        if history and len(history.messages) > self.max_messages:
+            history.messages = history.messages[-self.max_messages :]
 
     def format_history(self, session_id: str = "default") -> str:
         """Return a formatted string of the conversation history."""
