@@ -42,14 +42,14 @@ All example scripts live in the `examples/` directory and are numbered in a sugg
 4. Run an example:
 
    ```bash
-   python examples/01_basic_llm.py
+   python examples/01_llm.py
    ```
 
 ## Examples
 
 All example scripts live in the `examples/` directory. The list below reflects the current set of files; new examples are added regularly. These examples are continuously updated to work with the latest LangChain release and best practices.
 
-- [01_basic_llm.py](examples/01_basic_llm.py) - Make a simple LLM call.
+- [01_llm.py](examples/01_llm.py) - Make a simple LLM call.
 - [02_prompt_templates.py](examples/02_prompt_templates.py) - Create reusable prompt templates.
 - [03_chains.py](examples/03_chains.py) - Combine components into a single chain.
 - [04_agents.py](examples/04_agents.py) - Use agents to dynamically choose actions.
@@ -62,7 +62,25 @@ All example scripts live in the `examples/` directory. The list below reflects t
 
 ## Testing
 
-The examples are meant to be run directly and do not have a formal test suite. You can verify an example works by running it with Python and checking the output. If you find a bug, please open an issue or submit a pull request.
+The repository includes a pytest test suite. To run all tests, make sure you have installed the dependencies from `requirements.txt`, then run:
+
+```bash
+pytest
+```
+
+You can also run the tests with `python -m pytest`:
+
+```bash
+python -m pytest
+```
+
+To run a specific test file, pass its path to pytest:
+
+```bash
+pytest tests/test_examples.py
+```
+
+The tests validate that the examples run correctly and produce the expected output. If you find a bug, please open an issue or submit a pull request.
 
 ## Contributing
 
