@@ -47,7 +47,7 @@ import os
 import ast
 import operator
 import logging
-from typing import Optional, Type, List, Dict
+from typing import Any, Callable, Dict, List, Type, Union
 
 from langchain.tools import BaseTool, tool
 from langchain.agents import initialize_agent, AgentType
@@ -59,7 +59,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger(__name__)
 
 # Allowed AST operators for safe evaluation
-ALLOWED_OPERATORS = {
+ALLOWED_OPERATORS: Dict[type, Callable[..., Any]] = {
     ast.Add: operator.add,
     ast.Sub: operator.sub,
     ast.Mult: operator.mul,
@@ -72,6 +72,8 @@ ALLOWED_OPERATORS = {
 
 
 class CalculatorInput(BaseModel):
+    """Pydantic schema for the CalculatorTool input."""
+
     expression: str = Field(
         description="The math expression to evaluate, e.g. '2 + 3 * 4'",
         min_length=1,
@@ -80,12 +82,29 @@ class CalculatorInput(BaseModel):
 
 
 class CalculatorTool(BaseTool):
-    name = "calculator"
-    description = "Useful for when you need to answer questions about math. Input should be a valid mathematical expression."
+    """Tool for safely evaluating mathematical expressions.
+
+    This tool uses Python's AST module to parse and evaluate expressions
+    with a restricted set of operators. It is designed to handle invalid
+    input gracefully and return a readable error message.
+    """
+
+    name: str = "calculator"
+    description: str = (
+        "Useful for when you need to answer questions about math. "
+        "Input should be a valid mathematical expression."
+    )
     args_schema: Type[BaseModel] = CalculatorInput
 
     def _run(self, expression: str) -> str:
-        """Evaluate a math expression safely and return a helpful error on invalid input."""
+        """Evaluate a math expression safely and return a helpful error on invalid input.
+
+        Args:
+            expression: A string containing a mathematical expression.
+
+        Returns:
+            A string describing the result, or an error message if evaluation fails.
+        """
         try:
             # Parse the expression into an AST to validate syntax and allowed operations
             tree = ast.parse(expression, mode="eval")
@@ -112,11 +131,28 @@ class CalculatorTool(BaseTool):
             )
 
     async def _arun(self, expression: str) -> str:
-        """Async version of _run."""
+        """Async version of _run.
+
+        Args:
+            expression: A string containing a mathematical expression.
+
+        Returns:
+            A string describing the result, or an error message if evaluation fails.
+        """
         return self._run(expression)
 
-    def _eval_node(self, node):
-        """Recursively evaluate an AST node using only allowed operators."""
+    def _eval_node(self, node: ast.AST) -> Union[int, float]:
+        """Recursively evaluate an AST node using only allowed operators.
+
+        Args:
+            node: The AST node to evaluate.
+
+        Returns:
+            The numeric result of evaluating the node.
+
+        Raises:
+            ValueError: If the node contains an unsupported operation or constant.
+        """
         if isinstance(node, ast.Constant):
             if isinstance(node.value, (int, float)):
                 return node.value
@@ -141,6 +177,8 @@ class CalculatorTool(BaseTool):
 
 
 class StringLengthInput(BaseModel):
+    """Pydantic schema for the StringLengthTool input."""
+
     text: str = Field(
         description="The string to measure, e.g. 'hello'",
         max_length=100000,
@@ -148,12 +186,29 @@ class StringLengthInput(BaseModel):
 
 
 class StringLengthTool(BaseTool):
-    name = "string_length"
-    description = "Useful for when you need to know the number of characters in a string. Input should be a string."
+    """Tool for counting characters in a string.
+
+    This tool returns the number of characters in the input text, including
+    spaces and punctuation. It handles invalid inputs gracefully.
+    """
+
+    name: str = "string_length"
+    description: str = (
+        "Useful for when you need to know the number of characters in a string. "
+        "Input should be a string."
+    )
     args_schema: Type[BaseModel] = StringLengthInput
 
     def _run(self, text: str) -> str:
-        """Return the length of the input string, handling any unexpected errors."""
+        """Return the length of the input string, handling any unexpected errors.
+
+        Args:
+            text: The string to measure.
+
+        Returns:
+            A string describing the character count, or an error message if the
+            input is invalid.
+        """
         try:
             return f"The length of the string is {len(text)} characters."
         except Exception as e:
@@ -161,7 +216,15 @@ class StringLengthTool(BaseTool):
             return f"Error computing string length: {str(e)}. Please provide a valid string."
 
     async def _arun(self, text: str) -> str:
-        """Async version of _run."""
+        """Async version of _run.
+
+        Args:
+            text: The string to measure.
+
+        Returns:
+            A string describing the character count, or an error message if the
+            input is invalid.
+        """
         return self._run(text)
 
 
@@ -224,7 +287,7 @@ def word_count(text: str) -> str:
         return f"Error counting words: {str(e)}. Please provide a valid string."
 
 
-def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
+def extract_tool_call_arguments(agent_response: Dict[str, Any]) -> List[Dict[str, str]]:
     """
     Extract tool call arguments from an agent response dict.
 
@@ -253,7 +316,7 @@ def extract_tool_call_arguments(agent_response: dict) -> List[Dict[str, str]]:
     return calls
 
 
-def run_agent(agent, query: str) -> str:
+def run_agent(agent: Any, query: str) -> str:
     """
     Run a single query through the agent and return a readable response.
 
@@ -280,7 +343,7 @@ def run_agent(agent, query: str) -> str:
         )
 
 
-def main():
+def main() -> None:
     """
     Run an agent with custom calculator, string-length, reverse-string, and word-count tools.
 
