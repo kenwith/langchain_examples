@@ -25,51 +25,26 @@ class WorkflowState(TypedDict, total=False):
     final_output: Optional[str]
 
 
-# Node functions with type hints and comments
-def process_data(state: WorkflowState) -> WorkflowState:
-    """Process the input data (e.g., normalize, transform).
+# Type alias for brevity and readability
+State = WorkflowState
 
-    Args:
-        state: Current workflow state.
 
-    Returns:
-        Updated state with processed_data field set.
-    """
-    # Simulate processing by uppercasing input.
-    # The returned dict is a partial state update; LangGraph merges it
-    # into the current state, so other fields remain unchanged.
+# Node functions with type hints and concise docstrings
+def process_data(state: State) -> State:
+    """Process input data (e.g., uppercase)."""
     processed = state.get("input_data", "").upper()
     return {"processed_data": processed}
 
 
-def validate_data(state: WorkflowState) -> WorkflowState:
-    """Validate the processed data.
-
-    Args:
-        state: Current workflow state.
-
-    Returns:
-        Updated state with validation_result.
-    """
-    # Simple validation: check if processed data is not empty.
-    # This node receives the state after process_data, so processed_data
-    # is expected to be set by the time this node runs.
+def validate_data(state: State) -> State:
+    """Validate processed data (non-empty check)."""
     processed = state.get("processed_data", "")
     valid = len(processed) > 0
     return {"validation_result": valid}
 
 
-def finalize(state: WorkflowState) -> WorkflowState:
-    """Generate final output based on validation.
-
-    Args:
-        state: Current workflow state.
-
-    Returns:
-        Updated state with final_output.
-    """
-    # This node runs after the conditional edge, so validation_result
-    # should be available from the validate_data node.
+def finalize(state: State) -> State:
+    """Generate final output based on validation result."""
     if state.get("validation_result"):
         final = f"Validated: {state.get('processed_data')}"
     else:
@@ -78,15 +53,8 @@ def finalize(state: WorkflowState) -> WorkflowState:
 
 
 # Conditional edge function to route based on validation
-def should_continue(state: WorkflowState) -> str:
-    """Determine next node based on validation result.
-
-    Args:
-        state: Current workflow state.
-
-    Returns:
-        String indicating next node name.
-    """
+def should_continue(state: State) -> str:
+    """Determine next node (always 'finalize' in this example)."""
     # For simplicity, always route to finalize. In a more complex graph,
     # this could return "finalize" or "end" based on validation_result.
     return "finalize" if state.get("validation_result") else "finalize"
@@ -94,16 +62,10 @@ def should_continue(state: WorkflowState) -> str:
 
 # Build the graph
 def build_graph() -> Any:
-    """Construct and compile the LangGraph state graph.
-
-    Returns:
-        Compiled graph ready for execution.
-    """
-    # Initialize graph with state schema
+    """Construct and compile the LangGraph state graph."""
     workflow = StateGraph(WorkflowState)
 
-    # Add nodes. Each node is a function that takes the current state
-    # and returns a partial state update to merge into the graph state.
+    # Add nodes
     workflow.add_node("process", process_data)
     workflow.add_node("validate", validate_data)
     workflow.add_node("finalize", finalize)
@@ -122,18 +84,13 @@ def build_graph() -> Any:
     # 4. finalize: produces final_output based on validation_result.
     # 5. END: terminal node that stops execution.
 
-    # Entry point: process is the first node to execute.
+    # Entry point
     workflow.set_entry_point("process")
 
-    # process -> validate: after processing, always validate.
+    # process -> validate
     workflow.add_edge("process", "validate")
 
     # validate -> (conditional) -> finalize
-    # The conditional edge uses should_continue to determine the next node.
-    # The mapping keys are the possible return values from should_continue;
-    # the values are the node names to route to.
-    # Here, should_continue always returns "finalize", so the graph always
-    # proceeds to finalize after validation.
     workflow.add_conditional_edges(
         "validate",
         should_continue,
@@ -145,23 +102,15 @@ def build_graph() -> Any:
         },
     )
 
-    # finalize -> END: after final output is generated, stop.
+    # finalize -> END
     workflow.add_edge("finalize", END)
 
     # Compile and return
     return workflow.compile()
 
 
-def invoke_graph(initial_state: WorkflowState, app: Optional[Any] = None) -> WorkflowState:
-    """Run the workflow using an optionally pre-built graph.
-
-    Args:
-        initial_state: Starting state for the workflow.
-        app: Optional compiled graph. If not provided, build_graph() is called.
-
-    Returns:
-        Final state after graph execution.
-    """
+def invoke_graph(initial_state: State, app: Optional[Any] = None) -> State:
+    """Run the workflow using an optionally pre-built graph."""
     if app is None:
         app = build_graph()
     return app.invoke(initial_state)
@@ -169,7 +118,7 @@ def invoke_graph(initial_state: WorkflowState, app: Optional[Any] = None) -> Wor
 
 if __name__ == "__main__":
     # Example input
-    initial_state: WorkflowState = {"input_data": "Hello LangGraph"}
+    initial_state: State = {"input_data": "Hello LangGraph"}
 
     # Run the workflow using the helper
     result = invoke_graph(initial_state)
