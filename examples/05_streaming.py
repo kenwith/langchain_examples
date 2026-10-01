@@ -18,6 +18,7 @@ def stream_response(response):
     for chunk in response:
         print(chunk.content, end="", flush=True)
     print()  # Ensure a newline after the stream ends
+    print("[Stream complete]", flush=True)
 
 
 def main():
