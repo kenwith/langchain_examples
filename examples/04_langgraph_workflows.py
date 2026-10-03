@@ -32,23 +32,31 @@ State = WorkflowState
 # Node functions with type hints and concise docstrings
 def process_data(state: State) -> State:
     """Process input data (e.g., uppercase)."""
+    # Take the input_data from the state, default to empty string, and uppercase it.
     processed = state.get("input_data", "").upper()
+    # Return a partial state update with the processed data.
     return {"processed_data": processed}
 
 
 def validate_data(state: State) -> State:
     """Validate processed data (non-empty check)."""
+    # Retrieve the processed_data from the state, default to empty string.
     processed = state.get("processed_data", "")
+    # A non-empty string is considered valid.
     valid = len(processed) > 0
+    # Store the boolean validation result in the state.
     return {"validation_result": valid}
 
 
 def finalize(state: State) -> State:
     """Generate final output based on validation result."""
+    # Check the validation_result flag; if True, build a success message.
     if state.get("validation_result"):
         final = f"Validated: {state.get('processed_data')}"
     else:
+        # Otherwise, provide a failure message.
         final = "Validation failed."
+    # Return the final output in the state.
     return {"final_output": final}
 
 
@@ -65,9 +73,26 @@ def build_graph() -> Any:
     """Construct and compile the LangGraph state graph."""
     workflow = StateGraph(WorkflowState)
 
-    # Add nodes
+    # --- Add nodes to the graph ---
+    # Each node is a function that takes the current state and returns a partial state update.
+    # The node name is used as a reference in edges and conditional edges.
+
+    # Node: process
+    # Purpose: Transform the raw input into processed data (e.g., uppercase).
+    # Input state key: input_data
+    # Output state key: processed_data
     workflow.add_node("process", process_data)
+
+    # Node: validate
+    # Purpose: Check the processed data and set a boolean validation result.
+    # Input state key: processed_data
+    # Output state key: validation_result
     workflow.add_node("validate", validate_data)
+
+    # Node: finalize
+    # Purpose: Generate the final output message based on the validation result.
+    # Input state key: validation_result, processed_data
+    # Output state key: final_output
     workflow.add_node("finalize", finalize)
 
     # --- Graph structure ---
@@ -84,44 +109,53 @@ def build_graph() -> Any:
     # 4. finalize: produces final_output based on validation_result.
     # 5. END: terminal node that stops execution.
 
-    # Entry point
+    # Entry point: execution starts at the "process" node.
     workflow.set_entry_point("process")
 
-    # process -> validate
+    # Edge: process -> validate
+    # After processing, unconditionally move to the validation step.
     workflow.add_edge("process", "validate")
 
-    # validate -> (conditional) -> finalize
+    # Conditional edge: validate -> (decision)
+    # The should_continue function determines which node to go to next.
+    # The mapping dictionary tells the graph what each return value means.
+    # In this case, "finalize" maps to the "finalize" node.
+    # To support early termination, you could add:
+    #   "end": END,
+    # and modify should_continue to return "end" when validation fails.
     workflow.add_conditional_edges(
         "validate",
         should_continue,
         {
             "finalize": "finalize",
-            # To support early termination, you could add:
+            # Uncomment the following line to allow early termination:
             # "end": END,
-            # and modify should_continue to return "end" when validation fails.
         },
     )
 
-    # finalize -> END
+    # Edge: finalize -> END
+    # After producing the final output, terminate the graph execution.
     workflow.add_edge("finalize", END)
 
-    # Compile and return
+    # Compile the graph into an executable app and return it.
     return workflow.compile()
 
 
 def invoke_graph(initial_state: State, app: Optional[Any] = None) -> State:
     """Run the workflow using an optionally pre-built graph."""
+    # If no app is provided, build one using the default build_graph function.
     if app is None:
         app = build_graph()
+    # Invoke the graph with the initial state and return the final state.
     return app.invoke(initial_state)
 
 
 if __name__ == "__main__":
-    # Example input
+    # Example input: a simple string to be processed by the workflow.
     initial_state: State = {"input_data": "Hello LangGraph"}
 
-    # Run the workflow using the helper
+    # Run the workflow using the helper function.
     result = invoke_graph(initial_state)
 
-    # Print the final output
+    # Print the final output produced by the finalize node.
     print("Final output:", result.get("final_output"))
