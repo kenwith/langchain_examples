@@ -1,7 +1,16 @@
 """Streaming example for LangChain.
 
+Streaming is a technique where the model emits output tokens incrementally
+rather than waiting for the full completion. This reduces perceived latency,
+improves interactivity, and is essential for chat and real-time applications.
+
 This example demonstrates how to stream tokens from a language model
 using a helper function that prints each token as it arrives.
+
+To run this script:
+1. Set the OPENAI_API_KEY environment variable to your OpenAI API key.
+2. Install dependencies: pip install langchain-openai
+3. Run the script: python examples/05_streaming.py
 """
 
 import os
