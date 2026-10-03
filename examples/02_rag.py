@@ -1,3 +1,9 @@
+"""Example of a Retrieval-Augmented Generation (RAG) pipeline.
+
+This script builds a simple RAG chain: it retrieves relevant document chunks
+from a vector store and passes them as context to an LLM to answer a question.
+"""
+
 from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
@@ -20,25 +26,37 @@ def build_retriever():
         Document(page_content="LangChain provides modular components for building RAG pipelines."),
     ]
 
+    # Split documents into smaller chunks for more precise retrieval
     splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0)
     chunks = splitter.split_documents(documents)
 
+    # Generate embeddings and store them in a FAISS vector index
     embeddings = OpenAIEmbeddings()
     vectorstore = FAISS.from_documents(chunks, embeddings)
+
+    # Return a retriever that can fetch relevant chunks for a query
     return vectorstore.as_retriever()
 
 
 def main():
+    # Build the retriever that will fetch relevant context
     retriever = build_retriever()
 
+    # Define the prompt template. The docs are formatted by format_docs before being inserted.
     prompt = ChatPromptTemplate.from_template(
         "Answer the question based on the following context:\n{{ format_docs(docs) }}\n\nQuestion: {{ question }}",
         template_format="jinja2",
         partial_variables={"format_docs": format_docs},
     )
 
+    # Initialize the language model (uses OpenAI API key from environment)
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
+    # Construct the RAG chain:
+    # 1. Retrieve relevant documents for the input question and pass the question through.
+    # 2. Format the retrieved docs and the question into the prompt.
+    # 3. Generate an answer with the LLM.
+    # 4. Parse the output to a plain string.
     rag_chain = (
         {"docs": retriever, "question": RunnablePassthrough()}
         | prompt
