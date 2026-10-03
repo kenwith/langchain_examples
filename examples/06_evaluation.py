@@ -22,16 +22,32 @@ How to run:
     The script will evaluate a sample response with the LLM-as-judge method
     and with LangChain's built-in criteria evaluator.
 
-Metrics used:
-    - Criteria score: an LLM-based score from LangChain's criteria evaluator
-      (typically 0/1 for binary criteria or a 1-5 score for scale criteria).
+Metrics used and how they are computed:
+    - Criteria score: an LLM-based score from LangChain's criteria evaluator.
+      For binary criteria, the score is 1 if the criterion is met and 0 otherwise.
+      For scale criteria, the score is an integer from 1 to 5. The LLM is asked
+      to reason step-by-step and produce a score based on the provided criterion.
     - LLM-as-judge score: a 1-5 rating produced by a separate LLM prompt.
+      The prompt asks the judge LLM to rate the response on a scale of 1 (poor)
+      to 5 (excellent) for a given quality dimension. The score is parsed from
+      the output line starting with "Score:".
     - Keyword/length score: a deterministic 0/1 score from
-      `KeywordAndLengthEvaluator` that checks required keywords and a minimum length.
+      `KeywordAndLengthEvaluator`. It returns 1 only if the prediction contains
+      all required keywords (case-insensitive) AND has length greater than
+      `min_length` characters. Otherwise it returns 0.
     - Reference F1 score: a deterministic 0-1 score from
-      `ReferenceAnswerEvaluator` based on token overlap between prediction and reference.
+      `ReferenceAnswerEvaluator`. It tokenizes both prediction and reference
+      into lowercase word sets, then computes:
+          precision = |prediction_tokens ∩ reference_tokens| / |prediction_tokens|
+          recall    = |prediction_tokens ∩ reference_tokens| / |reference_tokens|
+          F1        = 2 * precision * recall / (precision + recall)
+      If both precision and recall are 0, F1 is 0.
     - Accuracy: fraction of exact matches from `accuracy_scorer`.
+      Computed as (total - error_count) / total, where error_count is the
+      number of prediction/reference pairs that are not exactly equal.
     - Exact match rate: fraction of exact string matches from `exact_match_scorer`.
+      Computed as exact_matches / total, where exact_matches is the number of
+      prediction/reference pairs that are equal after no normalisation.
 
 Reference to evaluator class:
     Custom evaluators in this module subclass `langchain.evaluation.schema.StringEvaluator`.
@@ -50,6 +66,10 @@ from langchain_openai import ChatOpenAI
 def accuracy_scorer(predictions: List[str], references: List[str]) -> dict:
     """
     Compute simple accuracy and error count for classification tasks.
+
+    Accuracy is defined as the fraction of predictions that exactly match
+    their corresponding reference string:
+        accuracy = (total - error_count) / total
 
     Args:
         predictions: List of predicted labels/strings.
@@ -71,7 +91,10 @@ def accuracy_scorer(predictions: List[str], references: List[str]) -> dict:
     if total == 0:
         return {"accuracy": 0.0, "error_count": 0, "total": 0}
 
+    # Count mismatches: each pair where prediction != reference is an error.
     error_count = sum(1 for p, r in zip(predictions, references) if p != r)
+
+    # Accuracy is the complement of the error rate.
     accuracy = (total - error_count) / total
 
     return {
@@ -88,6 +111,9 @@ def exact_match_scorer(predictions: List[str], references: List[str]) -> dict:
     This is a basic string-equality check and does not apply any
     normalisation. It is useful for tasks where the output must match a
     canonical answer exactly.
+
+    The exact match rate is computed as:
+        exact_match_rate = exact_matches / total
 
     Args:
         predictions: List of predicted strings.
@@ -116,6 +142,7 @@ def exact_match_scorer(predictions: List[str], references: List[str]) -> dict:
     if total == 0:
         return {"exact_match_rate": 0.0, "exact_matches": 0, "total": 0}
 
+    # Count pairs where the prediction is exactly equal to the reference.
     exact_matches = sum(1 for p, r in zip(predictions, references) if p == r)
 
     return {
@@ -132,9 +159,14 @@ class KeywordAndLengthEvaluator(StringEvaluator):
     - Length sufficiency: prediction must exceed a minimum character count.
 
     Returns a binary score (1 if both criteria pass, otherwise 0) and an explanation.
+
+    The score is computed as:
+        score = 1 if (len(prediction) > min_length) and
+                     (all keywords are present in prediction.lower()) else 0
     """
 
     def __init__(self, keywords: List[str], min_length: int):
+        # Store keywords in lowercase for case-insensitive matching.
         self.keywords = [kw.lower() for kw in keywords]
         self.min_length = min_length
 
@@ -155,14 +187,15 @@ class KeywordAndLengthEvaluator(StringEvaluator):
     def _evaluate_strings(
         self, prediction: str, reference: str = None, input: str = None, **kwargs
     ) -> tuple[float, str]:
-        # Length check
+        # Length check: prediction must be strictly longer than the minimum.
         length_ok = len(prediction) > self.min_length
 
-        # Keyword check
+        # Keyword check: every required keyword must appear in the lowercased prediction.
         lower_prediction = prediction.lower()
         missing_keywords = [kw for kw in self.keywords if kw not in lower_prediction]
         all_keywords_present = len(missing_keywords) == 0
 
+        # Both conditions must hold for a passing score.
         score = 1 if (length_ok and all_keywords_present) else 0
 
         reasons = []
@@ -181,6 +214,13 @@ class ReferenceAnswerEvaluator(StringEvaluator):
     """
     Custom evaluator that scores a prediction against a reference answer
     using token-level F1 overlap. The score is between 0 and 1.
+
+    The F1 score is computed as:
+        precision = |pred_tokens ∩ ref_tokens| / |pred_tokens|
+        recall    = |pred_tokens ∩ ref_tokens| / |ref_tokens|
+        F1        = 2 * precision * recall / (precision + recall)
+
+    If either token set is empty, or precision + recall is zero, F1 is 0.
     """
 
     @property
@@ -207,6 +247,7 @@ class ReferenceAnswerEvaluator(StringEvaluator):
         if not reference:
             return 0.0, "No reference answer provided."
 
+        # Tokenize into lowercase word sets using regex \w+.
         pred_tokens = set(re.findall(r"\w+", prediction.lower()))
         ref_tokens = set(re.findall(r"\w+", reference.lower()))
 
@@ -215,10 +256,12 @@ class ReferenceAnswerEvaluator(StringEvaluator):
         if not pred_tokens:
             return 0.0, "Prediction has no tokens."
 
+        # Compute token overlap, precision, and recall.
         overlap = pred_tokens & ref_tokens
         precision = len(overlap) / len(pred_tokens)
         recall = len(overlap) / len(ref_tokens)
 
+        # F1 is the harmonic mean of precision and recall.
         if precision + recall == 0:
             f1 = 0.0
         else:
@@ -264,9 +307,11 @@ def print_evaluation_report(predictions: List[str], references: List[str]) -> No
         match = "Yes" if pred == ref else "No"
         print(f"{i}) Prediction: {pred} | Ground Truth: {ref} | Match: {match}")
         if total > 0:
+            # Compute token-overlap F1 for each pair.
             f1, _ = evaluator.evaluate_strings(prediction=pred, reference=ref)
             f1_scores.append(f1)
 
+    # Aggregate metrics using the scorer helpers.
     accuracy = accuracy_scorer(predictions, references)
     exact_match = exact_match_scorer(predictions, references)
 
@@ -290,6 +335,10 @@ def llm_judge_evaluate(
     This is a basic demonstration of the LLM-as-judge pattern. It constructs a
     simple instruction for the LLM to rate the response on a scale of 1 to 5,
     providing a score and a short justification.
+
+    The score is parsed from the LLM output line starting with "Score:".
+    If parsing fails, the score is None and the full output is used as the
+    explanation.
 
     Args:
         prompt: The original user prompt that generated the response.
@@ -321,7 +370,7 @@ Explanation: <brief reason for the score>"""
     response = llm.invoke(judge_prompt)
     raw_output = response.content if hasattr(response, "content") else str(response)
 
-    # Parse score and explanation
+    # Parse score and explanation from the structured output.
     score = None
     explanation = ""
     lines = raw_output.split("\n")
@@ -359,6 +408,10 @@ def evaluate_response(
     1. Built-in LLM-based criteria evaluation (e.g., relevance).
     2. Custom keyword and length evaluation, if both keywords and min_length are provided.
 
+    The built-in criteria evaluator uses an LLM to judge whether the prediction
+    satisfies the given criterion. The custom evaluator applies deterministic
+    keyword and length checks as described in `KeywordAndLengthEvaluator`.
+
     Args:
         prediction: The generated response to evaluate.
         reference: An optional reference answer for comparison.
@@ -374,6 +427,7 @@ def evaluate_response(
     """
     results = {}
 
+    # Load LangChain's built-in criteria evaluator and evaluate the response.
     criteria_evaluator = load_evaluator(
         "criteria",
         criteria=criteria,
@@ -385,6 +439,7 @@ def evaluate_response(
         input=input_prompt,
     )
 
+    # Optionally run the custom deterministic keyword/length evaluator.
     if keywords is not None and min_length is not None:
         custom_evaluator = KeywordAndLengthEvaluator(keywords=keywords, min_length=min_length)
         results["custom_result"] = custom_evaluator.evaluate_strings(prediction=prediction)
