@@ -3,10 +3,31 @@
 Demonstrates how to use ContextualCompressionRetriever with an LLMChainExtractor
 to compress retrieved documents to only the most relevant parts.
 
+How the technique works:
+- A base retriever first fetches candidate documents for a query.
+- A document compressor then processes each document with an LLM, extracting
+  only the sentences that are relevant to the query.
+- The result is a shorter, more focused set of documents that reduces noise and
+  saves tokens when feeding context to a downstream LLM.
+
 This example is provider-agnostic: it uses init_chat_model() to create a chat
-model based on environment variables. Set the API key for your chosen provider
-(e.g., OPENAI_API_KEY or ANTHROPIC_API_KEY) and optionally set MODEL_NAME and
-MODEL_PROVIDER to override the defaults.
+model based on environment variables.
+
+How to run:
+1. Install LangChain dependencies (langchain, langchain-core, and the package
+   for your chosen model provider).
+2. Set the API key for your provider, e.g.:
+   export OPENAI_API_KEY="your-key"
+   or:
+   export ANTHROPIC_API_KEY="your-key"
+3. Optionally override the model and provider:
+   export MODEL_NAME="gpt-4o"
+   export MODEL_PROVIDER="openai"
+   or:
+   export MODEL_NAME="claude-3-5-sonnet-20241022"
+   export MODEL_PROVIDER="anthropic"
+4. Run the example:
+   python examples/50_contextual_compression.py
 """
 
 import os
