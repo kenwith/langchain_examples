@@ -17,12 +17,12 @@ Each tool declares:
 - _run: the synchronous implementation (for BaseTool subclasses).
 - _arun: the asynchronous implementation (for BaseTool subclasses).
 
-Tool registration is handled by passing tool instances to `initialize_agent`.
-The agent will then be able to invoke them based on their descriptions.
-Tool inputs are validated against their Pydantic args_schema before the tool's
-_run method is called. Each tool is designed to gracefully handle errors by
-catching exceptions and returning a meaningful message, so the agent can
-recover and try alternative approaches.
+Tool registration is handled by passing tool instances (or @tool-decorated
+functions) to `initialize_agent`. The agent's LLM reads each tool's name and
+description to decide when to invoke it. Tool inputs are validated against
+their Pydantic args_schema before the tool's _run method is called. Each tool
+is designed to gracefully handle errors by catching exceptions and returning a
+meaningful message, so the agent can recover and try alternative approaches.
 
 The example also demonstrates how to inspect the intermediate steps of an agent
 execution by setting `return_intermediate_steps=True` and using a helper function
@@ -230,6 +230,8 @@ class StringLengthTool(BaseTool):
 
 # Using the @tool decorator to turn plain Python functions into LangChain tools.
 # LangChain infers the schema from the function signature and docstring.
+# These decorated functions are bound to the agent exactly like BaseTool
+# instances when included in the tools list passed to initialize_agent.
 @tool
 def reverse_string(text: str) -> str:
     """Reverses the given string.
@@ -310,10 +312,10 @@ def extract_tool_call_arguments(agent_response: Dict[str, Any]) -> List[Dict[str
             "Make sure to set return_intermediate_steps=True on the agent."
         )
 
-    calls = []
-    for action, _observation in agent_response["intermediate_steps"]:
-        calls.append({"tool": action.tool, "tool_input": action.tool_input})
-    return calls
+    tool_calls = []
+    for agent_action, _ in agent_response["intermediate_steps"]:
+        tool_calls.append({"tool": agent_action.tool, "tool_input": agent_action.tool_input})
+    return tool_calls
 
 
 def run_agent(agent: Any, query: str) -> str:
@@ -367,6 +369,12 @@ def main() -> None:
         raise ValueError("Please set the OPENAI_API_KEY environment variable.")
 
     llm = OpenAI(api_key=api_key, temperature=0)
+
+    # Bind the tools to the agent by passing them as the first argument to
+    # initialize_agent. The agent's LLM reads each tool's name and description
+    # to decide when to invoke it. The tool list can contain a mix of BaseTool
+    # instances and @tool-decorated functions; LangChain normalizes them into
+    # the same internal representation.
     tools = [CalculatorTool(), StringLengthTool(), reverse_string, word_count]
 
     agent = initialize_agent(
@@ -392,11 +400,11 @@ def main() -> None:
 
     # Show how to extract tool call arguments from the agent's response
     # (using __call__ to get intermediate steps)
-    response = agent({"input": sample_query})
-    calls = extract_tool_call_arguments(response)
+    agent_response = agent({"input": sample_query})
+    tool_calls = extract_tool_call_arguments(agent_response)
     print("\nExtracted tool calls from agent response:")
-    for call in calls:
-        print(f"  Tool: {call['tool']}, Args: {call['tool_input']}")
+    for tool_call in tool_calls:
+        print(f"  Tool: {tool_call['tool']}, Args: {tool_call['tool_input']}")
 
 
 if __name__ == "__main__":
