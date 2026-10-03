@@ -1,107 +1,74 @@
-"""Example 25: Embedding Similarity.
-
-This example demonstrates how to initialize a provider-agnostic embeddings model
-(using init_embeddings_model, the embeddings counterpart to init_chat_model)
-and rank a small set of documents by cosine similarity to a query.
-
-The :func:`cosine_similarity` function is a standalone utility that can be
-imported and reused in other modules.
-"""
-
-import math
 import os
-from typing import List, Sequence, Tuple
+import numpy as np
+from openai import OpenAI
 
-from langchain.embeddings import init_embeddings_model
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
-__all__ = ["cosine_similarity", "rank_documents"]
-
-
-# ---------------------------------------------------------------------------
-# Example 25: Embedding Similarity
-# ---------------------------------------------------------------------------
-
-
-def cosine_similarity(vec_a: Sequence[float], vec_b: Sequence[float]) -> float:
-    """Compute the cosine similarity between two vectors.
+def cosine_similarity(vec1, vec2):
+    """
+    Compute the cosine similarity between two vectors.
 
     Args:
-        vec_a: First vector.
-        vec_b: Second vector.
+        vec1 (list or np.ndarray): First vector.
+        vec2 (list or np.ndarray): Second vector.
 
     Returns:
-        Cosine similarity between -1 and 1. Returns 0.0 if either vector
-        has zero magnitude.
-
-    Raises:
-        ValueError: If the vectors have different lengths.
+        float: Cosine similarity between vec1 and vec2.
     """
-    if len(vec_a) != len(vec_b):
-        raise ValueError("Vectors must have the same length")
-
-    dot_product = sum(a * b for a, b in zip(vec_a, vec_b))
-    norm_a = math.sqrt(sum(a * a for a in vec_a))
-    norm_b = math.sqrt(sum(b * b for b in vec_b))
-
-    if norm_a == 0 or norm_b == 0:
+    v1 = np.asarray(vec1)
+    v2 = np.asarray(vec2)
+    dot = np.dot(v1, v2)
+    norm1 = np.linalg.norm(v1)
+    norm2 = np.linalg.norm(v2)
+    if norm1 == 0 or norm2 == 0:
         return 0.0
+    return dot / (norm1 * norm2)
 
-    return dot_product / (norm_a * norm_b)
-
-
-def rank_documents(
-    query: str, documents: List[str], embeddings
-) -> List[Tuple[int, float, str]]:
-    """Rank documents by cosine similarity to the query.
+def get_embedding(text, model="text-embedding-ada-002"):
+    """
+    Get embedding vector for the given text using OpenAI's embedding API.
 
     Args:
-        query: The query string.
-        documents: A list of document strings.
-        embeddings: An embeddings model with ``embed_query`` and
-            ``embed_documents`` methods.
+        text (str): Input text.
+        model (str): Embedding model name.
 
     Returns:
-        A list of tuples ``(index, score, document)`` sorted by score
-        in descending order.
+        list: Embedding vector.
     """
-    query_vec = embeddings.embed_query(query)
-    doc_vecs = embeddings.embed_documents(documents)
-
-    scored = []
-    for i, doc_vec in enumerate(doc_vecs):
-        score = cosine_similarity(query_vec, doc_vec)
-        scored.append((i, score, documents[i]))
-
-    scored.sort(key=lambda x: x[1], reverse=True)
-    return scored
-
+    text = text.replace("\n", " ")
+    response = client.embeddings.create(input=[text], model=model)
+    return response.data[0].embedding
 
 def main():
-    """Run the embedding similarity example."""
-    # A small set of documents to rank.
+    # Example documents
     documents = [
-        "Pasta is a staple food of Italian cuisine.",
-        "Dogs are loyal companions and great pets.",
-        "The Eiffel Tower is located in Paris, France.",
-        "Quantum mechanics is a fundamental theory in physics.",
-        "Chocolate is made from cocoa beans and is often sweet.",
+        "The quick brown fox jumps over the lazy dog.",
+        "Machine learning is a subset of artificial intelligence.",
+        "LangChain makes it easy to build applications with LLMs.",
+        "OpenAI provides powerful embedding models.",
     ]
 
-    query = "Tell me about Italian food."
+    # Query for which we want to find similar documents
+    query = "What is LangChain?"
 
-    # Initialize a provider-agnostic embeddings model.
-    # Set the model via the EMBEDDINGS_MODEL environment variable, or use the default.
-    # Make sure to set the appropriate API key for your provider (e.g., OPENAI_API_KEY).
-    model = os.getenv("EMBEDDINGS_MODEL", "openai:text-embedding-3-small")
-    embeddings = init_embeddings_model(model)
+    # Generate embeddings for all documents and the query
+    doc_embeddings = [get_embedding(doc) for doc in documents]
+    query_embedding = get_embedding(query)
 
-    results = rank_documents(query, documents, embeddings)
+    # Compute similarity scores using the reusable helper function
+    similarities = []
+    for i, doc_emb in enumerate(doc_embeddings):
+        sim = cosine_similarity(query_embedding, doc_emb)
+        similarities.append((documents[i], sim))
 
+    # Sort by similarity score (highest first)
+    similarities.sort(key=lambda x: x[1], reverse=True)
+
+    # Print results
     print(f"Query: {query}\n")
-    print("Ranked documents:")
-    for i, score, doc in results:
-        print(f"{i + 1}. Similarity: {score:.4f} - {doc}")
-
+    print("Most similar documents:")
+    for doc, score in similarities:
+        print(f"  ({score:.4f}) {doc}")
 
 if __name__ == "__main__":
     main()
