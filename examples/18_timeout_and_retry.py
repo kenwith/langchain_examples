@@ -12,6 +12,7 @@ Key Concepts
 - Automatically retry on transient errors using `with_retry`.
 - Use exponential backoff and jitter to avoid overwhelming the provider during retries.
 - Consistent error handling and graceful degradation.
+- Rate limit errors are detected and retried with exponential backoff.
 - Async invocation with retry using asyncio to complement synchronous usage.
 
 | Concept          | Implementation                                  |
@@ -20,6 +21,7 @@ Key Concepts
 | Timeout          | `model.with_timeout(30)`                        |
 | Retry            | `model.with_retry(stop_after_attempt=3, ...)`   |
 | Backoff          | `wait_exponential_jitter=True`                  |
+| Rate limit handling | `is_rate_limit_error()` + retry on provider rate limit exceptions |
 | Sync error handling | try/except around `model.invoke(...)`        |
 | Async error handling | try/except around `await model.ainvoke(...)` |
 
@@ -29,6 +31,53 @@ Run the example with: `python examples/18_timeout_and_retry.py`
 import asyncio
 import os
 from langchain.chat_models import init_chat_model
+
+
+def _get_rate_limit_exception_types():
+    """
+    Collect rate limit exception types from optional provider packages.
+
+    This keeps the example provider-agnostic: if a provider library is installed,
+    its rate limit error will be included in the retry tuple. If not, we simply
+    skip it and still retry on timeouts and connection errors.
+
+    Returns:
+        tuple: Rate limit exception types (possibly empty).
+    """
+    rate_limit_exceptions = []
+
+    try:
+        from openai import RateLimitError
+        rate_limit_exceptions.append(RateLimitError)
+    except ImportError:
+        pass
+
+    try:
+        from anthropic import RateLimitError
+        rate_limit_exceptions.append(RateLimitError)
+    except ImportError:
+        pass
+
+    return tuple(rate_limit_exceptions)
+
+
+def is_rate_limit_error(e: Exception) -> bool:
+    """
+    Best-effort detection of rate limit errors across providers.
+
+    Args:
+        e: The exception raised by the model call.
+
+    Returns:
+        bool: True if the exception looks like a rate limit error.
+    """
+    if type(e).__name__ == "RateLimitError":
+        return True
+    if getattr(e, "status_code", None) == 429:
+        return True
+    if "rate limit" in str(e).lower():
+        return True
+    return False
 
 
 def get_model_with_retry(timeout: int = 30, max_attempts: int = 3):
@@ -53,12 +102,14 @@ def get_model_with_retry(timeout: int = 30, max_attempts: int = 3):
     # Enforce a hard timeout on every invocation.
     model = model.with_timeout(timeout)
 
-    # Retry on common transient errors: timeouts and connection errors.
+    # Retry on common transient errors: timeouts, connection errors, and
+    # provider-specific rate limit errors (if the provider package is installed).
     # Use exponential backoff with jitter: each retry waits longer than the
     # previous one, and the jitter spreads out retries across concurrent calls.
+    retry_exceptions = (TimeoutError, ConnectionError) + _get_rate_limit_exception_types()
     model = model.with_retry(
         stop_after_attempt=max_attempts,
-        retry_if_exception_type=(TimeoutError, ConnectionError),
+        retry_if_exception_type=retry_exceptions,
         wait_exponential_jitter=True,
     )
 
@@ -79,7 +130,10 @@ def ask_question(question: str, model) -> None:
         print(f"A: {response.content}\n")
     except Exception as e:
         print(f"Q: {question}")
-        print(f"Error after retries: {e}\n")
+        if is_rate_limit_error(e):
+            print(f"Rate limit error after retries: {e}\n")
+        else:
+            print(f"Error after retries: {e}\n")
 
 
 async def ainvoke_with_retry(question: str, model) -> str:
@@ -120,7 +174,10 @@ async def async_main() -> None:
             print(f"A: {content}\n")
         except Exception as e:
             print(f"Q: {q}")
-            print(f"Error after async retries: {e}\n")
+            if is_rate_limit_error(e):
+                print(f"Rate limit error after async retries: {e}\n")
+            else:
+                print(f"Error after async retries: {e}\n")
 
 
 def main() -> None:
