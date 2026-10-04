@@ -2,14 +2,29 @@ import os
 import tempfile
 from typing import List, Optional
 
-from langchain.agents import AgentExecutor, create_react_agent
+from langchain.agents import AgentExecutor, create_tool_calling_agent
 from langchain.agents.tools import Tool
+from langchain_community.chat_models import ChatOllama
 from langchain_community.document_loaders import TextLoader
 from langchain_community.embeddings import OllamaEmbeddings
-from langchain_community.llms import Ollama
 from langchain_community.vectorstores import FAISS
-from langchain_core.prompts import PromptTemplate
+from langchain_core.prompts import ChatPromptTemplate
 from langchain_text_splitters import CharacterTextSplitter
+
+# ---------------------------------------------------------------------------
+# Ollama-specific setup
+# ---------------------------------------------------------------------------
+# This example uses Ollama to run models locally. Before running this script:
+#
+#   1. Install Ollama from https://ollama.com
+#   2. Pull the models used in this example:
+#        ollama pull llama3.1
+#        ollama pull nomic-embed-text
+#   3. Make sure the Ollama service is running locally (default: http://localhost:11434)
+#
+# The code below uses ChatOllama for the agent LLM and OllamaEmbeddings for
+# retrieval embeddings. Both connect to the local Ollama instance.
+# ---------------------------------------------------------------------------
 
 # Sample knowledge base content
 SAMPLE_DOCS = """
@@ -44,8 +59,15 @@ def create_retriever() -> FAISS:
 
 
 def build_agent() -> AgentExecutor:
-    """Build an agentic RAG agent using Ollama for LLM and embeddings."""
-    llm = Ollama(model="llama3", temperature=0)
+    """Build an agentic RAG agent using Ollama for LLM and embeddings.
+
+    The agent uses ChatOllama with tool calling support. Tools are attached
+    via ``bind_tools`` internally by ``create_tool_calling_agent``, which
+    ensures the model receives the tool schemas in a consistent way.
+    """
+    # ChatOllama is used instead of the plain Ollama LLM so that the agent can
+    # take advantage of native tool calling / bind_tools.
+    llm = ChatOllama(model="llama3.1", temperature=0)
 
     retriever = create_retriever().as_retriever(search_kwargs={"k": 3})
 
@@ -62,29 +84,23 @@ def build_agent() -> AgentExecutor:
         )
     ]
 
-    prompt = PromptTemplate.from_template(
-        """You are an assistant with access to a knowledge base. Use the KnowledgeBaseSearch tool when you need specific facts.
-
-You have access to the following tools:
-
-{tools}
-
-Use the following format:
-
-Question: the input question you must answer
-Thought: you should always think about what to do
-Action: the action to take, should be one of [{tool_names}]
-Action Input: the input to the action
-Observation: the result of the action
-... (this Thought/Action/Action Input/Observation can repeat N times)
-Thought: I now know the final answer
-Final Answer: the final answer to the original input question
-
-Question: {input}
-Thought: {agent_scratchpad}"""
+    # For tool-calling agents, the prompt is a chat prompt with a system
+    # message, the user input, and a placeholder for the agent's scratchpad.
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are an assistant with access to a knowledge base. "
+                "Use the KnowledgeBaseSearch tool when you need specific facts.",
+            ),
+            ("human", "{input}"),
+            ("placeholder", "{agent_scratchpad}"),
+        ]
     )
 
-    agent = create_react_agent(llm=llm, tools=tools, prompt=prompt)
+    # create_tool_calling_agent binds the tools to the LLM via bind_tools,
+    # making the tool schemas available to the model in a consistent format.
+    agent = create_tool_calling_agent(llm=llm, tools=tools, prompt=prompt)
     return AgentExecutor(agent=agent, tools=tools, verbose=True, handle_parsing_errors=True)
 
 
