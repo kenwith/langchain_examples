@@ -5,7 +5,9 @@ rather than waiting for the full completion. This reduces perceived latency,
 improves interactivity, and is essential for chat and real-time applications.
 
 This example demonstrates how to stream tokens from a language model
-using a helper function that prints each token as it arrives.
+using a helper function that prints each token as it arrives. It also
+includes a simple callback handler that counts tokens during streaming
+to show how custom event handling works with LangChain.
 
 To run this script:
 1. Set the OPENAI_API_KEY environment variable to your OpenAI API key.
@@ -15,7 +17,19 @@ To run this script:
 
 import os
 
+from langchain_core.callbacks import BaseCallbackHandler
 from langchain_openai import ChatOpenAI
+
+
+class TokenCounterHandler(BaseCallbackHandler):
+    """Callback handler that counts tokens during streaming."""
+
+    def __init__(self):
+        self.token_count = 0
+
+    def on_llm_new_token(self, token: str, **kwargs) -> None:
+        """Increment the token counter for each new token."""
+        self.token_count += 1
 
 
 def stream_response(response):
@@ -40,7 +54,7 @@ def stream_response(response):
 
 
 def main():
-    """Run a simple streaming example."""
+    """Run a simple streaming example with a token-counting callback."""
     # Use environment variables for credentials—never hardcode keys.
     model = ChatOpenAI(
         model="gpt-4o-mini",
@@ -48,11 +62,21 @@ def main():
         streaming=True,
     )
 
+    # Create a callback handler to count tokens as they stream.
+    token_handler = TokenCounterHandler()
+
     # Create a streaming response by calling stream() on the model.
-    response = model.stream("Write a short poem about streaming.")
+    # Pass the callback handler to receive streaming events.
+    response = model.stream(
+        "Write a short poem about streaming.",
+        callbacks=[token_handler],
+    )
 
     # Use our helper to print tokens as they arrive.
     stream_response(response)
+
+    # Display the token count collected by the callback handler.
+    print(f"Token count: {token_handler.token_count}")
 
 
 if __name__ == "__main__":
