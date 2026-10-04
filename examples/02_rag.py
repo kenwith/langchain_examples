@@ -1,14 +1,13 @@
 import os
 import sys
 
-from langchain.chains import create_retrieval_chain
-from langchain.chains.combine_documents import create_stuff_documents_chain
 from langchain_community.document_loaders import TextLoader
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 
 DATA_FILE = "data.txt"
 PERSIST_DIR = "db"
@@ -31,6 +30,11 @@ def create_vectorstore():
     )
     vectorstore.persist()
     print(f"Vector store created at {PERSIST_DIR}")
+
+
+def format_docs(docs):
+    """Format a list of documents into a single string for context."""
+    return "\n\n".join(doc.page_content for doc in docs)
 
 
 def main():
@@ -59,12 +63,18 @@ def main():
         ]
     )
 
-    combine_docs_chain = create_stuff_documents_chain(llm, prompt)
-    rag_chain = create_retrieval_chain(retriever, combine_docs_chain)
+    # Build the RAG chain using LCEL with RunnablePassthrough.assign
+    rag_chain = (
+        RunnablePassthrough.assign(
+            context=lambda x: format_docs(retriever.invoke(x["input"]))
+        )
+        | prompt
+        | llm
+    )
 
     query = "What did the president say about Ketanji Brown Jackson?"
     response = rag_chain.invoke({"input": query})
-    print(response["answer"])
+    print(response.content)
 
 
 if __name__ == "__main__":
