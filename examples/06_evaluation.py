@@ -10,6 +10,7 @@ This module demonstrates:
 5. A simple accuracy scorer for classification-style tasks.
 6. A basic exact-match scorer for generated-response correctness.
 7. A helper to format and summarize prediction/ground-truth pairs.
+8. A helper to evaluate a dataset and return a metrics dictionary.
 
 How to run:
     Set your OpenAI API key first:
@@ -447,6 +448,54 @@ def evaluate_response(
     return results
 
 
+def evaluate_predictions(dataset: List[tuple]) -> dict:
+    """
+    Evaluate a dataset of prediction/reference pairs and return a metrics dictionary.
+
+    The dataset is a list of tuples, each containing (prediction, reference).
+    This helper computes the following metrics:
+        - accuracy: fraction of exact matches (using accuracy_scorer)
+        - exact_match_rate: fraction of exact string matches (using exact_match_scorer)
+        - avg_f1: average token-overlap F1 score (using ReferenceAnswerEvaluator)
+        - total: total number of samples
+
+    Args:
+        dataset: List of (prediction, reference) tuples.
+
+    Returns:
+        A dictionary with keys: "accuracy", "exact_match_rate", "avg_f1", "total".
+
+    Raises:
+        ValueError: If the dataset is empty or contains invalid entries.
+    """
+    if not dataset:
+        return {"accuracy": 0.0, "exact_match_rate": 0.0, "avg_f1": 0.0, "total": 0}
+
+    # Unzip predictions and references
+    predictions, references = zip(*dataset)
+    predictions = list(predictions)
+    references = list(references)
+
+    # Compute metrics using existing helpers
+    acc = accuracy_scorer(predictions, references)
+    exact = exact_match_scorer(predictions, references)
+
+    # Compute average F1 using ReferenceAnswerEvaluator
+    evaluator = ReferenceAnswerEvaluator()
+    f1_scores = []
+    for pred, ref in zip(predictions, references):
+        f1, _ = evaluator.evaluate_strings(prediction=pred, reference=ref)
+        f1_scores.append(f1)
+    avg_f1 = sum(f1_scores) / len(f1_scores) if f1_scores else 0.0
+
+    return {
+        "accuracy": acc["accuracy"],
+        "exact_match_rate": exact["exact_match_rate"],
+        "avg_f1": avg_f1,
+        "total": len(predictions),
+    }
+
+
 # Example usage demonstrating the LLM-as-judge evaluation
 if __name__ == "__main__":
     # Ensure an OpenAI API key is set
@@ -495,3 +544,9 @@ if __name__ == "__main__":
     ]
     print("Evaluation report example:")
     print_evaluation_report(sample_predictions, sample_references)
+
+    # Demonstrate the evaluate_predictions helper
+    print("\nDataset evaluation example:")
+    dataset = list(zip(sample_predictions, sample_references))
+    metrics = evaluate_predictions(dataset)
+    print(f"Metrics: {metrics}")
