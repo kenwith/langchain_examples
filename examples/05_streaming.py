@@ -21,12 +21,21 @@ from langchain_openai import ChatOpenAI
 def stream_response(response):
     """Print tokens from a streaming response as they arrive.
 
+    Ensures the stream output ends with exactly one newline before the
+    completion message, avoiding extra blank lines when the model already
+    emits a trailing newline.
+
     Args:
         response: An iterable of token chunks (e.g., from model.stream()).
     """
+    ended_with_newline = False
     for chunk in response:
-        print(chunk.content, end="", flush=True)
-    print()  # Ensure a newline after the stream ends
+        content = chunk.content
+        print(content, end="", flush=True)
+        ended_with_newline = content.endswith("\n")
+
+    if not ended_with_newline:
+        print()  # Add a final newline if the stream didn't already end with one
     print("[Stream complete]", flush=True)
 
 
