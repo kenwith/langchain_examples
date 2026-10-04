@@ -28,15 +28,20 @@ How to run:
    export MODEL_PROVIDER="anthropic"
 4. Run the example:
    python examples/50_contextual_compression.py
+
+To adapt this example:
+- Pass your own `llm` or `base_retriever` to `build_compression_retriever()`
+  to use custom models or retrieval logic without modifying the helper.
 """
 
 import os
-from typing import List
+from typing import List, Optional
 
 from langchain.chat_models import init_chat_model
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
 from langchain_core.documents import Document
+from langchain_core.language_models import BaseChatModel
 from langchain_core.retrievers import BaseRetriever
 
 
@@ -80,21 +85,32 @@ def create_dummy_retriever() -> DummyRetriever:
     return DummyRetriever(documents=documents)
 
 
-def build_compression_retriever():
-    """Build a ContextualCompressionRetriever with an LLMChainExtractor."""
-    # Create a provider-agnostic chat model. The model and provider are read
-    # from environment variables. For example:
-    #   OPENAI_API_KEY=... MODEL_NAME=gpt-4o MODEL_PROVIDER=openai
-    # or:
-    #   ANTHROPIC_API_KEY=... MODEL_NAME=claude-3-5-sonnet-20241022 MODEL_PROVIDER=anthropic
-    llm = init_chat_model(
-        model=os.getenv("MODEL_NAME", "gpt-4o"),
-        model_provider=os.getenv("MODEL_PROVIDER", "openai"),
-        temperature=0,
-    )
+def build_compression_retriever(
+    llm: Optional[BaseChatModel] = None,
+    base_retriever: Optional[BaseRetriever] = None,
+) -> ContextualCompressionRetriever:
+    """Build a ContextualCompressionRetriever with an LLMChainExtractor.
+
+    Args:
+        llm: A chat model instance to use for compression. If None, a model is
+            created from the MODEL_NAME and MODEL_PROVIDER environment variables.
+        base_retriever: A retriever that returns candidate documents. If None,
+            a DummyRetriever with sample documents is used.
+
+    Returns:
+        A configured ContextualCompressionRetriever.
+    """
+    if llm is None:
+        llm = init_chat_model(
+            model=os.getenv("MODEL_NAME", "gpt-4o"),
+            model_provider=os.getenv("MODEL_PROVIDER", "openai"),
+            temperature=0,
+        )
+
+    if base_retriever is None:
+        base_retriever = create_dummy_retriever()
 
     compressor = LLMChainExtractor.from_llm(llm)
-    base_retriever = create_dummy_retriever()
 
     return ContextualCompressionRetriever(
         base_compressor=compressor,
