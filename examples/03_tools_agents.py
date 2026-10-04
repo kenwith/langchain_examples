@@ -1,7 +1,8 @@
 """
 Example: Tools and Agents with LangChain
 This script demonstrates how to create an agent with tools using LangChain.
-It includes a factory function to create agents and expanded tool descriptions.
+It includes a factory function to create agents, a helper to run queries,
+and documentation on adding custom tools.
 """
 
 import os
@@ -178,10 +179,38 @@ Thought: {agent_scratchpad}"""
     return executor
 
 
+# ==================== Run Agent Helper ====================
+
+def run_agent(agent_executor: AgentExecutor, query: str) -> str:
+    """
+    Execute a single query against the agent and return the answer.
+
+    This helper encapsulates the invocation logic, making it easy to run
+    multiple queries or integrate the agent into a larger application.
+
+    Args:
+        agent_executor (AgentExecutor): The configured agent executor.
+        query (str): The user's question or instruction.
+
+    Returns:
+        str: The agent's final answer.
+    """
+    print(f"\n--- Query: {query} ---")
+    response = agent_executor.invoke({"input": query})
+    answer = response["output"]
+    print(f"Answer: {answer}")
+    return answer
+
+
 # ==================== Main Execution ====================
 
 if __name__ == "__main__":
     # Define the tools list with expanded descriptions
+    # To add a new tool:
+    # 1. Define a function with @tool decorator (or use Tool class).
+    # 2. Ensure the function has a clear docstring that describes what it does
+    #    and the arguments it expects.
+    # 3. Add the function to the `tools` list below.
     tools = [
         add_numbers,
         multiply_numbers,
@@ -211,8 +240,6 @@ if __name__ == "__main__":
         "Multiply 7.5 by 3.",
     ]
 
-    # Run the agent on each query
+    # Run the agent on each query using the helper
     for query in queries:
-        print(f"\n--- Query: {query} ---")
-        response = agent_executor.invoke({"input": query})
-        print(f"Answer: {response['output']}")
+        run_agent(agent_executor, query)
