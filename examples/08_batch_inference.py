@@ -10,7 +10,8 @@ blocking the event loop.
 The main public function is `batch_infer`, which takes a synchronous inference
 function and a list of inputs, and returns the outputs in the same order as the
 inputs. A convenience wrapper `batch_predict` is also provided for LangChain-style
-models that expose an `invoke` method.
+models that expose an `invoke` method. For large lists of inputs, `process_batch`
+is a generator that yields results with progress logging.
 
 Example usage:
     from my_model import model
@@ -20,12 +21,17 @@ Example usage:
     # Or with batch_predict:
     results = batch_predict(model, prompts, max_concurrency=5)
 
+    # Or with process_batch for progress logging:
+    for result in process_batch(model.invoke, prompts, batch_size=5):
+        print(result)
+
 Run the demo with:
     python 08_batch_inference.py
 """
 
 import asyncio
-from typing import Any, Callable, List, TypeVar
+import logging
+from typing import Any, Callable, Iterator, List, TypeVar
 
 # Type variable for input and output types
 T = TypeVar("T")
@@ -124,6 +130,60 @@ def batch_predict(
         >>> results = batch_predict(model, ["Hello", "World"], max_concurrency=5)
     """
     return batch_infer(model.invoke, prompts, max_concurrency)
+
+
+def process_batch(
+    infer_func: Callable[[T], U],
+    inputs: List[T],
+    batch_size: int = 10,
+    max_concurrency: int = 10,
+    log_interval: int = 1,
+) -> Iterator[U]:
+    """Process inputs in batches, yielding results with progress logging.
+
+    This generator processes a large list of inputs in smaller batches, calling
+    `batch_infer` on each batch. Progress is logged every `log_interval` batches
+    using the `logging` module, which is useful for long-running jobs.
+
+    Args:
+        infer_func: A synchronous function that takes a single input and returns
+            an output.
+        inputs: A list of inputs to process.
+        batch_size: Number of inputs to process per batch. Defaults to 10.
+        max_concurrency: Maximum number of concurrent inference calls per batch.
+            Passed to `batch_infer`. Defaults to 10.
+        log_interval: Log progress every N batches. Defaults to 1.
+
+    Yields:
+        The output for each input, in the same order as `inputs`.
+
+    Raises:
+        ValueError: If `batch_size` or `log_interval` is not positive.
+
+    Example:
+        >>> results = list(process_batch(model.invoke, prompts, batch_size=5))
+    """
+    if batch_size <= 0:
+        raise ValueError("batch_size must be positive")
+    if log_interval <= 0:
+        raise ValueError("log_interval must be positive")
+
+    total = len(inputs)
+    if total == 0:
+        return
+
+    batch_count = 0
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        batch = inputs[start:end]
+        batch_results = batch_infer(infer_func, batch, max_concurrency=max_concurrency)
+        for result in batch_results:
+            yield result
+
+        batch_count += 1
+        processed = end
+        if batch_count % log_interval == 0 or processed == total:
+            logging.info("Processed %d/%d inputs", processed, total)
 
 
 # --- Example usage ---------------------------------------------------------
