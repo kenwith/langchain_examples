@@ -191,6 +191,30 @@ def print_conversation(session, **kwargs) -> None:
     print("\n" + session.format_history(**kwargs) + "\n")
 
 
+def run_conversation(session, **kwargs) -> None:
+    """Run a standard two-turn conversation and demonstrate memory clearing.
+
+    The helper clears any existing history before starting, so each example
+    starts with a clean slate. It then runs two turns, prints the stored
+    history, clears it, and asks a follow-up to show that the model no longer
+    remembers the earlier context. Clearing at the end also prevents stale
+    state from leaking into the next example run.
+    """
+    session.clear_history(**kwargs)
+
+    print("AI:", session.ask("My favorite color is blue.", **kwargs))
+    print("AI:", session.ask("What is my favorite color?", **kwargs))
+
+    print_conversation(session, **kwargs)
+
+    session.clear_history(**kwargs)
+    print("\nHistory cleared. The AI now remembers nothing from the previous turns.\n")
+
+    print("AI:", session.ask("What is my favorite color?", **kwargs))
+
+    session.clear_history(**kwargs)
+
+
 def main() -> None:
     # ConversationBufferMemory retains the full chat history across turns.
     # The ConversationChain uses the configured memory_key "history" to inject
@@ -199,50 +223,17 @@ def main() -> None:
 
     # Each ConversationSession has its own isolated memory.
     session = ConversationSession()
-
-    print("AI:", session.ask("My favorite color is blue."))
-    print("AI:", session.ask("What is my favorite color?"))
-
-    # Show the formatted history before clearing.
-    print_conversation(session)
-
-    # Clear the session history to start a fresh multi-turn demonstration.
-    session.clear_history()
-    print("\nHistory cleared. The AI now remembers nothing from the previous turns.\n")
-
-    print("AI:", session.ask("What is my favorite color?"))
+    run_conversation(session)
 
     # ConversationSummaryMemory example with a running summary.
     print("\n--- ConversationSummaryMemory Example ---\n")
     summary_session = ConversationSummarySession()
-
-    print("AI:", summary_session.ask("My favorite color is blue."))
-    print("AI:", summary_session.ask("What is my favorite color?"))
-
-    # Show the formatted summary before clearing.
-    print_conversation(summary_session)
-
-    # Clear the session history to start a fresh multi-turn demonstration.
-    summary_session.clear_history()
-    print("\nHistory cleared. The AI now remembers nothing from the previous turns.\n")
-
-    print("AI:", summary_session.ask("What is my favorite color?"))
+    run_conversation(summary_session)
 
     # RunnableWithMessageHistory example with a simple in-memory chat history store.
     print("\n--- RunnableWithMessageHistory Example ---\n")
     runnable_session = RunnableConversationSession()
-
-    print("AI:", runnable_session.ask("My favorite color is blue.", session_id="user-1"))
-    print("AI:", runnable_session.ask("What is my favorite color?", session_id="user-1"))
-
-    # Show the formatted history before clearing.
-    print_conversation(runnable_session, session_id="user-1")
-
-    # Clear the session history for user-1.
-    runnable_session.clear_history(session_id="user-1")
-    print("\nHistory cleared for user-1. The AI now remembers nothing from the previous turns.\n")
-
-    print("AI:", runnable_session.ask("What is my favorite color?", session_id="user-1"))
+    run_conversation(runnable_session, session_id="user-1")
 
 
 if __name__ == "__main__":
