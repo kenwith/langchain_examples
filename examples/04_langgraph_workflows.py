@@ -3,6 +3,14 @@ Example 04: LangGraph Workflows
 This example demonstrates how to build a simple stateful workflow using LangGraph.
 It includes type hints for function signatures and inline comments to clarify the
 state flow through the graph.
+
+Graph structure:
+- Nodes:
+  - process: Takes `input_data`, transforms it (uppercase), and stores it in `processed_data`.
+  - finalize: Takes `processed_data`, validates it, and stores `validation_result` and `final_output`.
+- Edges:
+  - process -> finalize: Always after processing.
+  - finalize -> END: Terminates the graph after finalization.
 """
 
 from typing import Any, Optional, TypedDict
