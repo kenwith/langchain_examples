@@ -1,73 +1,74 @@
-"""Example of a Retrieval-Augmented Generation (RAG) pipeline.
+import os
+import sys
 
-This script builds a simple RAG chain: it retrieves relevant document chunks
-from a vector store and passes them as context to an LLM to answer a question.
-"""
+from langchain.chains import create_retrieval_chain
+from langchain.chains.combine_documents import create_stuff_documents_chain
+from langchain_community.document_loaders import TextLoader
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
+from langchain.text_splitter import CharacterTextSplitter
+from langchain_openai import ChatOpenAI
+from langchain.prompts import ChatPromptTemplate
 
-from langchain_core.documents import Document
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnablePassthrough
-from langchain_openai import ChatOpenAI, OpenAIEmbeddings
-from langchain_community.vectorstores import FAISS
-from langchain_text_splitters import CharacterTextSplitter
-
-
-def format_docs(docs):
-    """Join a list of documents into a single string for context."""
-    return "\n\n".join(doc.page_content for doc in docs)
+DATA_FILE = "data.txt"
+PERSIST_DIR = "db"
 
 
-def build_retriever():
-    # Sample documents - replace with your own data source
-    documents = [
-        Document(page_content="LangChain is a framework for developing applications powered by language models."),
-        Document(page_content="RAG stands for Retrieval-Augmented Generation."),
-        Document(page_content="LangChain provides modular components for building RAG pipelines."),
-    ]
+def load_documents():
+    """Load and split documents from the data file."""
+    loader = TextLoader(DATA_FILE)
+    documents = loader.load()
+    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    return text_splitter.split_documents(documents)
 
-    # Split documents into smaller chunks for more precise retrieval
-    splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0)
-    chunks = splitter.split_documents(documents)
 
-    # Generate embeddings and store them in a FAISS vector index
+def create_vectorstore():
+    """Create and persist the vector store from documents."""
+    docs = load_documents()
     embeddings = OpenAIEmbeddings()
-    vectorstore = FAISS.from_documents(chunks, embeddings)
-
-    # Return a retriever that can fetch relevant chunks for a query
-    return vectorstore.as_retriever()
+    vectorstore = Chroma.from_documents(
+        docs, embeddings, persist_directory=PERSIST_DIR
+    )
+    vectorstore.persist()
+    print(f"Vector store created at {PERSIST_DIR}")
 
 
 def main():
-    # Build the retriever that will fetch relevant context
-    retriever = build_retriever()
+    """Run the RAG pipeline."""
+    if not os.path.exists(PERSIST_DIR):
+        raise FileNotFoundError(
+            f"Vector store not found at '{PERSIST_DIR}'. "
+            f"Run `python {os.path.basename(__file__)} --create` to create it."
+        )
 
-    # Define the prompt template. The docs are formatted by format_docs before being inserted.
-    prompt = ChatPromptTemplate.from_template(
-        "Answer the question based on the following context:\n{{ format_docs(docs) }}\n\nQuestion: {{ question }}",
-        template_format="jinja2",
-        partial_variables={"format_docs": format_docs},
+    embeddings = OpenAIEmbeddings()
+    vectorstore = Chroma(
+        persist_directory=PERSIST_DIR, embedding_function=embeddings
+    )
+    retriever = vectorstore.as_retriever()
+
+    llm = ChatOpenAI(model="gpt-3.5-turbo")
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a helpful assistant. Answer questions based on the provided context.",
+            ),
+            ("human", "Context: {context}\n\nQuestion: {input}"),
+        ]
     )
 
-    # Initialize the language model (uses OpenAI API key from environment)
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+    combine_docs_chain = create_stuff_documents_chain(llm, prompt)
+    rag_chain = create_retrieval_chain(retriever, combine_docs_chain)
 
-    # Construct the RAG chain:
-    # 1. Retrieve relevant documents for the input question and pass the question through.
-    # 2. Format the retrieved docs and the question into the prompt.
-    # 3. Generate an answer with the LLM.
-    # 4. Parse the output to a plain string.
-    rag_chain = (
-        {"docs": retriever, "question": RunnablePassthrough()}
-        | prompt
-        | llm
-        | StrOutputParser()
-    )
-
-    question = "What is RAG?"
-    answer = rag_chain.invoke(question)
-    print(answer)
+    query = "What did the president say about Ketanji Brown Jackson?"
+    response = rag_chain.invoke({"input": query})
+    print(response["answer"])
 
 
 if __name__ == "__main__":
-    main()
+    if len(sys.argv) > 1 and sys.argv[1] == "--create":
+        create_vectorstore()
+    else:
+        main()
