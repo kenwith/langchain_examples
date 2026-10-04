@@ -6,6 +6,8 @@ document the schema, and validate input data.
 
 from pydantic import BaseModel, Field, ValidationError, field_validator
 
+REQUIRED_KEYS = {"name", "age", "email"}
+
 
 class Person(BaseModel):
     """A person with basic information.
@@ -74,6 +76,26 @@ def validate_response(data: dict) -> Person:
         raise ValueError(f"Invalid structured output: {errors}") from e
 
 
+def extract_entities(data: dict) -> Person:
+    """Extract and validate a Person from a structured response.
+
+    Ensures all required keys are present before constructing the Person.
+
+    Args:
+        data: Dictionary containing person fields.
+
+    Returns:
+        A validated Person instance.
+
+    Raises:
+        ValueError: If required keys are missing or data fails validation.
+    """
+    missing = REQUIRED_KEYS - data.keys()
+    if missing:
+        raise ValueError(f"Missing required keys: {', '.join(sorted(missing))}")
+    return validate_response(data)
+
+
 def main() -> None:
     """Demonstrate schema definition and validation."""
     # Valid input
@@ -132,6 +154,23 @@ def main() -> None:
         validate_response(invalid_data)
     except ValueError as e:
         print("Validation helper error:", e)
+
+    # Using extract_entities helper
+    try:
+        entity = extract_entities(valid_data)
+        print("Extracted entity:", entity)
+    except ValueError as e:
+        print("Extract entities error:", e)
+
+    missing_data = {
+        "name": "Eve",
+        "age": 28,
+        # missing "email"
+    }
+    try:
+        extract_entities(missing_data)
+    except ValueError as e:
+        print("Extract entities missing key error:", e)
 
 
 if __name__ == "__main__":
