@@ -11,6 +11,14 @@ Graph structure:
 - Edges:
   - process -> finalize: Always after processing.
   - finalize -> END: Terminates the graph after finalization.
+
+State flow:
+- The workflow state is a TypedDict with the following keys:
+  - input_data: Raw input string provided by the user.
+  - processed_data: Transformed version of input_data (e.g., uppercased).
+  - validation_result: Boolean indicating whether processed_data is valid.
+  - final_output: Final string produced after validation and finalization.
+- Each node reads only the keys it needs and returns a partial state update.
 """
 
 from typing import Any, Optional, TypedDict
@@ -40,24 +48,31 @@ State = WorkflowState
 # Node functions with type hints and concise docstrings
 def process_data(state: State) -> State:
     """Process input data (e.g., uppercase)."""
-    # Take the input_data from the state, default to empty string, and uppercase it.
-    processed = state.get("input_data", "").upper()
-    # Return a partial state update with the processed data.
+    # Read the raw input from the state; default to an empty string if absent.
+    input_data = state.get("input_data", "")
+
+    # Transform the input (e.g., uppercase) to create the processed data.
+    processed = input_data.upper()
+
+    # Write the processed data back to the state as a partial update.
     return {"processed_data": processed}
 
 
 def finalize(state: State) -> State:
     """Generate final output based on processed data."""
-    # Retrieve the processed_data from the state, default to empty string.
+    # Read the processed data from the state; default to an empty string if absent.
     processed = state.get("processed_data", "")
+
     # A non-empty string is considered valid.
     valid = len(processed) > 0
+
     # Build the final message based on validity.
     if valid:
         final = f"Validated: {processed}"
     else:
         final = "Validation failed."
-    # Return both the validation result and the final output.
+
+    # Write both the validation result and the final output to the state.
     return {"validation_result": valid, "final_output": final}
 
 
