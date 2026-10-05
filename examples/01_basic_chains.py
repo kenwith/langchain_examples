@@ -11,6 +11,17 @@ Purpose:
     and chain setup, making it easy to reuse the same configuration
     elsewhere in your code.
 
+    The `run_example` helper runs the chain end-to-end with a sample
+    topic. It is also called by the `if __name__ == "__main__":` guard,
+    so this file can be imported as a module without executing the
+    example automatically, or run directly as a script.
+
+Provider-agnostic model initialization:
+    `init_chat_model` selects the appropriate model provider based on
+    the `model_provider` argument (e.g., "openai", "anthropic", etc.).
+    The underlying provider reads its API key from the corresponding
+    environment variable, such as `OPENAI_API_KEY` for OpenAI.
+
 How it works:
     1. `init_chat_model` creates a chat model instance for the specified
        provider (e.g., OpenAI) with a given temperature.
@@ -25,6 +36,8 @@ Usage:
     Set the API key for your chosen model provider (e.g., OPENAI_API_KEY
     for OpenAI), then run:
     python examples/01_basic_chains.py
+
+    Or import the module and call `run_example()` from another Python script.
 
 Expected output:
     A short, friendly response about the importance of learning new things,
@@ -56,6 +69,7 @@ def create_chain(
 
 
 def run_example():
+    """Run a sample chain and print the generated response."""
     # Step 4: Create the chain using default model settings.
     chain = create_chain()
 
