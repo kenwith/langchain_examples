@@ -11,6 +11,16 @@ Purpose:
     and chain setup, making it easy to reuse the same configuration
     elsewhere in your code.
 
+How it works:
+    1. `init_chat_model` creates a chat model instance for the specified
+       provider (e.g., OpenAI) with a given temperature.
+    2. A `PromptTemplate` defines the message template and declares the
+       input variables that will be filled in at runtime.
+    3. The `LLMChain` combines the model and prompt template into a
+       reusable chain object.
+    4. Calling `chain.run(...)` formats the prompt with the provided
+       input value, sends it to the model, and returns the generated text.
+
 Usage:
     Set the API key for your chosen model provider (e.g., OPENAI_API_KEY
     for OpenAI), then run:
@@ -32,19 +42,28 @@ def create_chain(
     temperature: float = 0.7,
 ) -> LLMChain:
     """Create and return a configured LLMChain for reuse."""
+    # Step 1: Initialize the chat model with the selected provider and temperature.
     llm = init_chat_model(model, model_provider=model_provider, temperature=temperature)
 
+    # Step 2: Define the prompt template with an input variable for the topic.
     prompt = PromptTemplate(
         input_variables=["topic"],
         template="Write a short, enthusiastic sentence about {topic}.",
     )
 
+    # Step 3: Combine the model and prompt template into an LLMChain.
     return LLMChain(llm=llm, prompt=prompt)
 
 
 def run_example():
+    # Step 4: Create the chain using default model settings.
     chain = create_chain()
+
+    # Step 5: Run the chain with a topic value, which formats the prompt
+    #         and sends it to the model for generation.
     result = chain.run("learning new things")
+
+    # Step 6: Print the generated response to the console.
     print(result)
 
 
