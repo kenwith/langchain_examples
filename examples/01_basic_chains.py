@@ -21,6 +21,15 @@ Provider-agnostic model initialization:
     the `model_provider` argument (e.g., "openai", "anthropic", etc.).
     The underlying provider reads its API key from the corresponding
     environment variable, such as `OPENAI_API_KEY` for OpenAI.
+    This abstraction allows the same chain code to work with different
+    model providers without altering the chain logic.
+
+Chain composition:
+    The `LLMChain` is a simple composition of a prompt template and a
+    chat model. It formats the prompt with given inputs, sends the
+    formatted message to the model, and returns the model's response.
+    The chain object encapsulates this workflow, making it reusable
+    and easy to extend (e.g., by adding memory or other components).
 
 How it works:
     1. `init_chat_model` creates a chat model instance for the specified
@@ -55,26 +64,41 @@ def create_chain(
     temperature: float = 0.7,
 ) -> LLMChain:
     """Create and return a configured LLMChain for reuse."""
-    # Step 1: Initialize the chat model with the selected provider and temperature.
+    # Step 1: Initialize the chat model.
+    # `init_chat_model` is provider-agnostic: it inspects the `model_provider`
+    # argument and instantiates the appropriate model class (e.g., OpenAI,
+    # Anthropic, etc.). The provider reads its API key from the environment
+    # variable specific to that provider (e.g., OPENAI_API_KEY). This allows
+    # swapping providers by simply changing the `model_provider` and `model`
+    # arguments, without modifying any other chain logic.
     llm = init_chat_model(model, model_provider=model_provider, temperature=temperature)
 
-    # Step 2: Define the prompt template with an input variable for the topic.
+    # Step 2: Define the prompt template.
+    # The template uses a placeholder `{topic}` that will be substituted with
+    # the actual input value when the chain is invoked. The `input_variables`
+    # list declares which variables the template expects.
     prompt = PromptTemplate(
         input_variables=["topic"],
         template="Write a short, enthusiastic sentence about {topic}.",
     )
 
     # Step 3: Combine the model and prompt template into an LLMChain.
+    # The chain holds both components and orchestrates the flow: given an input,
+    # it formats the prompt, sends it to the model, and returns the response.
+    # This composition makes the pipeline reusable and easy to parameterize.
     return LLMChain(llm=llm, prompt=prompt)
 
 
 def run_example():
     """Run a sample chain and print the generated response."""
     # Step 4: Create the chain using default model settings.
+    # The default provider is OpenAI and the model is gpt-4o-mini.
     chain = create_chain()
 
-    # Step 5: Run the chain with a topic value, which formats the prompt
-    #         and sends it to the model for generation.
+    # Step 5: Run the chain with a topic value.
+    # The `run` method formats the prompt with the provided topic, sends it to
+    # the model, and returns the generated text. The chain encapsulates the
+    # entire process, so no additional setup is needed here.
     result = chain.run("learning new things")
 
     # Step 6: Print the generated response to the console.
