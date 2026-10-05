@@ -11,6 +11,7 @@ This module demonstrates:
 6. A basic exact-match scorer for generated-response correctness.
 7. A helper to format and summarize prediction/ground-truth pairs.
 8. A helper to evaluate a dataset and return a metrics dictionary.
+9. A helper to create an evaluation chain for custom rubric scoring.
 
 How to run:
     Set your OpenAI API key first:
@@ -59,8 +60,10 @@ import os
 import re
 from typing import List, Optional
 
+from langchain.chains import LLMChain
 from langchain.evaluation import load_evaluator
 from langchain.evaluation.schema import StringEvaluator
+from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
 
@@ -394,6 +397,54 @@ Explanation: <brief reason for the score>"""
     }
 
 
+def create_evaluation_chain(
+    llm: ChatOpenAI,
+    rubric: str,
+    criteria_name: str = "custom_rubric"
+) -> LLMChain:
+    """
+    Create a chain that evaluates a response against a custom rubric.
+
+    This helper builds an LLMChain that takes an input prompt and a model
+    prediction and returns a score (1-5) and explanation based on the provided
+    rubric. It is useful for comparing model outputs against a custom set of
+    criteria, e.g., "Rate the response on clarity, correctness, and conciseness."
+
+    The chain returns a dictionary with keys:
+        - "score": integer from 1 to 5 (or None if parsing fails)
+        - "explanation": the LLM's textual reasoning
+        - "raw_output": the full LLM output for transparency
+
+    To compare multiple model outputs, invoke the chain for each output and
+    compare the scores and explanations.
+
+    Args:
+        llm: A ChatOpenAI instance (or any LLM that supports the interface).
+        rubric: A string describing the rubric, e.g., "Rate the response on clarity, correctness, and conciseness."
+        criteria_name: A label for the rubric, used in the prompt (optional).
+
+    Returns:
+        An LLMChain that can be invoked with a dictionary containing
+        'input' (the original prompt) and 'prediction' (the model's response).
+        The chain returns a dictionary with 'score', 'explanation', and 'raw_output'.
+    """
+    prompt = PromptTemplate(
+        input_variables=["input", "prediction"],
+        template=f"""You are an impartial judge evaluating a response using the following rubric: {rubric}
+Score the response on a scale of 1 (poor) to 5 (excellent) based on the rubric.
+Provide a brief explanation for your score.
+
+User prompt: {{input}}
+Model response: {{prediction}}
+
+Return your evaluation in the following format:
+Score: <integer 1-5>
+Explanation: <brief reason for the score>"""
+    )
+    chain = LLMChain(llm=llm, prompt=prompt)
+    return chain
+
+
 def evaluate_response(
     prediction: str,
     reference: str,
@@ -496,7 +547,7 @@ def evaluate_predictions(dataset: List[tuple]) -> dict:
     }
 
 
-# Example usage demonstrating the LLM-as-judge evaluation
+# Example usage demonstrating the LLM-as-judge evaluation and custom rubric chain
 if __name__ == "__main__":
     # Ensure an OpenAI API key is set
     if not os.getenv("OPENAI_API_KEY"):
@@ -550,3 +601,26 @@ if __name__ == "__main__":
     dataset = list(zip(sample_predictions, sample_references))
     metrics = evaluate_predictions(dataset)
     print(f"Metrics: {metrics}")
+
+    # Demonstrate custom rubric evaluation chain
+    print("\nCustom rubric evaluation chain example:")
+    rubric = "Rate the response on clarity, correctness, and conciseness."
+    eval_chain = create_evaluation_chain(llm, rubric)
+    result = eval_chain.invoke({"input": sample_prompt, "prediction": sample_response})
+    print(f"Raw output: {result['text']}")
+    # Parse the score and explanation from the raw output (similar to llm_judge_evaluate)
+    lines = result['text'].split("\n")
+    score = None
+    explanation = ""
+    for line in lines:
+        if line.lower().startswith("score:"):
+            try:
+                score = int(line.split(":", 1)[1].strip())
+            except ValueError:
+                pass
+        elif line.lower().startswith("explanation:"):
+            explanation = line.split(":", 1)[1].strip()
+    if not explanation:
+        explanation = result['text']
+    print(f"Parsed score: {score}/5")
+    print(f"Explanation: {explanation}")
