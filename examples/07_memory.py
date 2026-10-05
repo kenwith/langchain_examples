@@ -215,6 +215,30 @@ def run_conversation(session, **kwargs) -> None:
     session.clear_history(**kwargs)
 
 
+def chat_with_memory(session, prompts, **kwargs) -> None:
+    """Run a scripted chat with memory and print a clear transcript.
+
+    This function sends a sequence of prompts to the session, prints each
+    exchange, and after every turn prints the current memory contents. It
+    demonstrates how the conversation history is accumulated and used by the
+    model.
+
+    Args:
+        session: A session object with ask, clear_history, and format_history methods.
+        prompts: An iterable of user prompts to send.
+        **kwargs: Additional arguments forwarded to session methods (e.g., session_id).
+    """
+    session.clear_history(**kwargs)
+    print("\n--- Chat with Memory Transcript ---\n")
+    for turn, prompt in enumerate(prompts, 1):
+        print(f"Turn {turn}")
+        print(f"Human: {prompt}")
+        response = session.ask(prompt, **kwargs)
+        print(f"AI: {response}")
+        print(f"\nMemory after this turn:\n{session.format_history(**kwargs)}\n")
+    session.clear_history(**kwargs)
+
+
 def main() -> None:
     # ConversationBufferMemory retains the full chat history across turns.
     # The ConversationChain uses the configured memory_key "history" to inject
@@ -234,6 +258,19 @@ def main() -> None:
     print("\n--- RunnableWithMessageHistory Example ---\n")
     runnable_session = RunnableConversationSession()
     run_conversation(runnable_session, session_id="user-1")
+
+    # A scripted chat that prints a clear transcript with memory contents.
+    print("\n--- Chat with Memory Function Example ---\n")
+    chat_session = ConversationSession()
+    chat_with_memory(
+        chat_session,
+        [
+            "My favorite color is blue.",
+            "What is my favorite color?",
+            "I also like pizza.",
+            "What do I like?",
+        ],
+    )
 
 
 if __name__ == "__main__":
