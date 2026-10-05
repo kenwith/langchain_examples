@@ -5,9 +5,9 @@ rather than waiting for the full completion. This reduces perceived latency,
 improves interactivity, and is essential for chat and real-time applications.
 
 This example demonstrates how to stream tokens from a language model
-using a helper function that prints each token as it arrives. It also
-includes a simple callback handler that counts tokens during streaming
-to show how custom event handling works with LangChain.
+using a helper function that yields token deltas and handles streaming
+errors gracefully. It also includes a simple callback handler that counts
+tokens during streaming to show how custom event handling works with LangChain.
 
 To run this script:
 1. Set the OPENAI_API_KEY environment variable to your OpenAI API key.
@@ -45,25 +45,24 @@ def print_token_with_delay(token: str, delay: float = 0.05) -> None:
 
 
 def stream_response(response):
-    """Print tokens from a streaming response as they arrive.
+    """Yield token deltas from a streaming response.
 
-    Uses a small delay between tokens to improve the streaming visualization.
-    Ensures the stream output ends with exactly one newline before the
-    completion message, avoiding extra blank lines when the model already
-    emits a trailing newline.
+    This generator yields each piece of content as it arrives. If an error
+    occurs during streaming, it yields a descriptive error message and then
+    stops gracefully instead of raising an exception.
 
     Args:
         response: An iterable of token chunks (e.g., from model.stream()).
-    """
-    ended_with_newline = False
-    for chunk in response:
-        content = chunk.content
-        print_token_with_delay(content)
-        ended_with_newline = content.endswith("\n")
 
-    if not ended_with_newline:
-        print()  # Add a final newline if the stream didn't already end with one
-    print("[Stream complete]", flush=True)
+    Yields:
+        str: The next token delta, or an error message if streaming fails.
+    """
+    try:
+        for chunk in response:
+            yield chunk.content
+    except Exception as e:
+        yield f"[Stream error: {e}]"
+        return
 
 
 def main():
@@ -85,8 +84,18 @@ def main():
         callbacks=[token_handler],
     )
 
-    # Use our helper to print tokens as they arrive.
-    stream_response(response)
+    # Iterate over the token deltas and print them as they arrive.
+    ended_with_newline = False
+    for token in stream_response(response):
+        print_token_with_delay(token)
+        ended_with_newline = token.endswith("\n")
+
+    # Ensure the stream output ends with exactly one newline before the
+    # completion message, avoiding extra blank lines when the model already
+    # emits a trailing newline.
+    if not ended_with_newline:
+        print()  # Add a final newline if the stream didn't already end with one
+    print("[Stream complete]", flush=True)
 
     # Display the token count collected by the callback handler.
     print(f"Token count: {token_handler.token_count}")
