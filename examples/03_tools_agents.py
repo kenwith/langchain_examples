@@ -23,23 +23,34 @@ if not os.getenv("OPENAI_API_KEY"):
 # ==================== Tool Definitions ====================
 
 @tool
-def add_numbers(a: str, b: str) -> str:
-    """Add two numeric strings and return their sum as a string."""
-    try:
-        result = float(a) + float(b)
-        return str(result)
-    except ValueError:
-        return "Error: Both inputs must be numeric."
+def calculator(operation: str, a: str, b: str) -> str:
+    """Perform a basic arithmetic operation on two numeric strings.
 
-
-@tool
-def multiply_numbers(a: str, b: str) -> str:
-    """Multiply two numeric strings and return the product as a string."""
+    Supported operations: 'add', 'subtract', 'multiply', 'divide'.
+    Returns the result as a string, or an error message if the inputs are
+    invalid or the operation is not supported.
+    """
     try:
-        result = float(a) * float(b)
-        return str(result)
+        num_a = float(a)
+        num_b = float(b)
     except ValueError:
-        return "Error: Both inputs must be numeric."
+        return "Error: Both operands must be numeric."
+
+    op = operation.lower()
+    if op == "add":
+        result = num_a + num_b
+    elif op == "subtract":
+        result = num_a - num_b
+    elif op == "multiply":
+        result = num_a * num_b
+    elif op == "divide":
+        if num_b == 0:
+            return "Error: Division by zero is not allowed."
+        result = num_a / num_b
+    else:
+        return "Error: Unsupported operation. Use 'add', 'subtract', 'multiply', or 'divide'."
+
+    return str(result)
 
 
 @tool
@@ -152,17 +163,23 @@ def run_agent(agent_executor: AgentExecutor, query: str) -> str:
 
     This helper encapsulates the invocation logic, making it easy to run
     multiple queries or integrate the agent into a larger application.
+    Errors raised during invocation are caught and returned as a message
+    so the caller can handle them gracefully.
 
     Args:
         agent_executor (AgentExecutor): The configured agent executor.
         query (str): The user's question or instruction.
 
     Returns:
-        str: The agent's final answer.
+        str: The agent's final answer, or an error message if invocation fails.
     """
     print(f"\n--- Query: {query} ---")
-    response = agent_executor.invoke({"input": query})
-    answer = response["output"]
+    try:
+        response = agent_executor.invoke({"input": query})
+        answer = response.get("output", "No output produced.")
+    except Exception as exc:
+        print(f"Error invoking agent: {exc}")
+        answer = f"An error occurred while processing the query: {exc}"
     print(f"Answer: {answer}")
     return answer
 
@@ -176,8 +193,7 @@ if __name__ == "__main__":
     #    docstring that describes what it does and the arguments it expects.
     # 2. Add the function to the `tools` list below.
     tools: List[BaseTool] = [
-        add_numbers,
-        multiply_numbers,
+        calculator,
         get_weather,
         search_web,
     ]
