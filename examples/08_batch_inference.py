@@ -35,7 +35,7 @@ Run the demo with:
 
 import asyncio
 import logging
-from typing import Any, Callable, Iterator, List, TypeVar
+from typing import Any, Callable, Iterator, List, Optional, TypeVar
 
 # Type variable for input and output types
 T = TypeVar("T")
@@ -81,6 +81,7 @@ def batch_infer(
     infer_func: Callable[[T], U],
     inputs: List[T],
     max_concurrency: int = 10,
+    batch_size: Optional[int] = None,
 ) -> List[U]:
     """Process multiple inputs concurrently using asyncio.
 
@@ -95,24 +96,49 @@ def batch_infer(
         inputs: A list of inputs to be processed.
         max_concurrency: Maximum number of simultaneous inference calls. Useful
             for rate limiting or resource management.
+        batch_size: Optional number of inputs to process per batch. When set,
+            inputs are processed in chunks of this size, and progress is logged
+            after each batch. This can be useful for very large input lists to
+            provide feedback and avoid creating too many tasks at once. Defaults
+            to None, which processes all inputs in a single batch.
 
     Returns:
         A list of outputs, preserving the order of `inputs`.
 
     Raises:
+        ValueError: If `batch_size` is not positive.
         Exception: If any inference call fails, the exception is propagated.
 
     Example:
         >>> from my_langchain_model import model
         >>> results = batch_infer(model.invoke, ["Hello", "World"], max_concurrency=5)
+        >>> results = batch_infer(model.invoke, ["Hello", "World"], batch_size=2)
     """
-    return asyncio.run(_batch_infer_async(infer_func, inputs, max_concurrency))
+    if batch_size is not None:
+        if batch_size <= 0:
+            raise ValueError("batch_size must be positive")
+
+    if batch_size is None:
+        return asyncio.run(_batch_infer_async(infer_func, inputs, max_concurrency))
+
+    results: List[U] = []
+    total = len(inputs)
+    for start in range(0, total, batch_size):
+        end = min(start + batch_size, total)
+        batch = inputs[start:end]
+        batch_results = asyncio.run(
+            _batch_infer_async(infer_func, batch, max_concurrency)
+        )
+        results.extend(batch_results)
+        logging.info("Processed %d/%d inputs", end, total)
+    return results
 
 
 def batch_predict(
     model: Any,
     prompts: List[str],
     max_concurrency: int = 10,
+    batch_size: Optional[int] = None,
 ) -> List[Any]:
     """Run batch predictions using a LangChain-style model.
 
@@ -125,6 +151,8 @@ def batch_predict(
             and returns a prediction.
         prompts: A list of prompt strings.
         max_concurrency: Maximum number of concurrent predictions.
+        batch_size: Optional number of prompts to process per batch. When set,
+            progress is logged after each batch. Defaults to None.
 
     Returns:
         A list of predictions in the same order as `prompts`.
@@ -132,8 +160,9 @@ def batch_predict(
     Example:
         >>> from my_langchain_model import model
         >>> results = batch_predict(model, ["Hello", "World"], max_concurrency=5)
+        >>> results = batch_predict(model, ["Hello", "World"], batch_size=2)
     """
-    return batch_infer(model.invoke, prompts, max_concurrency)
+    return batch_infer(model.invoke, prompts, max_concurrency, batch_size=batch_size)
 
 
 def batch_generate(
@@ -172,9 +201,10 @@ def process_batch(
 ) -> Iterator[U]:
     """Process inputs in batches, yielding results with progress logging.
 
-    This generator processes a large list of inputs in smaller batches, calling
-    `batch_infer` on each batch. Progress is logged every `log_interval` batches
-    using the `logging` module, which is useful for long-running jobs.
+    This generator processes a large list of inputs in smaller batches, using
+    the same concurrent inference logic as `batch_infer` on each batch. Progress
+    is logged every `log_interval` batches using the `logging` module, which is
+    useful for long-running jobs.
 
     Args:
         infer_func: A synchronous function that takes a single input and returns
@@ -182,7 +212,7 @@ def process_batch(
         inputs: A list of inputs to process.
         batch_size: Number of inputs to process per batch. Defaults to 10.
         max_concurrency: Maximum number of concurrent inference calls per batch.
-            Passed to `batch_infer`. Defaults to 10.
+            Defaults to 10.
         log_interval: Log progress every N batches. Defaults to 1.
 
     Yields:
@@ -207,7 +237,9 @@ def process_batch(
     for start in range(0, total, batch_size):
         end = min(start + batch_size, total)
         batch = inputs[start:end]
-        batch_results = batch_infer(infer_func, batch, max_concurrency=max_concurrency)
+        batch_results = asyncio.run(
+            _batch_infer_async(infer_func, batch, max_concurrency=max_concurrency)
+        )
         for result in batch_results:
             yield result
 
