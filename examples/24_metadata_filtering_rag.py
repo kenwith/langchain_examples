@@ -12,8 +12,9 @@ Set the appropriate environment variable for your chosen provider (e.g.,
 
 This example also showcases the ``build_filtered_retriever`` function, which
 centralizes metadata filtering by constructing a retriever with the appropriate
-search kwargs. This makes it easy to reuse the same filtering logic across
-different queries.
+search kwargs. Additionally, the ``build_filter_from_query`` helper constructs
+metadata filters from simple query keywords, making it easy to derive filters
+directly from natural language input.
 """
 
 # ------------------------------------------------------------------
@@ -77,6 +78,41 @@ def build_metadata_filter(category=None, year=None):
     return filter_dict
 
 
+def build_filter_from_query(query):
+    """Build a metadata filter dict from simple keywords in a query.
+
+    This helper inspects the query for known keywords and maps them to
+    metadata fields. It is intentionally simple and can be extended with
+    more sophisticated parsing.
+    """
+    filter_dict = {}
+    keyword_map = {
+        "apple": {"category": "technology"},
+        "iphone": {"category": "technology"},
+        "microsoft": {"category": "technology"},
+        "software": {"category": "technology"},
+        "jpmorgan": {"category": "finance"},
+        "chase": {"category": "finance"},
+        "goldman": {"category": "finance"},
+        "bank": {"category": "finance"},
+        "pfizer": {"category": "health"},
+        "moderna": {"category": "health"},
+        "vaccine": {"category": "health"},
+        "pharma": {"category": "health"},
+    }
+    query_lower = query.lower()
+    for keyword, metadata in keyword_map.items():
+        if keyword in query_lower:
+            filter_dict.update(metadata)
+
+    # Detect a four-digit year in the query and add it to the filter.
+    for token in query_lower.split():
+        if token.isdigit() and len(token) == 4:
+            filter_dict["year"] = int(token)
+
+    return filter_dict
+
+
 def build_filtered_retriever(vectorstore, filter_dict, k=3):
     """Build a retriever that applies metadata filtering.
 
@@ -111,7 +147,7 @@ def main():
     vectorstore = build_vectorstore(docs)
 
     query = "What does JPMorgan Chase do?"
-    filter_dict = build_metadata_filter(category="finance")
+    filter_dict = build_filter_from_query(query)
 
     print("Retrieving without filter (first 2 results):")
     retrieved_no_filter = vectorstore.similarity_search(query, k=2)
