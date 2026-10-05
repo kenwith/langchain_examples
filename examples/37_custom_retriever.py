@@ -6,13 +6,16 @@ document list using `InMemoryVectorStore`, and how to use it with a chat model.
 The custom retriever is implemented as a subclass of `BaseRetriever` and
 delegates the actual similarity search to an `InMemoryVectorStore`. This
 keeps the retriever simple while still allowing custom behaviour to be added
-later.
+later. Both synchronous and asynchronous retrieval methods are provided.
 """
 
 from typing import List
 
 from langchain.chat_models import init_chat_model
-from langchain_core.callbacks import CallbackManagerForRetrieverRun
+from langchain_core.callbacks import (
+    AsyncCallbackManagerForRetrieverRun,
+    CallbackManagerForRetrieverRun,
+)
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
@@ -104,9 +107,9 @@ class InMemoryCustomRetriever(BaseRetriever):
     """Custom retriever backed by an in-memory vector store.
 
     This retriever wraps an `InMemoryVectorStore` and delegates the retrieval
-    logic to its `similarity_search` method. It is designed to be a minimal
-    example of how to implement a custom retriever by subclassing
-    `BaseRetriever`.
+    logic to its `similarity_search` and `asimilarity_search` methods. It is
+    designed to be a minimal example of how to implement a custom retriever by
+    subclassing `BaseRetriever`.
 
     Attributes:
         vector_store: The in-memory vector store used for similarity search.
@@ -136,6 +139,27 @@ class InMemoryCustomRetriever(BaseRetriever):
             A list of `Document` objects sorted by relevance to the query.
         """
         return self.vector_store.similarity_search(query, k=self.k)
+
+    async def _aget_relevant_documents(
+        self, query: str, *, run_manager: AsyncCallbackManagerForRetrieverRun
+    ) -> List[Document]:
+        """Asynchronously retrieve documents relevant to the query.
+
+        This method is called by `BaseRetriever.ainvoke` and should return a
+        list of documents most relevant to the query. It delegates to the
+        underlying vector store's asynchronous similarity search.
+
+        Args:
+            query: The query string to search for.
+            run_manager: Async callback manager for the retriever run. Provided
+                by the framework for logging, tracing, and other callbacks. This
+                implementation does not use it, but it is required by the
+                `BaseRetriever` interface.
+
+        Returns:
+            A list of `Document` objects sorted by relevance to the query.
+        """
+        return await self.vector_store.asimilarity_search(query, k=self.k)
 
 
 def create_custom_retriever() -> BaseRetriever:
