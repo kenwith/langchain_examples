@@ -10,29 +10,21 @@ from typing import List, Optional
 
 from langchain.agents import AgentExecutor, create_react_agent
 from langchain.agents.output_parsers import ReActSingleInputOutputParser
-from langchain.tools import Tool, tool
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import Runnable
+from langchain_core.tools import BaseTool, tool
 from langchain_openai import ChatOpenAI
 
-# Set your OpenAI API key here or in environment variables
-os.environ.setdefault("OPENAI_API_KEY", "your-api-key")
+# Load the API key from the environment. Do not hardcode secrets.
+if not os.getenv("OPENAI_API_KEY"):
+    raise ValueError("Please set the OPENAI_API_KEY environment variable.")
 
 
 # ==================== Tool Definitions ====================
 
 @tool
 def add_numbers(a: str, b: str) -> str:
-    """
-    Add two numbers together and return the result.
-
-    Args:
-        a (str): The first number as a string.
-        b (str): The second number as a string.
-
-    Returns:
-        str: The sum of a and b as a string.
-    """
+    """Add two numeric strings and return their sum as a string."""
     try:
         result = float(a) + float(b)
         return str(result)
@@ -42,16 +34,7 @@ def add_numbers(a: str, b: str) -> str:
 
 @tool
 def multiply_numbers(a: str, b: str) -> str:
-    """
-    Multiply two numbers and return the product.
-
-    Args:
-        a (str): The first number as a string.
-        b (str): The second number as a string.
-
-    Returns:
-        str: The product of a and b as a string.
-    """
+    """Multiply two numeric strings and return the product as a string."""
     try:
         result = float(a) * float(b)
         return str(result)
@@ -61,18 +44,7 @@ def multiply_numbers(a: str, b: str) -> str:
 
 @tool
 def get_weather(city: str) -> str:
-    """
-    Get the current weather for a given city.
-
-    This tool simulates a weather API. In a real implementation, you would
-    call an external service. For demonstration, it returns a fixed string.
-
-    Args:
-        city (str): The name of the city.
-
-    Returns:
-        str: A weather report for the city.
-    """
+    """Return a simulated weather report for the given city."""
     # Simulated weather data
     weather_data = {
         "new york": "Sunny, 72°F",
@@ -88,19 +60,7 @@ def get_weather(city: str) -> str:
 
 @tool
 def search_web(query: str) -> str:
-    """
-    Search the web for information.
-
-    This tool simulates a web search. In a real implementation, you would
-    use a search API like Google or Bing. For demonstration, it returns a
-    static response.
-
-    Args:
-        query (str): The search query.
-
-    Returns:
-        str: A summary of search results.
-    """
+    """Return a simulated web search result for the given query."""
     # Simulated search result
     return f"Top result for '{query}': This is a simulated web search result."
 
@@ -108,7 +68,7 @@ def search_web(query: str) -> str:
 # ==================== Agent Factory ====================
 
 def create_agent(
-    tools: List[Tool],
+    tools: List[BaseTool],
     llm: Runnable,
     system_prompt: Optional[str] = None,
     verbose: bool = True,
@@ -116,11 +76,14 @@ def create_agent(
     """
     Create a ReAct agent executor with the given tools and language model.
 
-    This factory function simplifies the process of setting up an agent by
-    handling the prompt template, agent creation, and executor configuration.
+    The tools are bound to the agent in two ways:
+    1. `create_react_agent` receives them so their names and docstrings are
+       included in the prompt, letting the LLM decide which tool to call.
+    2. `AgentExecutor` receives the same tools so it can execute the selected
+       action.
 
     Args:
-        tools (List[Tool]): List of tools available to the agent.
+        tools (List[BaseTool]): List of tools available to the agent.
         llm (Runnable): The language model to use.
         system_prompt (Optional[str]): Custom system prompt. If None, a default
             prompt is used.
@@ -161,7 +124,8 @@ Question: {input}
 Thought: {agent_scratchpad}"""
     )
 
-    # Create the agent
+    # Create the agent. Passing tools here binds their names and descriptions
+    # into the prompt so the model can choose the right tool.
     agent = create_react_agent(
         llm=llm,
         tools=tools,
@@ -169,7 +133,8 @@ Thought: {agent_scratchpad}"""
         output_parser=ReActSingleInputOutputParser(),
     )
 
-    # Create and return the executor
+    # Create and return the executor. The executor also receives the tools so
+    # it can actually run the tool selected by the agent.
     executor = AgentExecutor(
         agent=agent,
         tools=tools,
@@ -207,11 +172,10 @@ def run_agent(agent_executor: AgentExecutor, query: str) -> str:
 if __name__ == "__main__":
     # Define the tools list with expanded descriptions
     # To add a new tool:
-    # 1. Define a function with @tool decorator (or use Tool class).
-    # 2. Ensure the function has a clear docstring that describes what it does
-    #    and the arguments it expects.
-    # 3. Add the function to the `tools` list below.
-    tools = [
+    # 1. Define a function with @tool decorator, type hints, and a concise
+    #    docstring that describes what it does and the arguments it expects.
+    # 2. Add the function to the `tools` list below.
+    tools: List[BaseTool] = [
         add_numbers,
         multiply_numbers,
         get_weather,
@@ -221,7 +185,9 @@ if __name__ == "__main__":
     # Initialize the language model
     llm = ChatOpenAI(model="gpt-4", temperature=0)
 
-    # Create the agent using the factory function
+    # Create the agent using the factory function. The tools are bound to the
+    # agent here: create_react_agent exposes them to the model, and the
+    # AgentExecutor uses them to run the chosen actions.
     agent_executor = create_agent(
         tools=tools,
         llm=llm,
