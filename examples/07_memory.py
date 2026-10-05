@@ -191,28 +191,40 @@ def print_conversation(session, **kwargs) -> None:
     print("\n" + session.format_history(**kwargs) + "\n")
 
 
+def clear_conversation(session, **kwargs) -> None:
+    """Clear the in-memory conversation history for a session.
+
+    This helper resets the chat history stored in memory for the given session.
+    It works with any session object that provides a clear_history method,
+    including ConversationSession, ConversationSummarySession, and
+    RunnableConversationSession. For RunnableConversationSession, pass the
+    session_id as a keyword argument to clear a specific session's history.
+    """
+    session.clear_history(**kwargs)
+
+
 def run_conversation(session, **kwargs) -> None:
     """Run a standard two-turn conversation and demonstrate memory clearing.
 
-    The helper clears any existing history before starting, so each example
-    starts with a clean slate. It then runs two turns, prints the stored
-    history, clears it, and asks a follow-up to show that the model no longer
-    remembers the earlier context. Clearing at the end also prevents stale
-    state from leaking into the next example run.
+    The clear_conversation helper clears any existing history before starting,
+    so each example starts with a clean slate. It then runs two turns, prints
+    the stored history, clears it, and asks a follow-up to show that the model
+    no longer remembers the earlier context. Clearing at the end also prevents
+    stale state from leaking into the next example run.
     """
-    session.clear_history(**kwargs)
+    clear_conversation(session, **kwargs)
 
     print("AI:", session.ask("My favorite color is blue.", **kwargs))
     print("AI:", session.ask("What is my favorite color?", **kwargs))
 
     print_conversation(session, **kwargs)
 
-    session.clear_history(**kwargs)
+    clear_conversation(session, **kwargs)
     print("\nHistory cleared. The AI now remembers nothing from the previous turns.\n")
 
     print("AI:", session.ask("What is my favorite color?", **kwargs))
 
-    session.clear_history(**kwargs)
+    clear_conversation(session, **kwargs)
 
 
 def chat_with_memory(session, prompts, **kwargs) -> None:
@@ -221,14 +233,15 @@ def chat_with_memory(session, prompts, **kwargs) -> None:
     This function sends a sequence of prompts to the session, prints each
     exchange, and after every turn prints the current memory contents. It
     demonstrates how the conversation history is accumulated and used by the
-    model.
+    model. The clear_conversation helper is used at the start and end to ensure
+    a clean slate.
 
     Args:
         session: A session object with ask, clear_history, and format_history methods.
         prompts: An iterable of user prompts to send.
         **kwargs: Additional arguments forwarded to session methods (e.g., session_id).
     """
-    session.clear_history(**kwargs)
+    clear_conversation(session, **kwargs)
     print("\n--- Chat with Memory Transcript ---\n")
     for turn, prompt in enumerate(prompts, 1):
         print(f"Turn {turn}")
@@ -236,7 +249,7 @@ def chat_with_memory(session, prompts, **kwargs) -> None:
         response = session.ask(prompt, **kwargs)
         print(f"AI: {response}")
         print(f"\nMemory after this turn:\n{session.format_history(**kwargs)}\n")
-    session.clear_history(**kwargs)
+    clear_conversation(session, **kwargs)
 
 
 def main() -> None:
