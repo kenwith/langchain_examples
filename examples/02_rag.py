@@ -15,8 +15,12 @@ PERSIST_DIR = "db"
 
 def load_documents():
     """Load and split documents from the data file."""
-    loader = TextLoader(DATA_FILE)
-    documents = loader.load()
+    try:
+        loader = TextLoader(DATA_FILE)
+        documents = loader.load()
+    except FileNotFoundError:
+        print(f"Error: Data file '{DATA_FILE}' not found.", file=sys.stderr)
+        return []
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
     return text_splitter.split_documents(documents)
 
@@ -24,6 +28,9 @@ def load_documents():
 def create_vectorstore():
     """Create and persist the vector store from documents."""
     docs = load_documents()
+    if not docs:
+        print("No documents found to index. Exiting.", file=sys.stderr)
+        return
     embeddings = OpenAIEmbeddings()
     vectorstore = Chroma.from_documents(
         docs, embeddings, persist_directory=PERSIST_DIR
@@ -37,13 +44,27 @@ def format_docs(docs):
     return "\n\n".join(doc.page_content for doc in docs)
 
 
+def retrieve_context(retriever, query):
+    """Retrieve relevant documents and format them as context.
+
+    If no documents are found, return a fallback message so the LLM
+    knows there is no relevant context to use.
+    """
+    docs = retriever.invoke(query)
+    if not docs:
+        return "No relevant documents found in the knowledge base."
+    return format_docs(docs)
+
+
 def main():
     """Run the RAG pipeline."""
     if not os.path.exists(PERSIST_DIR):
-        raise FileNotFoundError(
+        print(
             f"Vector store not found at '{PERSIST_DIR}'. "
-            f"Run `python {os.path.basename(__file__)} --create` to create it."
+            f"Run `python {os.path.basename(__file__)} --create` to create it.",
+            file=sys.stderr,
         )
+        return
 
     embeddings = OpenAIEmbeddings()
     vectorstore = Chroma(
@@ -63,10 +84,15 @@ def main():
         ]
     )
 
-    # Build the RAG chain using LCEL with RunnablePassthrough.assign
+    # Build the RAG chain using LCEL.
+    # 1. Retrieval step: fetch relevant documents from the vector store
+    #    based on the user's query, then format them into a context string.
+    #    If no documents are retrieved, a fallback message is used.
+    # 2. Generation step: pass the context and the original question to the
+    #    LLM via the prompt template, and generate the final answer.
     rag_chain = (
         RunnablePassthrough.assign(
-            context=lambda x: format_docs(retriever.invoke(x["input"]))
+            context=lambda x: retrieve_context(retriever, x["input"])
         )
         | prompt
         | llm
