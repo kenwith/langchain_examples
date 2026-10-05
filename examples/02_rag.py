@@ -14,12 +14,20 @@ PERSIST_DIR = "db"
 
 
 def load_documents():
-    """Load and split documents from the data file."""
+    """Load and split documents from the data file.
+
+    Uses explicit UTF-8 encoding and provides a clear error message if the
+    source file is missing.
+    """
     try:
-        loader = TextLoader(DATA_FILE)
+        loader = TextLoader(DATA_FILE, encoding="utf-8")
         documents = loader.load()
     except FileNotFoundError:
-        print(f"Error: Data file '{DATA_FILE}' not found.", file=sys.stderr)
+        print(
+            f"Error: Data file '{DATA_FILE}' not found. "
+            "Please make sure the file exists in the current directory.",
+            file=sys.stderr,
+        )
         return []
     text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
     return text_splitter.split_documents(documents)
