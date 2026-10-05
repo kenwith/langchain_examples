@@ -46,7 +46,7 @@ LangChain is a framework for developing applications powered by language models.
 
 4. Run an example:
    ```bash
-   python examples/01_llm.py
+   python examples/01_basic_chains.py
    ```
 
 ## Examples
@@ -56,7 +56,7 @@ The examples are grouped by topic and each file is self-contained. For the curre
 - **Basics**: Simple LLM calls, chains, and output parsers.
 - **Retrieval-Augmented Generation (RAG)**: Vector stores, embeddings, and document QA.
 - **Agents**: ReAct agents, tool use, and conversational agents.
-- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, agents, and RAG with local models.
+- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, agents, RAG, HyDE, and reranking with local models.
 
 ### Ollama Examples
 
@@ -70,6 +70,8 @@ The following Ollama examples are available (check the examples directory for th
 - `examples/ollama_rag.py` – Build a RAG pipeline using Ollama for both generation and embeddings.
 - `examples/ollama_agent.py` – Create an agent that uses Ollama as the underlying model.
 - `examples/ollama_structured_output.py` – Use Ollama to generate structured, typed output.
+- `examples/ollama_hyde.py` – Improve retrieval quality with HyDE by generating hypothetical documents before embedding queries.
+- `examples/ollama_reranking.py` – Rerank retrieved documents to improve the relevance of RAG results.
 
 Run any example from the repository root with:
 
