@@ -10,8 +10,9 @@ blocking the event loop.
 The main public function is `batch_infer`, which takes a synchronous inference
 function and a list of inputs, and returns the outputs in the same order as the
 inputs. A convenience wrapper `batch_predict` is also provided for LangChain-style
-models that expose an `invoke` method. For large lists of inputs, `process_batch`
-is a generator that yields results with progress logging.
+models that expose an `invoke` method. For models that support native batching,
+`batch_generate` sends all prompts in a single model call. For large lists of
+inputs, `process_batch` is a generator that yields results with progress logging.
 
 Example usage:
     from my_model import model
@@ -20,6 +21,9 @@ Example usage:
 
     # Or with batch_predict:
     results = batch_predict(model, prompts, max_concurrency=5)
+
+    # Or with batch_generate for one native batched call:
+    responses = batch_generate(model, prompts)
 
     # Or with process_batch for progress logging:
     for result in process_batch(model.invoke, prompts, batch_size=5):
@@ -130,6 +134,33 @@ def batch_predict(
         >>> results = batch_predict(model, ["Hello", "World"], max_concurrency=5)
     """
     return batch_infer(model.invoke, prompts, max_concurrency)
+
+
+def batch_generate(
+    model: Any,
+    prompts: List[str],
+) -> List[str]:
+    """Generate responses for multiple prompts in a single model call.
+
+    This helper uses a LangChain model's `generate` method, which sends all
+    prompts to the underlying API at once. This can be more efficient than
+    making multiple `invoke` calls, especially for models that support native
+    batching.
+
+    Args:
+        model: An object with a `generate` method that accepts a list of
+            prompts and returns an LLMResult.
+        prompts: A list of prompt strings.
+
+    Returns:
+        A list of generated response strings, in the same order as `prompts`.
+
+    Example:
+        >>> from my_langchain_model import model
+        >>> responses = batch_generate(model, ["Hello", "World"])
+    """
+    result = model.generate(prompts)
+    return [gen[0].text for gen in result.generations]
 
 
 def process_batch(
