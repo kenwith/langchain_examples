@@ -20,8 +20,9 @@ def build_reranker(
     """Build a reranker function.
 
     The returned function reranks documents by relevance to the query using a
-    cross-encoder. If sentence-transformers is not installed, it falls back to
-    returning the first `top_k` documents unchanged.
+    cross-encoder. If the cross-encoder model cannot be loaded (for example, if
+    sentence-transformers is not installed or the model is unavailable), it falls
+    back to returning the first `top_k` documents unchanged.
 
     Args:
         model_name: Name of the cross-encoder model to use.
@@ -34,7 +35,7 @@ def build_reranker(
         from sentence_transformers import CrossEncoder
 
         encoder = CrossEncoder(model_name)
-    except ImportError:
+    except (ImportError, OSError, RuntimeError, ValueError):
         encoder = None
 
     def rerank_documents(
