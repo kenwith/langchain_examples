@@ -7,6 +7,7 @@ A collection of practical, runnable examples for building applications with Lang
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Examples](#examples)
+  - [Ollama Examples](#ollama-examples)
 - [Testing](#testing)
 - [Contributing](#contributing)
 - [License](#license)
@@ -35,6 +36,11 @@ LangChain is a framework for developing applications powered by language models.
    export OPENAI_API_KEY="your_openai_api_key"
    ```
 
+   For the Ollama examples, no API key is required. Instead, install [Ollama](https://ollama.ai) and pull a model, for example:
+   ```bash
+   ollama pull llama3
+   ```
+
 4. Run an example:
    ```bash
    python examples/01_llm.py
@@ -42,7 +48,20 @@ LangChain is a framework for developing applications powered by language models.
 
 ## Examples
 
-For the current list of examples, see the [examples directory](examples). The examples are grouped by topic and each file is self-contained.
+The examples are grouped by topic and each file is self-contained. For the current list of all examples, see the [examples directory](examples). The following categories are available:
+
+- **Basics**: Simple LLM calls, chains, and output parsers.
+- **Retrieval-Augmented Generation (RAG)**: Vector stores, embeddings, and document QA.
+- **Agents**: ReAct agents, tool use, and conversational agents.
+- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, and RAG with local models.
+
+### Ollama Examples
+
+The repository includes examples that use Ollama to run models locally. These examples require [Ollama](https://ollama.ai) to be installed and a model pulled (e.g., `ollama pull llama3`). Set the `OLLAMA_BASE_URL` environment variable if you are not using the default `http://localhost:11434`.
+
+- `examples/ollama_llm.py` – Basic chat completion with a local Ollama model.
+- `examples/ollama_embeddings.py` – Generate embeddings with Ollama for use in vector stores.
+- `examples/ollama_rag.py` – Build a RAG pipeline using Ollama for both generation and embeddings.
 
 Run any example from the repository root with:
 
