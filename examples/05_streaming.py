@@ -16,6 +16,7 @@ To run this script:
 """
 
 import os
+import time
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_openai import ChatOpenAI
@@ -32,9 +33,21 @@ class TokenCounterHandler(BaseCallbackHandler):
         self.token_count += 1
 
 
+def print_token_with_delay(token: str, delay: float = 0.05) -> None:
+    """Print a token and pause briefly to make streaming visible.
+
+    Args:
+        token: The token text to print.
+        delay: Seconds to wait after printing the token.
+    """
+    print(token, end="", flush=True)
+    time.sleep(delay)
+
+
 def stream_response(response):
     """Print tokens from a streaming response as they arrive.
 
+    Uses a small delay between tokens to improve the streaming visualization.
     Ensures the stream output ends with exactly one newline before the
     completion message, avoiding extra blank lines when the model already
     emits a trailing newline.
@@ -45,7 +58,7 @@ def stream_response(response):
     ended_with_newline = False
     for chunk in response:
         content = chunk.content
-        print(content, end="", flush=True)
+        print_token_with_delay(content)
         ended_with_newline = content.endswith("\n")
 
     if not ended_with_newline:
