@@ -3,15 +3,27 @@
 Demonstrates how to use ContextualCompressionRetriever with an LLMChainExtractor
 to compress retrieved documents to only the most relevant parts.
 
-How the technique works:
-- A base retriever first fetches candidate documents for a query.
-- A document compressor then processes each document with an LLM, extracting
-  only the sentences that are relevant to the query.
-- The result is a shorter, more focused set of documents that reduces noise and
-  saves tokens when feeding context to a downstream LLM.
+Contextual compression is a retrieval technique that sits between a base
+retriever and the final prompt context. It reduces the amount of irrelevant
+text in retrieved documents by using a language model to extract only the
+sentences that are relevant to the query.
 
-This example is provider-agnostic: it uses init_chat_model() to create a chat
-model based on environment variables.
+The pipeline in this example has three stages:
+
+1. Candidate retrieval: a base retriever fetches a set of documents that may
+   be relevant to the query. In this example, a DummyRetriever returns a fixed
+   set of sample documents so the example can run without an external vector
+   store.
+2. Compression: an LLMChainExtractor wraps a chat model and processes each
+   candidate document. The LLM is instructed to identify and copy the parts
+   of the document that are relevant to the query, discarding the rest.
+3. Output: the ContextualCompressionRetriever returns the compressed
+   documents, which are shorter and more focused. These documents can then be
+   passed to a downstream LLM as context, saving tokens and reducing noise.
+
+The example is provider-agnostic: it uses init_chat_model() to create a chat
+model based on environment variables. The same code works with OpenAI,
+Anthropic, or any other provider supported by LangChain.
 
 How to run:
 1. Install LangChain dependencies (langchain, langchain-core, and the package
@@ -30,8 +42,11 @@ How to run:
    python examples/50_contextual_compression.py
 
 To adapt this example:
-- Pass your own `llm` or `base_retriever` to `build_compression_retriever()`
-  to use custom models or retrieval logic without modifying the helper.
+- Pass a custom `compression_llm` to `build_compression_retriever()` to use a
+  different model for the extraction step.
+- Pass a custom `candidate_retriever` to `build_compression_retriever()` to
+  use real retrieval logic, such as a vector store retriever, without
+  modifying the helper.
 """
 
 import os
@@ -86,47 +101,48 @@ def create_dummy_retriever() -> DummyRetriever:
 
 
 def build_compression_retriever(
-    llm: Optional[BaseChatModel] = None,
-    base_retriever: Optional[BaseRetriever] = None,
+    compression_llm: Optional[BaseChatModel] = None,
+    candidate_retriever: Optional[BaseRetriever] = None,
 ) -> ContextualCompressionRetriever:
     """Build a ContextualCompressionRetriever with an LLMChainExtractor.
 
     Args:
-        llm: A chat model instance to use for compression. If None, a model is
-            created from the MODEL_NAME and MODEL_PROVIDER environment variables.
-        base_retriever: A retriever that returns candidate documents. If None,
-            a DummyRetriever with sample documents is used.
+        compression_llm: A chat model instance to use for compression. If None,
+            a model is created from the MODEL_NAME and MODEL_PROVIDER
+            environment variables.
+        candidate_retriever: A retriever that returns candidate documents. If
+            None, a DummyRetriever with sample documents is used.
 
     Returns:
         A configured ContextualCompressionRetriever.
     """
-    if llm is None:
-        llm = init_chat_model(
+    if compression_llm is None:
+        compression_llm = init_chat_model(
             model=os.getenv("MODEL_NAME", "gpt-4o"),
             model_provider=os.getenv("MODEL_PROVIDER", "openai"),
             temperature=0,
         )
 
-    if base_retriever is None:
-        base_retriever = create_dummy_retriever()
+    if candidate_retriever is None:
+        candidate_retriever = create_dummy_retriever()
 
-    compressor = LLMChainExtractor.from_llm(llm)
+    llm_chain_extractor = LLMChainExtractor.from_llm(compression_llm)
 
     return ContextualCompressionRetriever(
-        base_compressor=compressor,
-        base_retriever=base_retriever,
+        base_compressor=llm_chain_extractor,
+        base_retriever=candidate_retriever,
     )
 
 
 def main():
     """Run the contextual compression example."""
-    retriever = build_compression_retriever()
+    compression_retriever = build_compression_retriever()
     query = "What is contextual compression?"
-    compressed_docs = retriever.invoke(query)
+    compressed_documents = compression_retriever.invoke(query)
 
     print(f"Query: {query}\n")
     print("Compressed documents:")
-    for i, doc in enumerate(compressed_docs, 1):
+    for i, doc in enumerate(compressed_documents, 1):
         print(f"\n--- Document {i} ---")
         print(doc.page_content)
         if doc.metadata:
