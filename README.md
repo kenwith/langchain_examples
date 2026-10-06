@@ -64,14 +64,14 @@ The repository includes examples that use Ollama to run models locally. These ex
 
 The following Ollama examples are available (check the examples directory for the latest additions):
 
-- `examples/ollama_llm.py` – Basic chat completion with a local Ollama model.
-- `examples/ollama_chat.py` – Chat with conversation history using a local Ollama model.
-- `examples/ollama_embeddings.py` – Generate embeddings with Ollama for use in vector stores.
-- `examples/ollama_rag.py` – Build a RAG pipeline using Ollama for both generation and embeddings.
-- `examples/ollama_agent.py` – Create an agent that uses Ollama as the underlying model.
-- `examples/ollama_structured_output.py` – Use Ollama to generate structured, typed output.
-- `examples/ollama_hyde.py` – Improve retrieval quality with HyDE by generating hypothetical documents before embedding queries.
-- `examples/ollama_reranking.py` – Rerank retrieved documents to improve the relevance of RAG results.
+- `examples/07_ollama_llm.py` – Basic chat completion with a local Ollama model.
+- `examples/08_ollama_chat.py` – Chat with conversation history using a local Ollama model.
+- `examples/09_ollama_embeddings.py` – Generate embeddings with Ollama for use in vector stores.
+- `examples/10_ollama_rag.py` – Build a RAG pipeline using Ollama for both generation and embeddings.
+- `examples/11_ollama_agent.py` – Create an agent that uses Ollama as the underlying model.
+- `examples/12_ollama_structured_output.py` – Use Ollama to generate structured, typed output.
+- `examples/13_ollama_hyde.py` – Improve retrieval quality with HyDE by generating hypothetical documents before embedding queries.
+- `examples/14_ollama_reranking.py` – Rerank retrieved documents to improve the relevance of RAG results.
 
 Run any example from the repository root with:
 
