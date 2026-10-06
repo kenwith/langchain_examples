@@ -13,23 +13,33 @@ DATA_FILE = "data.txt"
 PERSIST_DIR = "db"
 
 
-def load_documents():
-    """Load and split documents from the data file.
+def load_documents(file_path=DATA_FILE, chunk_size=1000, chunk_overlap=0):
+    """Load and split documents from a given file.
 
     Uses explicit UTF-8 encoding and provides a clear error message if the
     source file is missing.
+
+    Args:
+        file_path: Path to the text file to load.
+        chunk_size: Maximum size of each text chunk.
+        chunk_overlap: Number of characters to overlap between chunks.
+
+    Returns:
+        A list of document chunks, or an empty list if the file is missing.
     """
     try:
-        loader = TextLoader(DATA_FILE, encoding="utf-8")
+        loader = TextLoader(file_path, encoding="utf-8")
         documents = loader.load()
     except FileNotFoundError:
         print(
-            f"Error: Data file '{DATA_FILE}' not found. "
-            "Please make sure the file exists in the current directory.",
+            f"Error: Data file '{file_path}' not found. "
+            "Please make sure the file exists.",
             file=sys.stderr,
         )
         return []
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
+    text_splitter = CharacterTextSplitter(
+        chunk_size=chunk_size, chunk_overlap=chunk_overlap
+    )
     return text_splitter.split_documents(documents)
 
 
