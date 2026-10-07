@@ -7,7 +7,6 @@ A collection of practical, runnable examples for building applications with Lang
 - [Overview](#overview)
 - [Quick Start](#quick-start)
 - [Examples](#examples)
-  - [Ollama Examples](#ollama-examples)
 - [Testing](#testing)
 - [Contributing](#contributing)
 - [License](#license)
@@ -51,33 +50,13 @@ LangChain is a framework for developing applications powered by language models.
 
 ## Examples
 
-The examples are grouped by topic and each file is self-contained. For the current list of all examples, see the [examples directory](examples). The following categories are available:
+Each example is a self-contained file in the [examples directory](examples). The examples fall into the following categories:
 
-- **Basics**: Simple LLM calls, chains, and output parsers.
+- **Basics**: LLM calls, chains, and output parsers.
 - **Retrieval-Augmented Generation (RAG)**: Vector stores, embeddings, and document QA.
 - **Agents**: ReAct agents, tool use, and conversational agents.
-- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, agents, RAG, HyDE, and reranking with local models.
-
-### Ollama Examples
-
-The repository includes examples that use Ollama to run models locally. These examples require [Ollama](https://ollama.ai) to be installed and a model pulled (e.g., `ollama pull llama3`). Set the `OLLAMA_BASE_URL` environment variable if you are not using the default `http://localhost:11434`.
-
-The following Ollama examples are available (check the examples directory for the latest additions):
-
-- `examples/07_ollama_llm.py` – Basic chat completion with a local Ollama model.
-- `examples/08_ollama_chat.py` – Chat with conversation history using a local Ollama model.
-- `examples/09_ollama_embeddings.py` – Generate embeddings with Ollama for use in vector stores.
-- `examples/10_ollama_rag.py` – Build a RAG pipeline using Ollama for both generation and embeddings.
-- `examples/11_ollama_agent.py` – Create an agent that uses Ollama as the underlying model.
-- `examples/12_ollama_structured_output.py` – Use Ollama to generate structured, typed output.
-- `examples/13_ollama_hyde.py` – Improve retrieval quality with HyDE by generating hypothetical documents before embedding queries.
-- `examples/14_ollama_reranking.py` – Rerank retrieved documents to improve the relevance of RAG results.
-
-Run any example from the repository root with:
-
-```bash
-python examples/<filename>.py
-```
+- **LangGraph**: Workflows, state, conditional edges, persistence, subgraphs, and parallel execution.
+- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, tools, RAG, HyDE, and reranking. Ollama files use the `*_ollama_*.py` naming convention.
 
 ## Testing
 
@@ -89,7 +68,7 @@ pytest
 
 ## Contributing
 
-Contributions are welcome! If you'd like to add an example or improve an existing one, please open an issue or submit a pull request.
+Contributions are welcome. To add an example or improve an existing one, open an issue or submit a pull request.
 
 ## License
 
