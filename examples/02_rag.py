@@ -1,42 +1,77 @@
 import os
 import sys
 
-from langchain_community.document_loaders import TextLoader
+from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import CharacterTextSplitter
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
+from langchain_core.documents import Document
 
 DATA_FILE = "data.txt"
 PERSIST_DIR = "db"
 
+SAMPLE_TEXTS = [
+    "The president delivered a speech to the nation, emphasizing the importance of unity and progress.",
+    "In the speech, the president praised the nomination of Ketanji Brown Jackson to the Supreme Court, describing her as a highly qualified and respected jurist.",
+    "The president also discussed economic recovery and the need for bipartisan cooperation in Congress.",
+    "Ketanji Brown Jackson's confirmation hearings were held in the Senate, where she answered questions about her judicial philosophy and record.",
+]
 
-def load_documents(file_path=DATA_FILE, chunk_size=1000, chunk_overlap=0):
-    """Load and split documents from a given file.
 
-    Uses explicit UTF-8 encoding and provides a clear error message if the
-    source file is missing.
+def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
+    """Load and split documents from a directory or built-in sample texts.
+
+    If a directory path is provided, all text files within that directory are
+    loaded. Otherwise, built-in sample texts are used as a fallback.
 
     Args:
-        file_path: Path to the text file to load.
+        directory_path: Optional path to a directory containing text files.
         chunk_size: Maximum size of each text chunk.
         chunk_overlap: Number of characters to overlap between chunks.
 
     Returns:
-        A list of document chunks, or an empty list if the file is missing.
+        A list of document chunks, or an empty list if no documents are found.
     """
-    try:
-        loader = TextLoader(file_path, encoding="utf-8")
-        documents = loader.load()
-    except FileNotFoundError:
-        print(
-            f"Error: Data file '{file_path}' not found. "
-            "Please make sure the file exists.",
-            file=sys.stderr,
-        )
+    documents = []
+
+    if directory_path:
+        try:
+            loader = DirectoryLoader(
+                directory_path,
+                glob="**/*.txt",
+                loader_cls=TextLoader,
+                loader_kwargs={"encoding": "utf-8"},
+            )
+            documents = loader.load()
+        except FileNotFoundError:
+            print(
+                f"Error: Directory '{directory_path}' not found. "
+                "Falling back to sample texts.",
+                file=sys.stderr,
+            )
+
+        if not documents:
+            print(
+                "No text files found in the directory. Falling back to sample texts.",
+                file=sys.stderr,
+            )
+            documents = [
+                Document(page_content=text, metadata={"source": "sample"})
+                for text in SAMPLE_TEXTS
+            ]
+    else:
+        documents = [
+            Document(page_content=text, metadata={"source": "sample"})
+            for text in SAMPLE_TEXTS
+        ]
+
+    if not documents:
+        print("No documents found to load.", file=sys.stderr)
         return []
+
     text_splitter = CharacterTextSplitter(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap
     )
