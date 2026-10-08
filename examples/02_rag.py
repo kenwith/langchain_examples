@@ -93,7 +93,11 @@ def create_vectorstore():
 
 
 def format_docs(docs):
-    """Format a list of documents into a single string for context."""
+    """Format a list of documents into a single string for use as context.
+
+    This helper keeps prompt construction readable and reusable by
+    centralizing the conversion of retrieved documents into a context block.
+    """
     return "\n\n".join(doc.page_content for doc in docs)
 
 
