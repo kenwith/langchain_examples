@@ -2,7 +2,8 @@
 
 This example demonstrates how to add a reranking step to improve retrieval quality.
 It includes helper functions `build_reranker` and `rerank_documents` to make the
-reranking step easy to reuse, plus `format_documents` for readable output.
+reranking step easy to reuse, plus `format_documents` and `print_results` for
+readable output.
 """
 
 from typing import Callable, List, Sequence
@@ -100,6 +101,18 @@ def format_documents(documents: Sequence[Document]) -> str:
     return "\n".join(lines)
 
 
+def print_results(title: str, documents: Sequence[Document]) -> None:
+    """Print a title and formatted documents.
+
+    Args:
+        title: The title to print before the documents.
+        documents: The documents to format and print.
+    """
+    print(title)
+    print(format_documents(documents))
+    print()
+
+
 def main() -> None:
     # Sample documents
     documents = [
@@ -135,16 +148,13 @@ def main() -> None:
     # Retrieve initial documents
     initial_docs = retriever.invoke(query)
 
-    print("=== Initial Retrieval ===")
-    print(format_documents(initial_docs))
-    print()
+    print_results("=== Initial Retrieval ===", initial_docs)
 
     # Build a reranker and rerank the retrieved documents
     rerank = build_reranker()
     reranked_docs = rerank(query, initial_docs, top_k=2)
 
-    print("=== After Reranking ===")
-    print(format_documents(reranked_docs))
+    print_results("=== After Reranking ===", reranked_docs)
 
 
 if __name__ == "__main__":
