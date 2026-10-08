@@ -3,6 +3,8 @@
 This module demonstrates how to build and run simple chains with LangChain.
 It uses an LLMChain to generate a company name from a product description and
 then a SimpleSequentialChain to create a catchphrase for that company name.
+
+Run this module directly to see the example output.
 """
 
 from langchain.chains import LLMChain, SimpleSequentialChain
