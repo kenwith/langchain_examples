@@ -51,9 +51,13 @@ class CountingCache(BaseCache):
 
 def print_cache_stats(cache: CountingCache):
     """Print cache hit and miss counts."""
+    total = cache.hits + cache.misses
     print(f"Cache hits: {cache.hits}")
     print(f"Cache misses: {cache.misses}")
-    print(f"Total cache lookups: {cache.hits + cache.misses}")
+    print(f"Total cache lookups: {total}")
+    if total > 0:
+        hit_rate = (cache.hits / total) * 100
+        print(f"Cache hit rate: {hit_rate:.1f}%")
 
 
 def main():
