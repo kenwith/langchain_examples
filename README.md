@@ -37,11 +37,11 @@ LangChain is a framework for developing applications powered by language models.
    - **OpenAI**: set `OPENAI_API_KEY`
    - **Anthropic**: set `ANTHROPIC_API_KEY`
    - **Google**: set `GOOGLE_API_KEY`
-   - **Ollama** (local models): no API key required. Install [Ollama](https://ollama.ai) and pull a model:
+   - **Ollama** (local models): no API key required. Install [Ollama](https://ollama.ai), start the Ollama server, and pull a model:
      ```bash
      ollama pull llama3
      ```
-   - If Ollama is not running on the default `http://localhost:11434`, set `OLLAMA_BASE_URL`.
+     Ollama examples require a locally running Ollama server (default `http://localhost:11434`). If Ollama is running on a different host or port, set `OLLAMA_BASE_URL`.
 
 4. Run an example:
    ```bash
@@ -56,7 +56,7 @@ Each example is a self-contained file in the [examples directory](examples). The
 - **Retrieval-Augmented Generation (RAG)**: Vector stores, embeddings, and document QA.
 - **Agents**: ReAct agents, tool use, and conversational agents.
 - **LangGraph**: Workflows, state, conditional edges, persistence, subgraphs, and parallel execution.
-- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, tools, RAG, HyDE, and reranking. Ollama files use the `*_ollama_*.py` naming convention.
+- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, tools, RAG, HyDE, and reranking. Ollama files use the `*_ollama_*.py` naming convention. These examples require a locally running Ollama server.
 
 ## Testing
 
@@ -65,6 +65,22 @@ The repository includes a pytest test suite. To run the tests:
 ```bash
 pytest
 ```
+
+### Running a single test
+
+To run a single test file, pass the file path to pytest:
+
+```bash
+pytest tests/test_01_basic_chains.py
+```
+
+To run a single test case within a file, use `::` to separate the test name:
+
+```bash
+pytest tests/test_01_basic_chains.py::test_something
+```
+
+Replace `test_something` with the actual test name.
 
 ## Contributing
 
