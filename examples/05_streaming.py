@@ -9,6 +9,14 @@ using a helper function that yields token deltas and handles streaming
 errors gracefully. It also includes a simple callback handler that counts
 tokens during streaming to show how custom event handling works with LangChain.
 
+Streaming usage notes:
+- Use model.stream(...) to obtain a streaming response.
+- Pass the response to stream_to_stdout() to print tokens as they arrive.
+- The stream_response() generator yields token deltas and catches errors,
+  so a failed stream produces an error message instead of crashing.
+- Callback handlers can be passed to model.stream() to observe events
+  such as on_llm_new_token.
+
 To run this script:
 1. Set the OPENAI_API_KEY environment variable to your OpenAI API key.
 2. Install dependencies: pip install langchain-openai
@@ -65,6 +73,26 @@ def stream_response(response):
         return
 
 
+def stream_to_stdout(response, delay: float = 0.05) -> None:
+    """Stream tokens from a response to standard output.
+
+    This helper consumes the token deltas yielded by :func:`stream_response`
+    and prints them as they arrive, using :func:`print_token_with_delay` to
+    make the streaming visible. It also ensures the output ends with a newline
+    so subsequent messages start on a fresh line.
+
+    Args:
+        response: An iterable of token chunks (e.g., from model.stream()).
+        delay: Seconds to wait after printing each token.
+    """
+    ended_with_newline = False
+    for token in stream_response(response):
+        print_token_with_delay(token, delay)
+        ended_with_newline = token.endswith("\n")
+    if not ended_with_newline:
+        print()
+
+
 def main():
     """Run a simple streaming example with a token-counting callback."""
     # Use environment variables for credentials—never hardcode keys.
@@ -84,17 +112,9 @@ def main():
         callbacks=[token_handler],
     )
 
-    # Iterate over the token deltas and print them as they arrive.
-    ended_with_newline = False
-    for token in stream_response(response):
-        print_token_with_delay(token)
-        ended_with_newline = token.endswith("\n")
+    # Stream the tokens to stdout using the helper.
+    stream_to_stdout(response)
 
-    # Ensure the stream output ends with exactly one newline before the
-    # completion message, avoiding extra blank lines when the model already
-    # emits a trailing newline.
-    if not ended_with_newline:
-        print()  # Add a final newline if the stream didn't already end with one
     print("[Stream complete]", flush=True)
 
     # Display the token count collected by the callback handler.
