@@ -121,10 +121,14 @@ def create_vectorstore(directory_path=None):
 def format_docs(docs):
     """Format a list of documents into a single string for use as context.
 
-    This helper keeps prompt construction readable and reusable by
-    centralizing the conversion of retrieved documents into a context block.
+    Each document is prefixed with its source name (from metadata) so the
+    model can trace information back to the original file.
     """
-    return "\n\n".join(doc.page_content for doc in docs)
+    formatted = []
+    for idx, doc in enumerate(docs, start=1):
+        source = doc.metadata.get("source", "unknown")
+        formatted.append(f"Source {idx} ({source}):\n{doc.page_content}")
+    return "\n\n".join(formatted)
 
 
 def retrieve_context(retriever, query):
@@ -163,7 +167,8 @@ def main():
         [
             (
                 "system",
-                "You are a helpful assistant. Answer questions based on the provided context.",
+                "You are a helpful assistant. Answer questions based on the provided context. "
+                "When you use information from a source, cite it by name (e.g., Source 1 (sample)).",
             ),
             ("human", "Context: {context}\n\nQuestion: {input}"),
         ]
