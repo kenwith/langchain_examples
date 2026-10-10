@@ -21,6 +21,41 @@ SAMPLE_TEXTS = [
 ]
 
 
+def load_documents_from_directory(directory_path):
+    """Load all text documents from a directory.
+
+    Args:
+        directory_path: Path to a directory containing .txt files.
+
+    Returns:
+        A list of loaded documents, or an empty list if the directory
+        does not exist or contains no text files.
+    """
+    try:
+        loader = DirectoryLoader(
+            directory_path,
+            glob="**/*.txt",
+            loader_cls=TextLoader,
+            loader_kwargs={"encoding": "utf-8"},
+        )
+        documents = loader.load()
+    except FileNotFoundError:
+        print(
+            f"Error: Directory '{directory_path}' not found.",
+            file=sys.stderr,
+        )
+        return []
+
+    if not documents:
+        print(
+            f"No text files found in directory '{directory_path}'.",
+            file=sys.stderr,
+        )
+        return []
+
+    return documents
+
+
 def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
     """Load and split documents from a directory or built-in sample texts.
 
@@ -38,24 +73,10 @@ def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
     documents = []
 
     if directory_path:
-        try:
-            loader = DirectoryLoader(
-                directory_path,
-                glob="**/*.txt",
-                loader_cls=TextLoader,
-                loader_kwargs={"encoding": "utf-8"},
-            )
-            documents = loader.load()
-        except FileNotFoundError:
-            print(
-                f"Error: Directory '{directory_path}' not found. "
-                "Falling back to sample texts.",
-                file=sys.stderr,
-            )
-
+        documents = load_documents_from_directory(directory_path)
         if not documents:
             print(
-                "No text files found in the directory. Falling back to sample texts.",
+                "Falling back to sample texts.",
                 file=sys.stderr,
             )
             documents = [
@@ -78,9 +99,14 @@ def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
     return text_splitter.split_documents(documents)
 
 
-def create_vectorstore():
-    """Create and persist the vector store from documents."""
-    docs = load_documents()
+def create_vectorstore(directory_path=None):
+    """Create and persist the vector store from documents.
+
+    Args:
+        directory_path: Optional path to a directory containing text files.
+            If not provided, sample texts are used.
+    """
+    docs = load_documents(directory_path=directory_path)
     if not docs:
         print("No documents found to index. Exiting.", file=sys.stderr)
         return
@@ -115,18 +141,20 @@ def retrieve_context(retriever, query):
 
 def main():
     """Run the RAG pipeline."""
-    if not os.path.exists(PERSIST_DIR):
+    try:
+        embeddings = OpenAIEmbeddings()
+        vectorstore = Chroma(
+            persist_directory=PERSIST_DIR, embedding_function=embeddings
+        )
+    except Exception as e:
         print(
-            f"Vector store not found at '{PERSIST_DIR}'. "
+            f"Error: Could not load vector store from '{PERSIST_DIR}'.\n"
+            f"Details: {e}\n"
             f"Run `python {os.path.basename(__file__)} --create` to create it.",
             file=sys.stderr,
         )
         return
 
-    embeddings = OpenAIEmbeddings()
-    vectorstore = Chroma(
-        persist_directory=PERSIST_DIR, embedding_function=embeddings
-    )
     retriever = vectorstore.as_retriever()
 
     llm = ChatOpenAI(model="gpt-3.5-turbo")
@@ -162,6 +190,10 @@ def main():
 
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--create":
-        create_vectorstore()
+        # Optionally accept a directory path after --create
+        if len(sys.argv) > 2:
+            create_vectorstore(directory_path=sys.argv[2])
+        else:
+            create_vectorstore()
     else:
         main()
