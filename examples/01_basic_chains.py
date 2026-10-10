@@ -1,49 +1,63 @@
-"""Basic chains example.
+"""Basic chain example with a reusable response formatter.
 
-This module demonstrates how to build and run simple chains with LangChain.
-It uses an LLMChain to generate a company name from a product description and
-then a SimpleSequentialChain to create a catchphrase for that company name.
+This example demonstrates how to create and run a simple LangChain chain.
+It also defines a ``print_response`` function that can be reused to format
+model output consistently.
 
-The model initialization is provider-agnostic: the run_example function accepts
-any LangChain LLM, so the same chain logic can be reused with different
-providers (e.g., OpenAI, Cohere, Hugging Face) by passing a compatible instance.
+Usage:
+    Run the script directly:
 
-Run this module directly to see the example output.
-"""
+    ```bash
+    python examples/01_basic_chains.py
+    ```
 
-from langchain.chains import LLMChain, SimpleSequentialChain
-from langchain.llms import OpenAI
-from langchain.prompts import PromptTemplate
+    The script will print the model's response with a simple visual separator.
 
+Example:
+    ```python
+    from langchain.llms import OpenAI
+    from langchain.chains import LLMChain
+    from langchain.prompts import PromptTemplate
 
-def run_example(llm) -> None:
-    """Run the basic chains example with the provided LLM instance."""
-    first_prompt = PromptTemplate(
+    llm = OpenAI(temperature=0)
+    prompt = PromptTemplate(
         input_variables=["product"],
         template="What is a good name for a company that makes {product}?",
     )
-    first_chain = LLMChain(llm=llm, prompt=first_prompt, verbose=True)
+    chain = LLMChain(llm=llm, prompt=prompt)
+    response = chain.run("eco-friendly water bottles")
+    print_response(response)
+    ```
+"""
 
-    second_prompt = PromptTemplate(
-        input_variables=["company_name"],
-        template="Write a catchphrase for the following company: {company_name}",
-    )
-    second_chain = LLMChain(llm=llm, prompt=second_prompt, verbose=True)
+from langchain.llms import OpenAI
+from langchain.chains import LLMChain
+from langchain.prompts import PromptTemplate
 
-    overall_chain = SimpleSequentialChain(
-        chains=[first_chain, second_chain],
-        verbose=True,
-    )
 
-    product = "colorful socks"
-    result = overall_chain.run(product)
-    print(result)
+def print_response(response: str) -> None:
+    """Print a formatted response to the console.
+
+    Args:
+        response: The model output to print.
+    """
+    print("\n" + "=" * 60)
+    print("Response:")
+    print("=" * 60)
+    print(response)
+    print("=" * 60 + "\n")
 
 
 def main() -> None:
-    """Initialize a model and run the example."""
-    llm = OpenAI(temperature=0.7)
-    run_example(llm)
+    """Run a basic chain example."""
+    llm = OpenAI(temperature=0)
+    prompt = PromptTemplate(
+        input_variables=["product"],
+        template="What is a good name for a company that makes {product}?",
+    )
+    chain = LLMChain(llm=llm, prompt=prompt)
+    response = chain.run("eco-friendly water bottles")
+    print_response(response)
 
 
 if __name__ == "__main__":
