@@ -1,64 +1,33 @@
-"""Basic chain example with a reusable response formatter.
+"""Basic chain example.
 
-This example demonstrates how to create and run a simple LangChain chain.
-It also defines a ``print_response`` function that can be reused to format
-model output consistently.
+Provider configuration:
+- Requires an OpenAI API key. Set the OPENAI_API_KEY environment variable,
+  or create a .env file in the project root with:
+  OPENAI_API_KEY=your-api-key
+- The default model is "gpt-4o-mini". Override with OPENAI_MODEL if needed.
 
-Usage:
-    Run the script directly:
+Expected output:
+A generated response from the model, e.g.:
 
-    ```bash
-    python examples/01_basic_chains.py
-    ```
-
-    The script will print the model's response with a simple visual separator.
-
-Example:
-    ```python
-    from langchain.llms import OpenAI
-    from langchain.chains import LLMChain
-    from langchain.prompts import PromptTemplate
-
-    llm = OpenAI(temperature=0)
-    prompt = PromptTemplate(
-        input_variables=["product"],
-        template="What is a good name for a company that makes {product}?",
-    )
-    chain = LLMChain(llm=llm, prompt=prompt)
-    response = chain.run("eco-friendly water bottles")
-    print_response(response)
-    ```
+```
+Why did the chicken cross the road?
+To get to the other side.
+```
 """
 
-from langchain.llms import OpenAI
-from langchain.chains import LLMChain
-from langchain.prompts import PromptTemplate
+from langchain_core.prompts import PromptTemplate
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
 
 
-def print_response(response: str) -> None:
-    """Print a formatted response to the console.
-
-    Args:
-        response: The model output to print.
-    """
-    print("\n" + "=" * 60)
-    print("Response:")
-    print("=" * 60)
+def run_example():
+    """Run the basic chain example."""
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+    prompt = PromptTemplate.from_template("Tell me a {adjective} joke.")
+    chain = prompt | llm | StrOutputParser()
+    response = chain.invoke({"adjective": "funny"})
     print(response)
-    print("=" * 60 + "\n")
-
-
-def main() -> None:
-    """Run a basic chain example."""
-    llm = OpenAI(temperature=0)
-    prompt = PromptTemplate(
-        input_variables=["product"],
-        template="What is a good name for a company that makes {product}?",
-    )
-    chain = LLMChain(llm=llm, prompt=prompt)
-    response = chain.run("eco-friendly water bottles")
-    print_response(response)
 
 
 if __name__ == "__main__":
-    main()
+    run_example()
