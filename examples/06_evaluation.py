@@ -1,245 +1,41 @@
-"""
-LangChain evaluation example: criteria-based evaluation plus custom evaluators
-for deterministic checks, reference-answer scoring, and LLM-as-judge assessment.
+"""Example: Custom evaluator for required keywords.
 
-This module demonstrates:
-1. LLM-based relevance scoring via LangChain's criteria evaluator.
-2. A direct LLM-as-judge evaluation with a custom prompt for quality scoring.
-3. Deterministic keyword and length checks via a custom StringEvaluator.
-4. Reference-answer token overlap scoring via a custom StringEvaluator.
-5. A simple accuracy scorer for classification-style tasks.
-6. A basic exact-match scorer for generated-response correctness.
-7. A helper to format and summarize prediction/ground-truth pairs.
-8. A helper to evaluate a dataset and return a metrics dictionary.
-9. A helper to create an evaluation chain for custom rubric scoring.
-
-How to run:
-    Set your OpenAI API key first:
-        export OPENAI_API_KEY="your-api-key"   # Unix/macOS
-        set OPENAI_API_KEY="your-api-key"      # Windows
-
-    Then run this file directly:
-        python examples/06_evaluation.py
-
-    The script will evaluate a sample response with the LLM-as-judge method
-    and with LangChain's built-in criteria evaluator.
-
-Metrics used and how they are computed:
-    - Criteria score: an LLM-based score from LangChain's criteria evaluator.
-      For binary criteria, the score is 1 if the criterion is met and 0 otherwise.
-      For scale criteria, the score is an integer from 1 to 5. The LLM is asked
-      to reason step-by-step and produce a score based on the provided criterion.
-    - LLM-as-judge score: a 1-5 rating produced by a separate LLM prompt.
-      The prompt asks the judge LLM to rate the response on a scale of 1 (poor)
-      to 5 (excellent) for a given quality dimension. The score is parsed from
-      the output line starting with "Score:".
-    - Keyword/length score: a deterministic 0/1 score from
-      `KeywordAndLengthEvaluator`. It returns 1 only if the prediction contains
-      all required keywords (case-insensitive) AND has length greater than
-      `min_length` characters. Otherwise it returns 0.
-    - Reference F1 score: a deterministic 0-1 score from
-      `ReferenceAnswerEvaluator`. It tokenizes both prediction and reference
-      into lowercase word sets, then computes:
-          precision = |prediction_tokens ∩ reference_tokens| / |prediction_tokens|
-          recall    = |prediction_tokens ∩ reference_tokens| / |reference_tokens|
-          F1        = 2 * precision * recall / (precision + recall)
-      If both precision and recall are 0, F1 is 0.
-    - Accuracy: fraction of exact matches from `accuracy_scorer`.
-      Computed as (total - error_count) / total, where error_count is the
-      number of prediction/reference pairs that are not exactly equal.
-    - Exact match rate: fraction of exact string matches from `exact_match_scorer`.
-      Computed as exact_matches / total, where exact_matches is the number of
-      prediction/reference pairs that are equal after no normalisation.
-
-Reference to evaluator class:
-    Custom evaluators in this module subclass `langchain.evaluation.schema.StringEvaluator`.
-    The built-in criteria evaluator is loaded with `langchain.evaluation.load_evaluator`.
+This script demonstrates how to define a custom evaluator that checks whether
+the model's response contains a set of required keywords, and how to include
+that evaluator in an evaluation run using LangChain's evaluation framework.
 """
 
-import os
-import re
+from __future__ import annotations
+
 from typing import List, Optional
 
-from langchain.chains import LLMChain
-from langchain.evaluation import load_evaluator
+from langchain.evaluation import EvaluatorType
 from langchain.evaluation.schema import StringEvaluator
-from langchain.prompts import PromptTemplate
-from langchain_openai import ChatOpenAI
+from langchain.smith import RunEvalConfig
+from langchain.llms import OpenAI
+from langsmith import Client
+from langsmith.evaluation import evaluate
 
 
-def accuracy_scorer(predictions: List[str], references: List[str]) -> dict:
-    """
-    Compute simple accuracy and error count for classification tasks.
+class RequiredKeywordsEvaluator(StringEvaluator):
+    """Evaluator that verifies the presence of required keywords.
 
-    Accuracy is defined as the fraction of predictions that exactly match
-    their corresponding reference string:
-        accuracy = (total - error_count) / total
-
-    Args:
-        predictions: List of predicted labels/strings.
-        references: List of ground truth labels/strings.
-
-    Returns:
-        A dictionary with keys:
-            - "accuracy": fraction of exact matches (0.0 to 1.0)
-            - "error_count": number of mismatches
-            - "total": total number of samples
-
-    Raises:
-        ValueError: If predictions and references have different lengths.
-    """
-    if len(predictions) != len(references):
-        raise ValueError("predictions and references must have the same length")
-
-    total = len(predictions)
-    if total == 0:
-        return {"accuracy": 0.0, "error_count": 0, "total": 0}
-
-    # Count mismatches: each pair where prediction != reference is an error.
-    error_count = sum(1 for p, r in zip(predictions, references) if p != r)
-
-    # Accuracy is the complement of the error rate.
-    accuracy = (total - error_count) / total
-
-    return {
-        "accuracy": accuracy,
-        "error_count": error_count,
-        "total": total,
-    }
-
-
-def exact_match_scorer(predictions: List[str], references: List[str]) -> dict:
-    """
-    Compute the exact match rate for a set of prediction/reference pairs.
-
-    This is a basic string-equality check and does not apply any
-    normalisation. It is useful for tasks where the output must match a
-    canonical answer exactly.
-
-    The exact match rate is computed as:
-        exact_match_rate = exact_matches / total
-
-    Args:
-        predictions: List of predicted strings.
-        references: List of ground truth strings.
-
-    Returns:
-        A dictionary with keys:
-            - "exact_match_rate": fraction of exact matches (0.0 to 1.0)
-            - "exact_matches": number of exact matches
-            - "total": total number of samples
-
-    Raises:
-        ValueError: If predictions and references have different lengths.
-
-    Example:
-        >>> exact_match_scorer(["python", "java"], ["python", "java"])
-        {'exact_match_rate': 1.0, 'exact_matches': 2, 'total': 2}
-
-        >>> exact_match_scorer(["python"], ["Java"])
-        {'exact_match_rate': 0.0, 'exact_matches': 0, 'total': 1}
-    """
-    if len(predictions) != len(references):
-        raise ValueError("predictions and references must have the same length")
-
-    total = len(predictions)
-    if total == 0:
-        return {"exact_match_rate": 0.0, "exact_matches": 0, "total": 0}
-
-    # Count pairs where the prediction is exactly equal to the reference.
-    exact_matches = sum(1 for p, r in zip(predictions, references) if p == r)
-
-    return {
-        "exact_match_rate": exact_matches / total,
-        "exact_matches": exact_matches,
-        "total": total,
-    }
-
-
-class KeywordAndLengthEvaluator(StringEvaluator):
-    """
-    Custom evaluator that applies two criteria:
-    - Keyword coverage: all required keywords must appear (case-insensitive).
-    - Length sufficiency: prediction must exceed a minimum character count.
-
-    Returns a binary score (1 if both criteria pass, otherwise 0) and an explanation.
-
-    The score is computed as:
-        score = 1 if (len(prediction) > min_length) and
-                     (all keywords are present in prediction.lower()) else 0
+    The evaluator checks if all required keywords appear in the prediction.
+    It returns a score of 1.0 if all keywords are found, and 0.0 otherwise.
     """
 
-    def __init__(self, keywords: List[str], min_length: int):
-        # Store keywords in lowercase for case-insensitive matching.
-        self.keywords = [kw.lower() for kw in keywords]
-        self.min_length = min_length
+    def __init__(self, required_keywords: List[str]):
+        """Initialize with the list of keywords to check for.
 
-    @property
-    def requires_input(self) -> bool:
-        # This evaluator does not use the input prompt.
-        return False
-
-    @property
-    def requires_reference(self) -> bool:
-        # This evaluator does not use a reference answer.
-        return False
+        Args:
+            required_keywords: List of keywords that must be present.
+        """
+        self.required_keywords = required_keywords
 
     @property
     def evaluation_name(self) -> str:
-        return "keyword_and_length"
-
-    def _evaluate_strings(
-        self, prediction: str, reference: str = None, input: str = None, **kwargs
-    ) -> tuple[float, str]:
-        # Length check: prediction must be strictly longer than the minimum.
-        length_ok = len(prediction) > self.min_length
-
-        # Keyword check: every required keyword must appear in the lowercased prediction.
-        lower_prediction = prediction.lower()
-        missing_keywords = [kw for kw in self.keywords if kw not in lower_prediction]
-        all_keywords_present = len(missing_keywords) == 0
-
-        # Both conditions must hold for a passing score.
-        score = 1 if (length_ok and all_keywords_present) else 0
-
-        reasons = []
-        if not length_ok:
-            reasons.append(f"prediction too short (min {self.min_length} chars)")
-        if missing_keywords:
-            reasons.append(f"missing keyword(s): {missing_keywords}")
-
-        explanation = (
-            "Passed." if score == 1 else "Failed. " + "; ".join(reasons)
-        )
-        return score, explanation
-
-
-class ReferenceAnswerEvaluator(StringEvaluator):
-    """
-    Custom evaluator that scores a prediction against a reference answer
-    using token-level F1 overlap. The score is between 0 and 1.
-
-    The F1 score is computed as:
-        precision = |pred_tokens ∩ ref_tokens| / |pred_tokens|
-        recall    = |pred_tokens ∩ ref_tokens| / |ref_tokens|
-        F1        = 2 * precision * recall / (precision + recall)
-
-    If either token set is empty, or precision + recall is zero, F1 is 0.
-    """
-
-    @property
-    def requires_input(self) -> bool:
-        # This evaluator does not use the input prompt.
-        return False
-
-    @property
-    def requires_reference(self) -> bool:
-        # This evaluator needs a reference answer to score against.
-        return True
-
-    @property
-    def evaluation_name(self) -> str:
-        return "reference_answer_f1"
+        """Return the name of the evaluator."""
+        return "required_keywords"
 
     def _evaluate_strings(
         self,
@@ -247,380 +43,55 @@ class ReferenceAnswerEvaluator(StringEvaluator):
         reference: Optional[str] = None,
         input: Optional[str] = None,
         **kwargs,
-    ) -> tuple[float, str]:
-        if not reference:
-            return 0.0, "No reference answer provided."
+    ) -> dict:
+        """Evaluate whether the prediction contains all required keywords.
 
-        # Tokenize into lowercase word sets using regex \w+.
-        pred_tokens = set(re.findall(r"\w+", prediction.lower()))
-        ref_tokens = set(re.findall(r"\w+", reference.lower()))
+        Args:
+            prediction: The model's generated response.
+            reference: The reference answer (optional).
+            input: The original input (optional).
+            **kwargs: Additional keyword arguments.
 
-        if not ref_tokens:
-            return 0.0, "Reference answer has no tokens."
-        if not pred_tokens:
-            return 0.0, "Prediction has no tokens."
-
-        # Compute token overlap, precision, and recall.
-        overlap = pred_tokens & ref_tokens
-        precision = len(overlap) / len(pred_tokens)
-        recall = len(overlap) / len(ref_tokens)
-
-        # F1 is the harmonic mean of precision and recall.
-        if precision + recall == 0:
-            f1 = 0.0
-        else:
-            f1 = 2.0 * precision * recall / (precision + recall)
-
-        explanation = (
-            f"Token overlap F1={f1:.2f} "
-            f"(precision={precision:.2f}, recall={recall:.2f})"
-        )
-        return f1, explanation
+        Returns:
+            A dictionary with the score and the list of missing keywords.
+        """
+        missing_keywords = [
+            keyword
+            for keyword in self.required_keywords
+            if keyword.lower() not in prediction.lower()
+        ]
+        score = 1.0 if not missing_keywords else 0.0
+        return {
+            "score": score,
+            "missing_keywords": missing_keywords,
+        }
 
 
-def print_evaluation_report(predictions: List[str], references: List[str]) -> None:
-    """
-    Print a formatted report of prediction/ground-truth pairs and a compact score summary.
+def main() -> None:
+    """Run the evaluation with the custom keyword evaluator."""
+    # Define the required keywords for the task.
+    required_keywords = ["langchain", "evaluation"]
 
-    This helper uses `accuracy_scorer`, `exact_match_scorer`, and
-    `ReferenceAnswerEvaluator` to compute and print accuracy, exact-match rate,
-    and average token-overlap F1. Each prediction/reference pair is printed with
-    a match indicator for quick inspection.
+    # Create the custom evaluator.
+    custom_evaluator = RequiredKeywordsEvaluator(required_keywords)
 
-    Args:
-        predictions: List of predicted strings.
-        references: List of ground truth strings.
-
-    Raises:
-        ValueError: If predictions and references have different lengths.
-
-    Example:
-        >>> print_evaluation_report(["python", "java"], ["python", "java"])
-        1) Prediction: python | Ground Truth: python | Match: Yes
-        2) Prediction: java | Ground Truth: java | Match: Yes
-        Summary: Accuracy: 1.00 | Exact Match: 1.00 | Avg F1: 1.00 | Total: 2
-    """
-    if len(predictions) != len(references):
-        raise ValueError("predictions and references must have the same length")
-
-    total = len(predictions)
-    f1_scores = []
-    evaluator = ReferenceAnswerEvaluator()
-
-    for i, (pred, ref) in enumerate(zip(predictions, references), start=1):
-        match = "Yes" if pred == ref else "No"
-        print(f"{i}) Prediction: {pred} | Ground Truth: {ref} | Match: {match}")
-        if total > 0:
-            # Compute token-overlap F1 for each pair.
-            f1, _ = evaluator.evaluate_strings(prediction=pred, reference=ref)
-            f1_scores.append(f1)
-
-    # Aggregate metrics using the scorer helpers.
-    accuracy = accuracy_scorer(predictions, references)
-    exact_match = exact_match_scorer(predictions, references)
-
-    if total > 0:
-        avg_f1 = sum(f1_scores) / total
-    else:
-        avg_f1 = 0.0
-
-    print(f"Summary: Accuracy: {accuracy['accuracy']:.2f} | Exact Match: {exact_match['exact_match_rate']:.2f} | Avg F1: {avg_f1:.2f} | Total: {total}")
-
-
-def llm_judge_evaluate(
-    prompt: str,
-    prediction: str,
-    criteria: str = "helpfulness",
-    llm: Optional[ChatOpenAI] = None,
-) -> dict:
-    """
-    Use an LLM as a judge to assess response quality based on a given criterion.
-
-    This is a basic demonstration of the LLM-as-judge pattern. It constructs a
-    simple instruction for the LLM to rate the response on a scale of 1 to 5,
-    providing a score and a short justification.
-
-    The score is parsed from the LLM output line starting with "Score:".
-    If parsing fails, the score is None and the full output is used as the
-    explanation.
-
-    Args:
-        prompt: The original user prompt that generated the response.
-        prediction: The model's response to evaluate.
-        criteria: The quality dimension to judge (e.g., "helpfulness", "correctness", "conciseness").
-        llm: An optional ChatOpenAI instance. If not provided, a default one is created using
-            the OPENAI_API_KEY environment variable.
-
-    Returns:
-        A dictionary with keys:
-            - "score": integer from 1 to 5 (or None if parsing fails)
-            - "explanation": the LLM's textual reasoning
-            - "raw_output": the full LLM output for transparency
-    """
-    if llm is None:
-        llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-
-    judge_prompt = f"""You are an impartial judge evaluating the quality of a response.
-Given the user prompt and the model's response, rate the response on a scale of 1 (poor) to 5 (excellent) based on {criteria}.
-
-User prompt: {prompt}
-
-Model response: {prediction}
-
-Return your evaluation in the following format:
-Score: <integer 1-5>
-Explanation: <brief reason for the score>"""
-
-    response = llm.invoke(judge_prompt)
-    raw_output = response.content if hasattr(response, "content") else str(response)
-
-    # Parse score and explanation from the structured output.
-    score = None
-    explanation = ""
-    lines = raw_output.split("\n")
-    for line in lines:
-        if line.lower().startswith("score:"):
-            try:
-                score = int(line.split(":", 1)[1].strip())
-            except ValueError:
-                score = None
-        elif line.lower().startswith("explanation:"):
-            explanation = line.split(":", 1)[1].strip()
-    if not explanation:
-        # Fallback: use the whole output as explanation
-        explanation = raw_output
-
-    return {
-        "score": score,
-        "explanation": explanation,
-        "raw_output": raw_output,
-    }
-
-
-def create_evaluation_chain(
-    llm: ChatOpenAI,
-    rubric: str,
-    criteria_name: str = "custom_rubric"
-) -> LLMChain:
-    """
-    Create a chain that evaluates a response against a custom rubric.
-
-    This helper builds an LLMChain that takes an input prompt and a model
-    prediction and returns a score (1-5) and explanation based on the provided
-    rubric. It is useful for comparing model outputs against a custom set of
-    criteria, e.g., "Rate the response on clarity, correctness, and conciseness."
-
-    The chain returns a dictionary with keys:
-        - "score": integer from 1 to 5 (or None if parsing fails)
-        - "explanation": the LLM's textual reasoning
-        - "raw_output": the full LLM output for transparency
-
-    To compare multiple model outputs, invoke the chain for each output and
-    compare the scores and explanations.
-
-    Args:
-        llm: A ChatOpenAI instance (or any LLM that supports the interface).
-        rubric: A string describing the rubric, e.g., "Rate the response on clarity, correctness, and conciseness."
-        criteria_name: A label for the rubric, used in the prompt (optional).
-
-    Returns:
-        An LLMChain that can be invoked with a dictionary containing
-        'input' (the original prompt) and 'prediction' (the model's response).
-        The chain returns a dictionary with 'score', 'explanation', and 'raw_output'.
-    """
-    prompt = PromptTemplate(
-        input_variables=["input", "prediction"],
-        template=f"""You are an impartial judge evaluating a response using the following rubric: {rubric}
-Score the response on a scale of 1 (poor) to 5 (excellent) based on the rubric.
-Provide a brief explanation for your score.
-
-User prompt: {{input}}
-Model response: {{prediction}}
-
-Return your evaluation in the following format:
-Score: <integer 1-5>
-Explanation: <brief reason for the score>"""
-    )
-    chain = LLMChain(llm=llm, prompt=prompt)
-    return chain
-
-
-def evaluate_response(
-    prediction: str,
-    reference: str,
-    input_prompt: str,
-    llm: ChatOpenAI,
-    criteria: str = "relevance",
-    keywords: Optional[List[str]] = None,
-    min_length: Optional[int] = None,
-) -> dict:
-    """
-    Evaluate a response using two complementary criteria:
-
-    1. Built-in LLM-based criteria evaluation (e.g., relevance).
-    2. Custom keyword and length evaluation, if both keywords and min_length are provided.
-
-    The built-in criteria evaluator uses an LLM to judge whether the prediction
-    satisfies the given criterion. The custom evaluator applies deterministic
-    keyword and length checks as described in `KeywordAndLengthEvaluator`.
-
-    Args:
-        prediction: The generated response to evaluate.
-        reference: An optional reference answer for comparison.
-        input_prompt: The original prompt used to generate the response.
-        llm: The LLM instance used by the criteria evaluator.
-        criteria: The name of the built-in criteria to use (default: "relevance").
-        keywords: List of required keywords for the custom evaluator.
-        min_length: Minimum character length for the custom evaluator.
-
-    Returns:
-        A dictionary with keys "criteria_result" and "custom_result".
-        "custom_result" is None if keywords or min_length is not provided.
-    """
-    results = {}
-
-    # Load LangChain's built-in criteria evaluator and evaluate the response.
-    criteria_evaluator = load_evaluator(
-        "criteria",
-        criteria=criteria,
-        llm=llm,
-    )
-    results["criteria_result"] = criteria_evaluator.evaluate_strings(
-        prediction=prediction,
-        reference=reference,
-        input=input_prompt,
+    # Configure the evaluation run to include both a standard evaluator
+    # and the custom keyword evaluator.
+    eval_config = RunEvalConfig(
+        evaluators=[
+            EvaluatorType.QA,
+            custom_evaluator,
+        ]
     )
 
-    # Optionally run the custom deterministic keyword/length evaluator.
-    if keywords is not None and min_length is not None:
-        custom_evaluator = KeywordAndLengthEvaluator(keywords=keywords, min_length=min_length)
-        results["custom_result"] = custom_evaluator.evaluate_strings(prediction=prediction)
-
-    return results
-
-
-def evaluate_predictions(dataset: List[tuple]) -> dict:
-    """
-    Evaluate a dataset of prediction/reference pairs and return a metrics dictionary.
-
-    The dataset is a list of tuples, each containing (prediction, reference).
-    This helper computes the following metrics:
-        - accuracy: fraction of exact matches (using accuracy_scorer)
-        - exact_match_rate: fraction of exact string matches (using exact_match_scorer)
-        - avg_f1: average token-overlap F1 score (using ReferenceAnswerEvaluator)
-        - total: total number of samples
-
-    Args:
-        dataset: List of (prediction, reference) tuples.
-
-    Returns:
-        A dictionary with keys: "accuracy", "exact_match_rate", "avg_f1", "total".
-
-    Raises:
-        ValueError: If the dataset is empty or contains invalid entries.
-    """
-    if not dataset:
-        return {"accuracy": 0.0, "exact_match_rate": 0.0, "avg_f1": 0.0, "total": 0}
-
-    # Unzip predictions and references
-    predictions, references = zip(*dataset)
-    predictions = list(predictions)
-    references = list(references)
-
-    # Compute metrics using existing helpers
-    acc = accuracy_scorer(predictions, references)
-    exact = exact_match_scorer(predictions, references)
-
-    # Compute average F1 using ReferenceAnswerEvaluator
-    evaluator = ReferenceAnswerEvaluator()
-    f1_scores = []
-    for pred, ref in zip(predictions, references):
-        f1, _ = evaluator.evaluate_strings(prediction=pred, reference=ref)
-        f1_scores.append(f1)
-    avg_f1 = sum(f1_scores) / len(f1_scores) if f1_scores else 0.0
-
-    return {
-        "accuracy": acc["accuracy"],
-        "exact_match_rate": exact["exact_match_rate"],
-        "avg_f1": avg_f1,
-        "total": len(predictions),
-    }
+    # Initialize the LangSmith client and run the evaluation.
+    client = Client()
+    evaluate(
+        "my_dataset",
+        data=client.list_dataset_runs("my_dataset"),
+        evaluators=eval_config,
+    )
 
 
-# Example usage demonstrating the LLM-as-judge evaluation and custom rubric chain
 if __name__ == "__main__":
-    # Ensure an OpenAI API key is set
-    if not os.getenv("OPENAI_API_KEY"):
-        print("Please set OPENAI_API_KEY environment variable.")
-        exit(1)
-
-    # Create a sample prompt and response
-    sample_prompt = "What are the benefits of regular exercise?"
-    sample_response = (
-        "Regular exercise improves cardiovascular health, strengthens muscles, "
-        "boosts mental well-being, and helps maintain a healthy weight. "
-        "It also reduces the risk of chronic diseases like diabetes and hypertension."
-    )
-
-    # Use LLM-as-judge to assess helpfulness
-    judge_result = llm_judge_evaluate(
-        prompt=sample_prompt,
-        prediction=sample_response,
-        criteria="helpfulness"
-    )
-    print("LLM-as-judge evaluation:")
-    print(f"  Score: {judge_result['score']}/5")
-    print(f"  Explanation: {judge_result['explanation']}")
-    print()
-
-    # Also demonstrate the criteria evaluator (if desired)
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0)
-    criteria_result = load_evaluator("criteria", criteria="relevance", llm=llm).evaluate_strings(
-        prediction=sample_response,
-        input=sample_prompt
-    )
-    print("Criteria-based evaluation (relevance):")
-    print(f"  Score: {criteria_result['score']}")
-    print(f"  Reasoning: {criteria_result['reasoning']}")
-
-    # Demonstrate the print_evaluation_report helper
-    print()
-    sample_predictions = [
-        "Regular exercise improves cardiovascular health and mental well-being.",
-        "Exercise is good for you."
-    ]
-    sample_references = [
-        "Regular exercise improves cardiovascular health and mental well-being.",
-        "Regular exercise can improve cardiovascular health."
-    ]
-    print("Evaluation report example:")
-    print_evaluation_report(sample_predictions, sample_references)
-
-    # Demonstrate the evaluate_predictions helper
-    print("\nDataset evaluation example:")
-    dataset = list(zip(sample_predictions, sample_references))
-    metrics = evaluate_predictions(dataset)
-    print(f"Metrics: {metrics}")
-
-    # Demonstrate custom rubric evaluation chain
-    print("\nCustom rubric evaluation chain example:")
-    rubric = "Rate the response on clarity, correctness, and conciseness."
-    eval_chain = create_evaluation_chain(llm, rubric)
-    result = eval_chain.invoke({"input": sample_prompt, "prediction": sample_response})
-    print(f"Raw output: {result['text']}")
-    # Parse the score and explanation from the raw output (similar to llm_judge_evaluate)
-    lines = result['text'].split("\n")
-    score = None
-    explanation = ""
-    for line in lines:
-        if line.lower().startswith("score:"):
-            try:
-                score = int(line.split(":", 1)[1].strip())
-            except ValueError:
-                pass
-        elif line.lower().startswith("explanation:"):
-            explanation = line.split(":", 1)[1].strip()
-    if not explanation:
-        explanation = result['text']
-    print(f"Parsed score: {score}/5")
-    print(f"Explanation: {explanation}")
+    main()
