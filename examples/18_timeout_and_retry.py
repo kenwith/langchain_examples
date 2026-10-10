@@ -9,22 +9,27 @@ def exponential_backoff_with_jitter(
     attempt: int,
     base_delay: float = 1.0,
     max_delay: float = 60.0,
-    jitter_factor: float = 0.5,
+    jitter_factor: float = 1.0,
 ) -> float:
-    """Calculate sleep time with exponential backoff and jitter.
+    """Calculate sleep time with exponential backoff and full jitter.
+
+    Full jitter randomizes the sleep time between 0 and the exponential
+    backoff value, which helps prevent thundering herd problems when many
+    clients retry simultaneously.
 
     Args:
         attempt: The current retry attempt (0-indexed).
         base_delay: Base delay in seconds.
         max_delay: Maximum delay in seconds.
-        jitter_factor: Fraction of the delay to use as random jitter.
+        jitter_factor: Fraction of the exponential delay to use as the
+            upper bound for random jitter. Defaults to 1.0 for full jitter.
 
     Returns:
         Sleep time in seconds.
     """
     exponential_delay = min(max_delay, base_delay * (2 ** attempt))
-    jitter = random.uniform(0, exponential_delay * jitter_factor)
-    return exponential_delay + jitter
+    max_sleep = min(exponential_delay * jitter_factor, max_delay)
+    return random.uniform(0, max_sleep)
 
 
 def retry_with_backoff(
@@ -33,7 +38,7 @@ def retry_with_backoff(
     max_retries: int = 5,
     base_delay: float = 1.0,
     max_delay: float = 60.0,
-    jitter_factor: float = 0.5,
+    jitter_factor: float = 1.0,
     exceptions: tuple[type[Exception], ...] = (Exception,),
     **kwargs: Any,
 ) -> T:
@@ -45,7 +50,8 @@ def retry_with_backoff(
         max_retries: Maximum number of retries after the first attempt.
         base_delay: Base delay in seconds.
         max_delay: Maximum delay in seconds.
-        jitter_factor: Fraction of the delay to use as random jitter.
+        jitter_factor: Fraction of the exponential delay to use as the
+            upper bound for random jitter. Defaults to 1.0 for full jitter.
         exceptions: Tuple of exception types to catch and retry.
         **kwargs: Keyword arguments for func.
 
