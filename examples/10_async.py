@@ -19,6 +19,20 @@ Async patterns:
   before passing the tasks to `asyncio.gather`. The callback runs as soon as
   that task finishes, so output appears in the order requests complete.
 
+Concurrency pattern:
+- Create an `asyncio.Semaphore` to cap the number of simultaneous requests.
+- For each prompt, create an `asyncio.Task` with `asyncio.ensure_future`
+  wrapping the `ask_model` coroutine. The task starts running as soon as the
+  event loop gets a chance.
+- Optionally attach a done callback to each task to handle results in
+  completion order.
+- Pass all tasks to `asyncio.gather(..., return_exceptions=True)` so the
+  event loop continues even if one task fails, and exceptions are returned
+  in the result list.
+- The `async def main()` coroutine is the entry point. It is executed by
+  `asyncio.run(main())`, which creates the event loop, runs the coroutine,
+  and closes the loop.
+
 Async best practices:
 - Prefer `ainvoke` over the legacy `arun` for new code. `ainvoke` is the
   standard async interface for LangChain runnables and chains.
@@ -122,10 +136,7 @@ async def run_concurrently(
 
 
 async def main() -> None:
-    """Run multiple prompts concurrently and print their responses.
-
-    Also demonstrates streaming with `astream`.
-    """
+    """Async entry point: run prompts concurrently and demonstrate streaming."""
     prompts = [
         "What is LangChain?",
         "What is an async function?",
@@ -167,4 +178,5 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
+    # asyncio.run creates and manages the event loop for the main coroutine.
     asyncio.run(main())
