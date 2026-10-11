@@ -10,6 +10,13 @@ Requirements:
 - Have an Ollama server running locally (default: http://localhost:11434).
 - Pull a model, e.g., `llama3.2`.
 
+Ollama-specific setup:
+- The Ollama provider in LangChain relies on the `langchain-ollama` package.
+- Ollama exposes a local HTTP API, typically at `http://localhost:11434`.
+- The model name must match a model already pulled into the local Ollama cache.
+- To use a remote Ollama server, set `OLLAMA_BASE_URL` to the server URL.
+- To change the model, set `OLLAMA_MODEL` to the desired model name.
+
 Environment variables (optional):
 - `OLLAMA_BASE_URL`: Override the Ollama server URL.
 - `OLLAMA_MODEL`: Model name to use (default: "llama3.2").
@@ -34,13 +41,19 @@ def get_model():
     )
 
 
+async def stream_tokens(model, messages):
+    """Asynchronously yield content tokens from the model's response."""
+    async for chunk in model.astream(messages):
+        if chunk.content:
+            yield chunk.content
+
+
 async def stream_response(prompt: str):
     """Stream a response from the Ollama model asynchronously."""
     model = get_model()
     messages = [HumanMessage(content=prompt)]
-    async for chunk in model.astream(messages):
-        if chunk.content:
-            print(chunk.content, end="", flush=True)
+    async for token in stream_tokens(model, messages):
+        print(token, end="", flush=True)
     print()  # final newline
 
 
