@@ -7,7 +7,7 @@ the reranking step easy to reuse, plus `format_documents` and `print_results` fo
 readable output. It also evaluates retrieval quality before and after reranking.
 """
 
-from typing import Callable, List, Sequence, Set
+from typing import Callable, List, Optional, Sequence, Set, Tuple
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -85,10 +85,12 @@ def rerank_documents(
     query: str,
     documents: Sequence[Document],
     top_k: int = 3,
-) -> List[Document]:
+) -> Tuple[List[Document], List[Optional[float]]]:
     """Rerank documents by relevance to the query using a cross-encoder.
 
-    This is a convenience wrapper around `build_reranker`.
+    This is a convenience wrapper around `build_reranker`. It returns both the
+    reranked documents and their scores, making it easier to reuse the reranking
+    step without extracting scores from document metadata.
 
     Args:
         query: The query string.
@@ -96,9 +98,14 @@ def rerank_documents(
         top_k: The number of top documents to return.
 
     Returns:
-        A list of documents sorted by relevance (most relevant first).
+        A tuple of (reranked_documents, scores). The documents are sorted by
+        relevance (most relevant first). The scores list has the same length as
+        the document list and contains the rerank score for each document, or
+        None if no cross-encoder model was available.
     """
-    return _DEFAULT_RERANKER(query, documents, top_k)
+    reranked = _DEFAULT_RERANKER(query, documents, top_k)
+    scores = [doc.metadata.get("rerank_score") for doc in reranked]
+    return reranked, scores
 
 
 def format_documents(documents: Sequence[Document]) -> str:
@@ -201,12 +208,12 @@ def main() -> None:
     print(f"Precision@2 (initial): {precision_at_k(initial_docs, relevant_sources, 2):.2f}")
     print()
 
-    # Build a reranker and rerank the retrieved documents
-    rerank = build_reranker()
-    reranked_docs = rerank(query, initial_docs, top_k=2)
+    # Rerank the retrieved documents using the convenience helper
+    reranked_docs, rerank_scores = rerank_documents(query, initial_docs, top_k=2)
 
     print_results("=== After Reranking ===", reranked_docs)
     print(f"Precision@2 (reranked): {precision_at_k(reranked_docs, relevant_sources, 2):.2f}")
+    print("Rerank scores:", [f"{s:.4f}" if s is not None else "N/A" for s in rerank_scores])
     print()
 
 
