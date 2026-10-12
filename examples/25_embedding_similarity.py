@@ -39,6 +39,29 @@ def get_embedding(text, model="text-embedding-ada-002"):
     response = client.embeddings.create(input=[text], model=model)
     return response.data[0].embedding
 
+def rank_documents_by_similarity(query, documents, embedding_model="text-embedding-ada-002"):
+    """
+    Rank a list of documents by cosine similarity to a query.
+
+    Args:
+        query (str): The query text.
+        documents (list of str): The documents to compare against.
+        embedding_model (str): Embedding model name.
+
+    Returns:
+        list of tuple: Sorted list of (document, similarity_score) in descending order.
+    """
+    query_embedding = get_embedding(query, model=embedding_model)
+    doc_embeddings = [get_embedding(doc, model=embedding_model) for doc in documents]
+
+    similarities = []
+    for doc, doc_emb in zip(documents, doc_embeddings):
+        sim = cosine_similarity(query_embedding, doc_emb)
+        similarities.append((doc, sim))
+
+    similarities.sort(key=lambda x: x[1], reverse=True)
+    return similarities
+
 def main():
     # Example documents
     documents = [
@@ -51,23 +74,13 @@ def main():
     # Query for which we want to find similar documents
     query = "What is LangChain?"
 
-    # Generate embeddings for all documents and the query
-    doc_embeddings = [get_embedding(doc) for doc in documents]
-    query_embedding = get_embedding(query)
-
-    # Compute similarity scores using the reusable helper function
-    similarities = []
-    for i, doc_emb in enumerate(doc_embeddings):
-        sim = cosine_similarity(query_embedding, doc_emb)
-        similarities.append((documents[i], sim))
-
-    # Sort by similarity score (highest first)
-    similarities.sort(key=lambda x: x[1], reverse=True)
+    # Rank documents using the reusable helper functions
+    ranked_documents = rank_documents_by_similarity(query, documents)
 
     # Print results
     print(f"Query: {query}\n")
     print("Most similar documents:")
-    for doc, score in similarities:
+    for doc, score in ranked_documents:
         print(f"  ({score:.4f}) {doc}")
 
 if __name__ == "__main__":
