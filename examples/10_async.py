@@ -61,8 +61,10 @@ Resilience:
   continue even if some tasks fail, returning exceptions alongside successful
   results. This is demonstrated by the `run_concurrently` helper.
 - The `run_concurrently` helper also accepts an `on_result` callback so that
-  results can be printed immediately as each task completes, rather than
-  waiting for all calls to finish.
+  successful results can be printed immediately as each task completes,
+  rather than waiting for all calls to finish.
+- After `run_concurrently` returns, the caller can inspect the list of
+  `(prompt, result)` tuples to report per-task failures explicitly.
 """
 
 import asyncio
@@ -95,17 +97,12 @@ async def ask_model(chain, prompt: str, semaphore: asyncio.Semaphore | None = No
     while the network request is in progress. If a semaphore is provided,
     the request is limited by the semaphore to cap concurrency.
     """
-    try:
-        if semaphore is not None:
-            async with semaphore:
-                response = await chain.ainvoke({"input": prompt})
-        else:
+    if semaphore is not None:
+        async with semaphore:
             response = await chain.ainvoke({"input": prompt})
-        return response["output"].strip()
-    except Exception as e:
-        # Log the error and re-raise so the caller can decide how to handle it.
-        print(f"Error asking model for prompt '{prompt}': {e}")
-        raise
+    else:
+        response = await chain.ainvoke({"input": prompt})
+    return response["output"].strip()
 
 
 async def run_concurrently(
@@ -113,16 +110,16 @@ async def run_concurrently(
     prompts: list[str],
     semaphore: asyncio.Semaphore | None = None,
     on_result=None,
-) -> list:
-    """Run multiple prompts concurrently, returning a list of results.
+) -> list[tuple[str, str | Exception]]:
+    """Run multiple prompts concurrently, returning a list of (prompt, result) tuples.
 
     Uses `asyncio.gather(..., return_exceptions=True)` so that a single
-    failure doesn't cancel the other tasks. Each element in the returned
-    list is either the response string or an exception instance.
+    failure doesn't cancel the other tasks. Each tuple's second element is
+    either the response string or an exception instance.
 
     If `on_result` is provided, it is called with the prompt and the
-    completed task as soon as each task finishes, allowing results to be
-    printed in completion order.
+    completed task as soon as each task finishes, allowing successful
+    results to be printed in completion order.
     """
     tasks = []
     for prompt in prompts:
@@ -132,7 +129,8 @@ async def run_concurrently(
                 lambda t, p=prompt: on_result(p, t)
             )
         tasks.append(task)
-    return await asyncio.gather(*tasks, return_exceptions=True)
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    return list(zip(prompts, results))
 
 
 async def main() -> None:
@@ -149,21 +147,31 @@ async def main() -> None:
     semaphore = asyncio.Semaphore(3)
 
     def print_result(prompt: str, task: asyncio.Task) -> None:
-        """Print a single result as soon as its task completes."""
+        """Print a successful result as soon as its task completes."""
         try:
             result = task.result()
             print(f"Prompt: {prompt}")
             print(f"Response: {result}")
             print()
-        except Exception as e:
-            print(f"Prompt: {prompt}")
-            print(f"  Error: {e}")
-            print()
+        except Exception:
+            # Failures are reported after gather returns, using the
+            # (prompt, result) tuples from run_concurrently.
+            pass
 
     start = time.perf_counter()
-    await run_concurrently(chain, prompts, semaphore, on_result=print_result)
+    results = await run_concurrently(chain, prompts, semaphore, on_result=print_result)
     elapsed = time.perf_counter() - start
     print(f"Concurrent calls completed in {elapsed:.2f} seconds\n")
+
+    # Report per-task failures from the returned results.
+    failed = [(prompt, result) for prompt, result in results if isinstance(result, Exception)]
+    if failed:
+        print(f"{len(failed)} of {len(prompts)} prompts failed:")
+        for prompt, error in failed:
+            print(f"  - {prompt}: {error}")
+        print()
+    else:
+        print("All prompts succeeded.\n")
 
     # Demonstrate streaming with astream
     print("Streaming response for 'Explain async/await in one sentence':")
