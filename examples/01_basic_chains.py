@@ -1,10 +1,18 @@
 """Basic chain example.
 
+This example demonstrates a minimal LangChain chain: a prompt template,
+a chat model, and an output parser. The chain is provider-agnostic: any
+LangChain chat model can be used in place of ChatOpenAI.
+
 Provider configuration:
-- Requires an OpenAI API key. Set the OPENAI_API_KEY environment variable,
-  or create a .env file in the project root with:
+- For OpenAI, set the OPENAI_API_KEY environment variable, or create a
+  .env file in the project root with:
   OPENAI_API_KEY=your-api-key
 - The default model is "gpt-4o-mini". Override with OPENAI_MODEL if needed.
+- To use another provider, install the corresponding integration package
+  (e.g., langchain-anthropic, langchain-google-vertexai) and set the
+  appropriate API key environment variable. Then replace the ChatOpenAI
+  instantiation with the provider's chat model class.
 
 Expected output:
 A generated response from the model, e.g.:
@@ -20,12 +28,17 @@ from langchain_openai import ChatOpenAI
 from langchain_core.output_parsers import StrOutputParser
 
 
+def run_prompt(llm, prompt_template, variables):
+    """Run a prompt through a chat model and return the response."""
+    prompt = PromptTemplate.from_template(prompt_template)
+    chain = prompt | llm | StrOutputParser()
+    return chain.invoke(variables)
+
+
 def run_example():
     """Run the basic chain example."""
     llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
-    prompt = PromptTemplate.from_template("Tell me a {adjective} joke.")
-    chain = prompt | llm | StrOutputParser()
-    response = chain.invoke({"adjective": "funny"})
+    response = run_prompt(llm, "Tell me a {adjective} joke.", {"adjective": "funny"})
     print(response)
 
 
