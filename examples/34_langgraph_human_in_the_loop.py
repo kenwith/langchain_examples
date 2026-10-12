@@ -1,9 +1,10 @@
-"""Use `interrupt` and `Command` to pause a graph for human approval.
+"""Use `interrupt_before` and `Command` to pause a graph for human approval.
 
 This example builds a LangGraph that generates a draft response with a
-provider-agnostic chat model, then pauses to ask a human for approval before
-returning the final result. The graph uses `interrupt` to pause and
-`Command(resume=...)` to continue.
+provider-agnostic chat model, then pauses for human approval before
+returning the final result. The graph uses an explicit `interrupt_before`
+checkpoint to pause before the `human_review` node, and resumes with
+`Command(resume=...)`.
 
 Set the `MODEL_NAME` environment variable to choose a model, e.g.
 `openai:gpt-4o-mini` or `anthropic:claude-3-5-sonnet-latest`. You will also
@@ -12,7 +13,7 @@ need the corresponding API key set in your environment.
 
 # ---------------------------------------------------------------------------
 # Example: 34_langgraph_human_in_the_loop.py
-# Description: Use `interrupt` and `Command` to pause a graph for human approval.
+# Description: Use `interrupt_before` and `Command` to pause a graph for human approval.
 # ---------------------------------------------------------------------------
 
 import os
@@ -20,7 +21,7 @@ from typing import TypedDict
 
 from langchain.chat_models import init_chat_model
 from langgraph.graph import END, START, StateGraph
-from langgraph.types import Command, interrupt
+from langgraph.types import Command
 
 
 class State(TypedDict):
@@ -38,22 +39,13 @@ def generate_draft(state: State) -> dict:
 
 
 def human_review(state: State) -> dict:
-    """Pause the graph and ask a human to approve the draft."""
-    response = interrupt(
-        {
-            "question": "Do you approve this draft?",
-            "draft": state["draft"],
-        }
-    )
+    """Process the human decision after the interrupt checkpoint.
 
-    # The response comes from Command(resume=...). It can be a dict with an
-    # "approved" key, or a simple boolean. Default to False for safety.
-    if isinstance(response, dict):
-        approved = bool(response.get("approved", False))
-    else:
-        approved = bool(response)
-
-    return {"approved": approved}
+    The approval decision is merged into the state by `Command(resume=...)`.
+    This node runs after the graph resumes and exists primarily as the
+    explicit checkpoint target.
+    """
+    return {}
 
 
 def finalize(state: State) -> dict:
@@ -75,7 +67,13 @@ def build_graph():
     graph.add_edge("human_review", "finalize")
     graph.add_edge("finalize", END)
 
-    return graph.compile()
+    # Explicit checkpoint: pause before the human_review node.
+    return graph.compile(interrupt_before=["human_review"])
+
+
+def resume_graph(graph, config, approved: bool):
+    """Resume the graph with the human approval decision."""
+    return graph.invoke(Command(resume={"approved": approved}), config)
 
 
 def main():
@@ -83,7 +81,8 @@ def main():
     graph = build_graph()
     config = {"configurable": {"thread_id": "demo-thread"}}
 
-    # Start the graph. It will pause in `human_review` with an interrupt.
+    # Start the graph. It will pause before `human_review` due to the
+    # explicit `interrupt_before` checkpoint.
     result = graph.invoke(
         {"query": "Explain LangGraph in one sentence."},
         config,
@@ -97,11 +96,8 @@ def main():
         print("Unexpected: graph did not interrupt.")
         return
 
-    # Resume the graph with human approval.
-    result = graph.invoke(
-        Command(resume={"approved": True}),
-        config,
-    )
+    # Resume the graph with human approval using the dedicated resume function.
+    result = resume_graph(graph, config, approved=True)
     print("\nFinal result after approval:")
     print(result["result"])
 
