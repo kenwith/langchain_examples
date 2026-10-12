@@ -168,7 +168,8 @@ def main():
             (
                 "system",
                 "You are a helpful assistant. Answer questions based on the provided context. "
-                "When you use information from a source, cite it by name (e.g., Source 1 (sample)).",
+                "When you use information from a source, cite it by name (e.g., Source 1 (sample)). "
+                "At the end of your answer, include a 'Sources:' section that lists every source you used.",
             ),
             ("human", "Context: {context}\n\nQuestion: {input}"),
         ]
@@ -190,7 +191,23 @@ def main():
 
     query = "What did the president say about Ketanji Brown Jackson?"
     response = rag_chain.invoke({"input": query})
-    print(response.content)
+    answer = response.content
+
+    # Append source metadata to the generated answer so the output remains
+    # transparent even if the model does not include citations on its own.
+    docs = retriever.invoke(query)
+    if docs:
+        sources = []
+        seen = set()
+        for doc in docs:
+            source = doc.metadata.get("source", "unknown")
+            if source not in seen:
+                seen.add(source)
+                sources.append(source)
+        if sources and "Sources:" not in answer:
+            answer += "\n\nSources:\n" + "\n".join(f"- {source}" for source in sources)
+
+    print(answer)
 
 
 if __name__ == "__main__":
