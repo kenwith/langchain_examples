@@ -1,8 +1,9 @@
 """
 Example: LLM Caching with Hit/Miss Counting
 
-This example demonstrates how to use LangChain's LLM caching mechanism and
-track cache hits and misses with a custom counting cache.
+This example demonstrates how to use LangChain's LLM caching mechanism,
+track cache hits and misses with a custom counting cache, and clear the
+cache when needed.
 """
 
 import os
@@ -48,6 +49,12 @@ class CountingCache(BaseCache):
         """Store a result for newer LangChain versions."""
         self._cache[key] = value
 
+    def clear(self):
+        """Clear all cached entries and reset hit/miss counters."""
+        self._cache.clear()
+        self.hits = 0
+        self.misses = 0
+
 
 def print_cache_stats(cache: CountingCache):
     """Print cache hit and miss counts."""
@@ -58,6 +65,11 @@ def print_cache_stats(cache: CountingCache):
     if total > 0:
         hit_rate = (cache.hits / total) * 100
         print(f"Cache hit rate: {hit_rate:.1f}%")
+
+
+def clear_cache(cache: CountingCache):
+    """Clear the cache contents and reset hit/miss counters."""
+    cache.clear()
 
 
 def main():
@@ -92,6 +104,20 @@ def main():
 
     # Print cache statistics after the cached LLM calls.
     print("\nCache statistics after cached LLM calls:")
+    print_cache_stats(counting_cache)
+
+    # Clear the cache to demonstrate that previously cached prompts
+    # will be treated as misses on subsequent calls.
+    clear_cache(counting_cache)
+    print("\nCache cleared. Statistics now:")
+    print_cache_stats(counting_cache)
+
+    print("\nCalling the first prompt again (should be a miss after clearing):")
+    print(llm(prompt))
+    print("\nCalling it once more (should be a hit):")
+    print(llm(prompt))
+
+    print("\nCache statistics after clearing and re-running:")
     print_cache_stats(counting_cache)
 
 
