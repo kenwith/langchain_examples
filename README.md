@@ -51,7 +51,39 @@ LangChain is a framework for developing applications powered by language models.
 
 ## Examples
 
-Each example is a self-contained file in the [examples directory](examples). The examples fall into the following categories:
+Each example is a self-contained file in the [examples directory](examples). The following table lists every example file, its category, and a brief description.
+
+| Example File | Category | Description |
+| --- | --- | --- |
+| 01_basic_chains.py | Basics | Builds a simple LLM chain with a prompt template and output parser. |
+| 02_basic_llm.py | Basics | Demonstrates a direct LLM call with a single prompt. |
+| 03_basic_output_parser.py | Basics | Shows how to use output parsers to get structured responses. |
+| 01_rag.py | RAG | Implements retrieval-augmented generation using a vector store. |
+| 02_rag_hyde.py | RAG | Uses HyDE to improve retrieval quality. |
+| 01_agents.py | Agents | Creates a ReAct agent that can use tools. |
+| 01_langgraph.py | LangGraph | Builds a stateful workflow with conditional edges. |
+| 01_async_basic.py | Async | Runs multiple LLM calls concurrently using asyncio. |
+| 02_async_chain.py | Async | Composes an async chain with runnables. |
+| 03_async_rag.py | Async | Performs RAG pipeline asynchronously. |
+| 04_async_agents.py | Async | Runs an agent loop asynchronously. |
+| 01_ollama_chat.py | Ollama | Chat with a local Ollama model. |
+| 02_ollama_embeddings.py | Ollama | Generate embeddings with Ollama. |
+| 03_ollama_tools.py | Ollama | Use tools with Ollama models. |
+| 04_ollama_rag.py | Ollama | RAG pipeline using Ollama for generation and embeddings. |
+| 05_ollama_hyde.py | Ollama | Implements HyDE with Ollama. |
+| 06_ollama_rerank.py | Ollama | Reranks retrieval results with Ollama. |
+| 07_ollama_structured.py | Ollama | Obtains structured output from Ollama models. |
+| 08_ollama_fallback.py | Ollama | Configures fallback models with Ollama. |
+| 01_async_ollama_chat.py | Async Ollama | Async chat with Ollama. |
+| 02_async_ollama_embeddings.py | Async Ollama | Async embeddings with Ollama. |
+| 03_async_ollama_tools.py | Async Ollama | Async tool use with Ollama. |
+| 04_async_ollama_rag.py | Async Ollama | Async RAG pipeline with Ollama. |
+| 05_async_ollama_hyde.py | Async Ollama | Async HyDE with Ollama. |
+| 06_async_ollama_rerank.py | Async Ollama | Async reranking with Ollama. |
+| 07_async_ollama_structured.py | Async Ollama | Async structured output with Ollama. |
+| 08_async_ollama_fallback.py | Async Ollama | Async fallback with Ollama. |
+
+The examples fall into the following categories:
 
 - **Basics**: LLM calls, chains, and output parsers.
 - **Retrieval-Augmented Generation (RAG)**: Vector stores, embeddings, and document QA.
