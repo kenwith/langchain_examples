@@ -12,9 +12,10 @@ Set the appropriate environment variable for your chosen provider (e.g.,
 
 This example also showcases the ``build_filtered_retriever`` function, which
 centralizes metadata filtering by constructing a retriever with the appropriate
-search kwargs. Additionally, the ``build_filter_from_query`` helper constructs
-metadata filters from simple query keywords, making it easy to derive filters
-directly from natural language input.
+search kwargs. Additionally, the ``build_metadata_filter`` helper constructs
+filter expressions from explicit criteria, and the ``build_filter_from_query``
+helper derives metadata filters from simple query keywords, making it easy to
+filter directly from natural language input.
 """
 
 # ------------------------------------------------------------------
@@ -69,7 +70,18 @@ def build_vectorstore(documents):
 
 
 def build_metadata_filter(category=None, year=None):
-    """Build a metadata filter dictionary from optional criteria."""
+    """Build a metadata filter expression from optional criteria.
+
+    The returned filter is a dictionary suitable for use as the ``filter``
+    argument in vector store search methods (e.g., ``similarity_search`` or
+    ``as_retriever``). Supported metadata fields are:
+
+    - ``category``: a string matching the document metadata ``category``.
+    - ``year``: an integer matching the document metadata ``year``.
+
+    If neither criterion is provided, an empty dictionary is returned, which
+    applies no filtering.
+    """
     filter_dict = {}
     if category is not None:
         filter_dict["category"] = category
@@ -85,7 +97,8 @@ def build_filter_from_query(query):
     metadata fields. It is intentionally simple and can be extended with
     more sophisticated parsing.
     """
-    filter_dict = {}
+    category = None
+    year = None
     keyword_map = {
         "apple": {"category": "technology"},
         "iphone": {"category": "technology"},
@@ -103,14 +116,15 @@ def build_filter_from_query(query):
     query_lower = query.lower()
     for keyword, metadata in keyword_map.items():
         if keyword in query_lower:
-            filter_dict.update(metadata)
+            if "category" in metadata:
+                category = metadata["category"]
 
     # Detect a four-digit year in the query and add it to the filter.
     for token in query_lower.split():
         if token.isdigit() and len(token) == 4:
-            filter_dict["year"] = int(token)
+            year = int(token)
 
-    return filter_dict
+    return build_metadata_filter(category=category, year=year)
 
 
 def build_filtered_retriever(vectorstore, filter_dict, k=3):
