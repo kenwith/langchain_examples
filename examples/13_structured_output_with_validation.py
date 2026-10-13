@@ -13,7 +13,7 @@ based on environment variables (e.g., `OPENAI_API_KEY`, `MODEL_NAME`).
 from typing import List, Optional
 
 from langchain.chat_models import init_chat_model
-from pydantic import BaseModel, EmailStr, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, ValidationError, field_validator
 
 
 # -----------------------------------------------------------------------------
@@ -37,6 +37,26 @@ class Person(BaseModel):
     def name_must_not_be_empty(cls, v: str) -> str:
         if not v.strip():
             raise ValueError("Name cannot be empty")
+        return v
+
+
+class Product(BaseModel):
+    """A product with validated fields."""
+
+    name: str = Field(description="Product name")
+    price: float = Field(description="Price in USD")
+    rating: float = Field(description="Average rating from 0 to 5")
+
+    @field_validator("price")
+    def price_must_be_positive(cls, v: float) -> float:
+        if v <= 0:
+            raise ValueError("Price must be a positive number")
+        return v
+
+    @field_validator("rating")
+    def rating_must_be_in_range(cls, v: float) -> float:
+        if v < 0 or v > 5:
+            raise ValueError("Rating must be between 0 and 5")
         return v
 
 
@@ -69,6 +89,29 @@ def run_example() -> None:
     print(f"Age: {person.age}")
     print(f"Email: {person.email}")
     print(f"Tags: {person.tags}")
+
+    # Demonstrate error handling for invalid input
+    demonstrate_error_handling()
+
+
+def demonstrate_error_handling() -> None:
+    """Show how Pydantic validation errors are raised and caught."""
+    print("\n--- Demonstrating error handling for invalid input ---")
+
+    # Attempt to create a Product with invalid values
+    invalid_product_data = {
+        "name": "Laptop",
+        "price": -100.0,
+        "rating": 9.5,
+    }
+
+    try:
+        Product(**invalid_product_data)
+    except ValidationError as exc:
+        print("Validation failed for invalid product data:")
+        print(exc)
+    else:
+        print("Unexpectedly, the product was created successfully.")
 
 
 # -----------------------------------------------------------------------------
