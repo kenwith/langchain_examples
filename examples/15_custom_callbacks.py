@@ -95,6 +95,12 @@ class TokenUsageCallbackHandler(BaseCallbackHandler):
         print(f"Completion tokens: {self.token_usage['completion_tokens']}")
         print(f"Total tokens: {self.token_usage['total_tokens']}")
 
+    def print_callback_events(self) -> None:
+        """Print a formatted summary of callback lifecycle events."""
+        print("\n--- Callback Events ---")
+        for i, event in enumerate(self.event_order, 1):
+            print(f"{i}. {event}")
+
 
 def main() -> None:
     # Ensure the API key is available
@@ -111,10 +117,7 @@ def main() -> None:
 
     result = chain.run({"topic": "programming"}, callbacks=[callback])
 
-    print("\n--- Event Order ---")
-    for i, event in enumerate(callback.event_order, 1):
-        print(f"{i}. {event}")
-
+    callback.print_callback_events()
     callback.print_usage_summary()
 
     print("\n--- Result ---")
