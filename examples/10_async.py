@@ -26,9 +26,9 @@ Concurrency pattern:
   event loop gets a chance.
 - Optionally attach a done callback to each task to handle results in
   completion order.
-- Pass all tasks to `asyncio.gather(..., return_exceptions=True)` so the
-  event loop continues even if one task fails, and exceptions are returned
-  in the result list.
+- Pass all tasks to `run_async_tasks`, which wraps
+  `asyncio.gather(..., return_exceptions=True)` so the event loop continues
+  even if one task fails, and exceptions are returned in the result list.
 - The `async def main()` coroutine is the entry point. It is executed by
   `asyncio.run(main())`, which creates the event loop, runs the coroutine,
   and closes the loop.
@@ -65,6 +65,8 @@ Resilience:
   rather than waiting for all calls to finish.
 - After `run_concurrently` returns, the caller can inspect the list of
   `(prompt, result)` tuples to report per-task failures explicitly.
+- The `run_async_tasks` helper is a thin wrapper around `asyncio.gather`
+  that returns the combined results from a list of awaitables.
 """
 
 import asyncio
@@ -105,6 +107,18 @@ async def ask_model(chain, prompt: str, semaphore: asyncio.Semaphore | None = No
     return response["output"].strip()
 
 
+async def run_async_tasks(tasks, return_exceptions: bool = True):
+    """Run multiple awaitables concurrently and return combined results.
+
+    This is a thin wrapper around `asyncio.gather`. It accepts a list of
+    awaitables (coroutines or tasks) and returns a list of results in the
+    same order. If `return_exceptions` is True (default), exceptions are
+    returned as values instead of being raised, matching the resilience
+    pattern used throughout this example.
+    """
+    return await asyncio.gather(*tasks, return_exceptions=return_exceptions)
+
+
 async def run_concurrently(
     chain,
     prompts: list[str],
@@ -113,9 +127,9 @@ async def run_concurrently(
 ) -> list[tuple[str, str | Exception]]:
     """Run multiple prompts concurrently, returning a list of (prompt, result) tuples.
 
-    Uses `asyncio.gather(..., return_exceptions=True)` so that a single
-    failure doesn't cancel the other tasks. Each tuple's second element is
-    either the response string or an exception instance.
+    Uses `run_async_tasks`, which wraps `asyncio.gather(..., return_exceptions=True)`,
+    so that a single failure doesn't cancel the other tasks. Each tuple's second
+    element is either the response string or an exception instance.
 
     If `on_result` is provided, it is called with the prompt and the
     completed task as soon as each task finishes, allowing successful
@@ -129,7 +143,7 @@ async def run_concurrently(
                 lambda t, p=prompt: on_result(p, t)
             )
         tasks.append(task)
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+    results = await run_async_tasks(tasks, return_exceptions=True)
     return list(zip(prompts, results))
 
 
