@@ -46,7 +46,7 @@ class ConversationSession:
 
     def ask(self, prompt: str) -> str:
         """Send a prompt to the conversation and return the AI response."""
-        self.trim_history()
+        trim_messages(self)
         return self.chain.run(input=prompt)
 
     def clear_history(self) -> None:
@@ -96,7 +96,7 @@ class ConversationSummarySession:
 
     def ask(self, prompt: str) -> str:
         """Send a prompt to the conversation and return the AI response."""
-        self.trim_history()
+        trim_messages(self)
         return self.chain.run(input=prompt)
 
     def clear_history(self) -> None:
@@ -150,7 +150,7 @@ class RunnableConversationSession:
 
     def ask(self, prompt: str, session_id: str = "default") -> str:
         """Send a prompt to the conversation and return the AI response."""
-        self.trim_history(session_id)
+        trim_messages(self, session_id=session_id)
         response = self.history.invoke(
             {"input": prompt},
             config={"configurable": {"session_id": session_id}},
@@ -203,6 +203,20 @@ def clear_history(session, **kwargs) -> None:
     that the same reset logic works across all session types.
     """
     session.clear_history(**kwargs)
+
+
+def trim_messages(session, **kwargs) -> None:
+    """Trim the conversation history for a session to keep token growth bounded.
+
+    This helper delegates to the session's trim_history method. It is useful
+    for keeping long-running conversations within a fixed message or character
+    limit, preventing unbounded token growth in the model context.
+
+    Args:
+        session: A session object with a trim_history method.
+        **kwargs: Additional arguments forwarded to trim_history, such as session_id.
+    """
+    session.trim_history(**kwargs)
 
 
 def run_conversation(session, **kwargs) -> None:
