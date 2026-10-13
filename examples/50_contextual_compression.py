@@ -25,6 +25,11 @@ The example is provider-agnostic: it uses init_chat_model() to create a chat
 model based on environment variables. The same code works with OpenAI,
 Anthropic, or any other provider supported by LangChain.
 
+The module also provides a `compress_documents` helper that wraps the
+compression retriever and returns a single concise summary string. This is
+useful when the compressed documents only need to be passed as a compact
+context block to a downstream model.
+
 How to run:
 1. Install LangChain dependencies (langchain, langchain-core, and the package
    for your chosen model provider).
@@ -42,11 +47,11 @@ How to run:
    python examples/50_contextual_compression.py
 
 To adapt this example:
-- Pass a custom `compression_llm` to `build_compression_retriever()` to use a
-  different model for the extraction step.
-- Pass a custom `candidate_retriever` to `build_compression_retriever()` to
-  use real retrieval logic, such as a vector store retriever, without
-  modifying the helper.
+- Pass a custom `compression_llm` to `build_compression_retriever()` or
+  `compress_documents()` to use a different model for the extraction step.
+- Pass a custom `candidate_retriever` to `build_compression_retriever()` or
+  `compress_documents()` to use real retrieval logic, such as a vector store
+  retriever, without modifying the helper.
 """
 
 import os
@@ -134,6 +139,36 @@ def build_compression_retriever(
     )
 
 
+def compress_documents(
+    query: str,
+    compression_llm: Optional[BaseChatModel] = None,
+    candidate_retriever: Optional[BaseRetriever] = None,
+) -> str:
+    """Compress candidate documents for a query and return a concise summary.
+
+    Builds a ContextualCompressionRetriever using the provided (or default)
+    compression LLM and candidate retriever, invokes it with the query, and
+    joins the compressed document contents into a single string.
+
+    Args:
+        query: The user query used to retrieve and compress documents.
+        compression_llm: A chat model instance to use for compression. If None,
+            a model is created from the MODEL_NAME and MODEL_PROVIDER
+            environment variables.
+        candidate_retriever: A retriever that returns candidate documents. If
+            None, a DummyRetriever with sample documents is used.
+
+    Returns:
+        A concise summary string containing the compressed document contents.
+    """
+    retriever = build_compression_retriever(
+        compression_llm=compression_llm,
+        candidate_retriever=candidate_retriever,
+    )
+    compressed_docs = retriever.invoke(query)
+    return "\n\n".join(doc.page_content for doc in compressed_docs)
+
+
 def main():
     """Run the contextual compression example."""
     compression_retriever = build_compression_retriever()
@@ -147,6 +182,10 @@ def main():
         print(doc.page_content)
         if doc.metadata:
             print(f"Metadata: {doc.metadata}")
+
+    print("\n--- Concise summary via compress_documents ---")
+    summary = compress_documents(query)
+    print(summary)
 
 
 if __name__ == "__main__":
