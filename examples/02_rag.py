@@ -128,25 +128,24 @@ def format_docs(docs):
     """Format a list of documents into a single string for use as context.
 
     Each document is prefixed with its source name (from metadata) so the
-    model can trace information back to the original file.
+    model can trace information back to the original file. If no documents
+    are provided, a fallback message is returned so the LLM knows there is
+    no relevant context to use.
+
+    Args:
+        docs: A list of Document objects.
+
+    Returns:
+        A string containing the formatted context.
     """
+    if not docs:
+        return "No relevant documents found in the knowledge base."
+
     formatted = []
     for idx, doc in enumerate(docs, start=1):
         source = doc.metadata.get("source", "unknown")
         formatted.append(f"Source {idx} ({source}):\n{doc.page_content}")
     return "\n\n".join(formatted)
-
-
-def retrieve_context(retriever, query):
-    """Retrieve relevant documents and format them as context.
-
-    If no documents are found, return a fallback message so the LLM
-    knows there is no relevant context to use.
-    """
-    docs = retriever.invoke(query)
-    if not docs:
-        return "No relevant documents found in the knowledge base."
-    return format_docs(docs)
 
 
 def main():
@@ -183,13 +182,14 @@ def main():
 
     # Build the RAG chain using LCEL.
     # 1. Retrieval step: fetch relevant documents from the vector store
-    #    based on the user's query, then format them into a context string.
-    #    If no documents are retrieved, a fallback message is used.
+    #    based on the user's query, then format them into a context string
+    #    using format_docs. If no documents are retrieved, format_docs
+    #    returns a fallback message.
     # 2. Generation step: pass the context and the original question to the
     #    LLM via the prompt template, and generate the final answer.
     rag_chain = (
         RunnablePassthrough.assign(
-            context=lambda x: retrieve_context(retriever, x["input"])
+            context=lambda x: format_docs(retriever.invoke(x["input"]))
         )
         | prompt
         | llm
