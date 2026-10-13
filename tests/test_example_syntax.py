@@ -6,9 +6,9 @@ catch syntax errors without executing any API calls. It deliberately does not
 import or invoke ``init_chat_model`` to avoid triggering network requests or
 requiring provider credentials.
 
-In addition to valid syntax, every example must contain a module docstring,
-an ``if __name__ == '__main__':`` guard, and only absolute imports (no
-relative imports or wildcard imports) so it can be safely imported and run
+In addition to valid syntax, every example must contain a non-empty module
+docstring, an ``if __name__ == '__main__':`` guard, and only absolute imports
+(no relative imports or wildcard imports) so it can be safely imported and run
 as a script.
 
 The test suite also explicitly requires at least two Ollama example files
@@ -20,7 +20,7 @@ maintaining a hardcoded list.
 
 | Test | Description |
 |------|-------------|
-| test_example_syntax | Parse and compile every example file and verify it has a module docstring, a main guard, and valid imports. |
+| test_example_syntax | Parse and compile every example file and verify it has a non-empty module docstring, a main guard, and valid imports. |
 | test_examples_directory_has_python_files | Ensure the examples directory contains Python files to validate. |
 | test_examples_directory_has_ollama_files | Ensure the examples directory contains at least two Ollama example files. |
 """
@@ -41,8 +41,9 @@ def _example_files():
 
 
 def _has_docstring(tree):
-    """Return True if the module has a docstring."""
-    return ast.get_docstring(tree) is not None
+    """Return True if the module has a non-empty docstring."""
+    docstring = ast.get_docstring(tree)
+    return bool(docstring and docstring.strip())
 
 
 def _has_main_guard(tree):
@@ -105,12 +106,13 @@ def pytest_generate_tests(metafunc):
 
 
 def test_example_syntax(example_path):
-    """Assert that the example file has valid Python syntax, a module docstring,
-    an ``if __name__ == '__main__':`` guard, and valid imports.
+    """Assert that the example file has valid Python syntax, a non-empty module
+    docstring, an ``if __name__ == '__main__':`` guard, and valid imports.
 
     The source is parsed with ``ast.parse`` and then compiled with ``compile``
     to ensure it is syntactically valid and can be transformed into a code
-    object without executing it.
+    object without executing it. The docstring and main guard checks are
+    performed on the AST to avoid executing the module.
     """
     source = example_path.read_text(encoding="utf-8")
     # Parse only; do not execute to avoid any API calls or side effects.
@@ -120,7 +122,7 @@ def test_example_syntax(example_path):
 
     rel_path = example_path.relative_to(EXAMPLES_DIR).as_posix()
 
-    assert _has_docstring(tree), f"{rel_path} is missing a module docstring."
+    assert _has_docstring(tree), f"{rel_path} is missing a non-empty module docstring."
     assert _has_main_guard(tree), f"{rel_path} is missing an if __name__ == '__main__' guard."
     assert _has_valid_imports(tree), f"{rel_path} contains invalid imports."
 
