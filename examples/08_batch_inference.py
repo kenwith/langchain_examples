@@ -14,10 +14,23 @@ models that expose an `invoke` method. For models that support native batching,
 `batch_generate` sends all prompts in a single model call. For large lists of
 inputs, `process_batch` is a generator that yields results with progress logging.
 
+The `format_batch_results` helper prints prompts and their corresponding
+responses in a clear, human-readable format. It is useful for demos and
+debugging batch inference output.
+
+Usage notes:
+    - `batch_infer` and `batch_predict` preserve input order.
+    - Use `max_concurrency` to limit the number of simultaneous calls.
+    - Use `batch_size` to process very large lists in chunks with progress logging.
+    - `batch_generate` is suitable for models that support native batched generation.
+    - `process_batch` yields results incrementally and is memory-friendly for large inputs.
+    - `format_batch_results` requires prompts and responses of the same length.
+
 Example usage:
     from my_model import model
     prompts = ["Hello", "World"]
     results = batch_infer(model.invoke, prompts, max_concurrency=5)
+    format_batch_results(prompts, results)
 
     # Or with batch_predict:
     results = batch_predict(model, prompts, max_concurrency=5)
@@ -249,6 +262,41 @@ def process_batch(
             logging.info("Processed %d/%d inputs", processed, total)
 
 
+def format_batch_results(prompts: List[str], responses: List[Any]) -> None:
+    """Print prompts and responses in a clear, readable format.
+
+    This helper takes a list of prompts and their corresponding responses and
+    prints them in a structured format. It is intended for scripts, demos, and
+    debugging where a quick visual inspection of batch inference results is
+    needed.
+
+    Args:
+        prompts: A list of prompt strings.
+        responses: A list of responses, one for each prompt.
+
+    Raises:
+        ValueError: If the number of prompts and responses does not match.
+
+    Example:
+        >>> prompts = ["Hello", "World"]
+        >>> responses = ["Hi there!", "Earth"]
+        >>> format_batch_results(prompts, responses)
+        Prompt: Hello
+        Response: Hi there!
+        ----------------------------------------
+        Prompt: World
+        Response: Earth
+        ----------------------------------------
+    """
+    if len(prompts) != len(responses):
+        raise ValueError("prompts and responses must have the same length")
+
+    for prompt, response in zip(prompts, responses):
+        print(f"Prompt: {prompt}")
+        print(f"Response: {response}")
+        print("-" * 40)
+
+
 # --- Example usage ---------------------------------------------------------
 def example_infer(text: str) -> str:
     """Mock inference function for demonstration purposes.
@@ -280,9 +328,8 @@ def main():
     # Use a smaller concurrency to illustrate the semaphore effect
     results = batch_infer(example_infer, inputs, max_concurrency=3)
 
-    # Print results
-    for original, processed in zip(inputs, results):
-        print(f"Input: {original}\nOutput: {processed}\n")
+    # Print results in a readable format
+    format_batch_results(inputs, results)
 
 
 if __name__ == "__main__":
