@@ -136,9 +136,23 @@ class InMemoryCustomRetriever(BaseRetriever):
     designed to be a minimal example of how to implement a custom retriever by
     subclassing `BaseRetriever`.
 
+    The retriever is configured with a vector store and a number of documents
+    to retrieve per query (`k`). The `invoke` method (inherited from
+    `BaseRetriever`) calls the synchronous `_get_relevant_documents` method,
+    which in turn calls `vector_store.similarity_search`. Similarly, `ainvoke`
+    calls the asynchronous `_aget_relevant_documents` method, which calls
+    `vector_store.asimilarity_search`.
+
+    This class does not implement any additional filtering or post-processing
+    of the retrieved documents; it is intentionally kept simple to illustrate
+    the minimal interface required for a custom retriever. The `run_manager`
+    arguments are required by the `BaseRetriever` interface and are provided by
+    the framework for logging, tracing, and other callbacks. They are not used
+    in this implementation.
+
     Attributes:
         vector_store: The in-memory vector store used for similarity search.
-        k: The number of documents to retrieve for each query.
+        k: The number of documents to retrieve for each query. Defaults to 3.
     """
 
     vector_store: InMemoryVectorStore
@@ -187,7 +201,7 @@ class InMemoryCustomRetriever(BaseRetriever):
         return await self.vector_store.asimilarity_search(query, k=self.k)
 
 
-def create_custom_retriever() -> BaseRetriever:
+def create_custom_retriever() -> InMemoryCustomRetriever:
     """Create a custom retriever from an in-memory document list.
 
     Returns:
