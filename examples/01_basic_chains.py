@@ -4,6 +4,13 @@ This example demonstrates a minimal LangChain chain: a prompt template,
 a chat model, and an output parser. The chain is provider-agnostic: any
 LangChain chat model can be used in place of ChatOpenAI.
 
+The module exposes a reusable run_chain() function that accepts any
+LangChain chat model, a prompt template, and template variables. It builds
+a prompt, pipes it through the model and a string output parser, and
+returns the parsed response. This keeps the core chain logic separate from
+model configuration, so the same function can be reused with different
+providers and prompts.
+
 Provider configuration:
 - OpenAI (default): set the OPENAI_API_KEY environment variable, or create
   a .env file in the project root with:
@@ -31,8 +38,17 @@ from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
 
-def run_prompt(llm, prompt_template, variables):
-    """Run a prompt through a chat model and return the response."""
+def run_chain(llm, prompt_template, variables):
+    """Run a prompt through a chat model and return the response.
+
+    Args:
+        llm: A LangChain chat model instance.
+        prompt_template: A string template with placeholders.
+        variables: A dictionary of values for the template placeholders.
+
+    Returns:
+        The parsed string response from the model.
+    """
     prompt = PromptTemplate.from_template(prompt_template)
     chain = prompt | llm | StrOutputParser()
     return chain.invoke(variables)
@@ -42,7 +58,7 @@ def run_example():
     """Run the basic chain example."""
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     llm = ChatOpenAI(model=model, temperature=0.7)
-    response = run_prompt(llm, "Tell me a {adjective} joke.", {"adjective": "funny"})
+    response = run_chain(llm, "Tell me a {adjective} joke.", {"adjective": "funny"})
     print(response)
 
 
