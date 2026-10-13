@@ -9,7 +9,8 @@ Graph structure:
   - process: Takes `input_data`, transforms it (uppercase), and stores it in `processed_data`.
   - finalize: Takes `processed_data`, validates it, and stores `validation_result` and `final_output`.
 - Edges:
-  - process -> finalize: Always after processing.
+  - process -> finalize: Conditional edge based on `should_continue`.
+  - process -> END: Conditional edge when there is no processed data.
   - finalize -> END: Terminates the graph after finalization.
 
 State flow:
@@ -19,6 +20,8 @@ State flow:
   - validation_result: Boolean indicating whether processed_data is valid.
   - final_output: Final string produced after validation and finalization.
 - Each node reads only the keys it needs and returns a partial state update.
+- A conditional edge function `should_continue` routes the graph to `finalize` or `END`
+  based on whether processed data exists.
 """
 
 from typing import Any, Optional, TypedDict
@@ -76,6 +79,15 @@ def finalize(state: State) -> State:
     return {"validation_result": valid, "final_output": final}
 
 
+def should_continue(state: State) -> str:
+    """Determine the next node based on whether processed data exists."""
+    # If there is no processed data, skip finalization and terminate.
+    if not state.get("processed_data"):
+        return END
+    # Otherwise, proceed to the finalize node.
+    return "finalize"
+
+
 # Build the graph
 def build_graph() -> Any:
     """Construct and compile the LangGraph state graph."""
@@ -98,20 +110,30 @@ def build_graph() -> Any:
     workflow.add_node("finalize", finalize)
 
     # --- Graph structure ---
-    # The workflow is a simple linear path with two nodes:
+    # The workflow starts at the "process" node.
     #
-    #   process -> finalize -> END
+    #   process -> (should_continue) -> finalize -> END
+    #          \-> END
     #
     # 1. process: transforms raw input into processed_data.
-    # 2. finalize: checks processed_data and produces final_output.
-    # 3. END: terminal node that stops execution.
+    # 2. should_continue: routes to finalize if processed_data exists, otherwise END.
+    # 3. finalize: checks processed_data and produces final_output.
+    # 4. END: terminal node that stops execution.
 
     # Entry point: execution starts at the "process" node.
     workflow.set_entry_point("process")
 
-    # Edge: process -> finalize
-    # After processing, unconditionally move to the finalization step.
-    workflow.add_edge("process", "finalize")
+    # Conditional edge: process -> finalize or END
+    # After processing, the `should_continue` function decides whether to proceed
+    # to finalization or terminate early when no processed data is available.
+    workflow.add_conditional_edges(
+        "process",
+        should_continue,
+        {
+            "finalize": "finalize",
+            END: END,
+        },
+    )
 
     # Edge: finalize -> END
     # After producing the final output, terminate the graph execution.
