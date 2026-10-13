@@ -99,23 +99,29 @@ def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
     return text_splitter.split_documents(documents)
 
 
-def create_vectorstore(directory_path=None):
+def create_vector_store(directory_path=None, persist_dir=PERSIST_DIR):
     """Create and persist the vector store from documents.
 
     Args:
         directory_path: Optional path to a directory containing text files.
             If not provided, sample texts are used.
+        persist_dir: Directory where the vector store should be persisted.
+
+    Returns:
+        The created Chroma vector store, or None if no documents are available.
     """
     docs = load_documents(directory_path=directory_path)
     if not docs:
         print("No documents found to index. Exiting.", file=sys.stderr)
-        return
+        return None
+
     embeddings = OpenAIEmbeddings()
     vectorstore = Chroma.from_documents(
-        docs, embeddings, persist_directory=PERSIST_DIR
+        docs, embeddings, persist_directory=persist_dir
     )
     vectorstore.persist()
-    print(f"Vector store created at {PERSIST_DIR}")
+    print(f"Vector store created at {persist_dir}")
+    return vectorstore
 
 
 def format_docs(docs):
@@ -214,8 +220,8 @@ if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "--create":
         # Optionally accept a directory path after --create
         if len(sys.argv) > 2:
-            create_vectorstore(directory_path=sys.argv[2])
+            create_vector_store(directory_path=sys.argv[2])
         else:
-            create_vectorstore()
+            create_vector_store()
     else:
         main()
