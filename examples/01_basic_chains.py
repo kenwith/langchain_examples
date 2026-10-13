@@ -5,27 +5,30 @@ a chat model, and an output parser. The chain is provider-agnostic: any
 LangChain chat model can be used in place of ChatOpenAI.
 
 Provider configuration:
-- For OpenAI, set the OPENAI_API_KEY environment variable, or create a
-  .env file in the project root with:
+- OpenAI (default): set the OPENAI_API_KEY environment variable, or create
+  a .env file in the project root with:
   OPENAI_API_KEY=your-api-key
-- The default model is "gpt-4o-mini". Override with OPENAI_MODEL if needed.
-- To use another provider, install the corresponding integration package
-  (e.g., langchain-anthropic, langchain-google-vertexai) and set the
-  appropriate API key environment variable. Then replace the ChatOpenAI
-  instantiation with the provider's chat model class.
+  The default model is "gpt-4o-mini". Override with OPENAI_MODEL if needed.
+- Anthropic: install langchain-anthropic and set ANTHROPIC_API_KEY.
+  Replace ChatOpenAI with ChatAnthropic(model="claude-3-5-haiku-latest").
+- Google: install langchain-google-vertexai or langchain-google-genai and
+  set GOOGLE_API_KEY or GOOGLE_APPLICATION_CREDENTIALS. Replace ChatOpenAI
+  with ChatGoogleGenerativeAI(model="gemini-1.5-flash").
+- Local models via Ollama: install langchain-ollama and run a local model
+  with Ollama. Replace ChatOpenAI with ChatOllama(model="llama3.2").
 
 Expected output:
 A generated response from the model, e.g.:
 
-```
 Why did the chicken cross the road?
 To get to the other side.
-```
 """
 
+import os
+
+from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
-from langchain_core.output_parsers import StrOutputParser
 
 
 def run_prompt(llm, prompt_template, variables):
@@ -37,7 +40,8 @@ def run_prompt(llm, prompt_template, variables):
 
 def run_example():
     """Run the basic chain example."""
-    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+    model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    llm = ChatOpenAI(model=model, temperature=0.7)
     response = run_prompt(llm, "Tell me a {adjective} joke.", {"adjective": "funny"})
     print(response)
 
