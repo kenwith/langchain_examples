@@ -13,6 +13,9 @@ degrade gracefully to a backup model.
 | Provider         | Ollama (primary), OpenAI/Ollama (fallback)        |
 +------------------+---------------------------------------------------+
 
+The ``run_with_fallback`` helper invokes the chain and prints which model
+handled the request.
+
 Prerequisites:
 - Install ``langchain``, ``langchain-ollama``, and optionally ``langchain-openai``.
 - Start Ollama locally and pull the primary model (e.g., ``ollama pull llama3.2``).
@@ -51,13 +54,29 @@ def create_model_with_fallbacks():
     return primary.with_fallbacks([fallback])
 
 
+def run_with_fallback(model, query):
+    """Invoke a chat model with fallbacks and print which model handled it.
+
+    The response metadata is used to identify the model that produced the
+    final output.
+    """
+    response = model.invoke(query)
+    model_name = (
+        response.response_metadata.get("model")
+        or response.response_metadata.get("model_name")
+        or "unknown"
+    )
+    print(f"Handled by: {model_name}")
+    print(response.content)
+
+
 def run_demo():
     """Run a simple query with fallback configured."""
     model = create_model_with_fallbacks()
-    response = model.invoke(
-        "Explain the concept of graceful degradation in one sentence."
+    run_with_fallback(
+        model,
+        "Explain the concept of graceful degradation in one sentence.",
     )
-    print(response.content)
 
 
 if __name__ == "__main__":
