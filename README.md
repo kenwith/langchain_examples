@@ -31,18 +31,18 @@ LangChain is a framework for developing applications powered by language models.
    pip install -r requirements.txt
    ```
 
-3. Set up your environment variables:
+3. Set up environment variables:
 
-   The examples are provider-agnostic. You only need to configure the provider you plan to use:
+   The examples are provider-agnostic. Only the provider to be used needs configuration:
 
    - **OpenAI**: set `OPENAI_API_KEY`
    - **Anthropic**: set `ANTHROPIC_API_KEY`
    - **Google**: set `GOOGLE_API_KEY`
-   - **Ollama** (local models): no API key required. Install [Ollama](https://ollama.ai), start the Ollama server, and pull a model:
+   - **Ollama** (local models): no API key required. [Ollama](https://ollama.ai) must be installed, the Ollama server started, and a model pulled:
      ```bash
      ollama pull llama3
      ```
-     Ollama examples require a locally running Ollama server (default `http://localhost:11434`). If Ollama is running on a different host or port, set `OLLAMA_BASE_URL`.
+     Ollama examples require a locally running Ollama server (default `http://localhost:11434`). A different host or port can be configured by setting `OLLAMA_BASE_URL`.
 
 4. Run an example:
    ```bash
@@ -57,8 +57,8 @@ Each example is a self-contained file in the [examples directory](examples). The
 - **Retrieval-Augmented Generation (RAG)**: Vector stores, embeddings, and document QA.
 - **Agents**: ReAct agents, tool use, and conversational agents.
 - **LangGraph**: Workflows, state, conditional edges, persistence, subgraphs, and parallel execution.
-- **Async**: Concurrent LLM calls, async chains, async RAG, async agents, and async Ollama examples.
-- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, tools, RAG, HyDE, and reranking. Ollama files use the `*_ollama_*.py` naming convention. Async Ollama examples are also available, combining the `*_async_*.py` and `*_ollama_*.py` naming conventions. These examples require a locally running Ollama server.
+- **Async**: Concurrent LLM calls, async chains, async RAG, async agents, and async Ollama examples, including structured output and fallback.
+- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, tools, RAG, HyDE, reranking, structured output, and fallback. Ollama files use the `*_ollama_*.py` naming convention. Async Ollama examples are also available, combining the `*_async_*.py` and `*_ollama_*.py` naming conventions. These examples require a locally running Ollama server.
 
 ## Async Examples
 
@@ -68,15 +68,15 @@ Async examples demonstrate how to use LangChain's asynchronous API to build conc
 - **Async chains**: Using async-compatible chains and runnables to compose workflows without blocking the event loop.
 - **Async RAG**: Performing retrieval and generation steps asynchronously to reduce latency in document QA pipelines.
 - **Async agents**: Running agent loops and tool calls asynchronously, enabling more efficient handling of multi-step tasks.
-- **Async Ollama**: Running Ollama models asynchronously for chat, embeddings, tools, RAG, HyDE, and reranking. These files follow the `*_async_ollama_*.py` naming convention and require a local Ollama server.
+- **Async Ollama**: Running Ollama models asynchronously for chat, embeddings, tools, RAG, HyDE, reranking, structured output, and fallback. These files follow the `*_async_ollama_*.py` naming convention and require a local Ollama server.
 
-To run an async example, use a command like:
+An async example can be run with a command like:
 
 ```bash
 python examples/01_async_basic.py
 ```
 
-Replace the filename with the actual async example you want to run. Async Ollama examples can be run in the same way, for example:
+The filename should be replaced with the actual async example to run. Async Ollama examples can be run in the same way, for example:
 
 ```bash
 python examples/01_async_ollama_chat.py
@@ -84,31 +84,29 @@ python examples/01_async_ollama_chat.py
 
 ## Testing
 
-The repository includes a pytest test suite. To run the tests:
+The repository includes a pytest test suite. Individual tests can be run with pytest. The full test suite can be run with:
 
 ```bash
 pytest
 ```
 
-### Running a single test
-
-To run a single test file, pass the file path to pytest:
+A single test file can be run by passing the file path to pytest:
 
 ```bash
 pytest tests/test_01_basic_chains.py
 ```
 
-To run a single test case within a file, use `::` to separate the test name:
+A single test case within a file can be run by using `::` to separate the test name:
 
 ```bash
 pytest tests/test_01_basic_chains.py::test_something
 ```
 
-Replace `test_something` with the actual test name.
+The placeholder `test_something` should be replaced with the actual test name.
 
 ## Contributing
 
-Contributions are welcome. To add an example or improve an existing one, open an issue or submit a pull request.
+Contributions are welcome. Issues and pull requests can be submitted for new examples or improvements to existing examples.
 
 ## License
 
