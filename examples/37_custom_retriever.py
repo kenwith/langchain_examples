@@ -7,6 +7,31 @@ The custom retriever is implemented as a subclass of `BaseRetriever` and
 delegates the actual similarity search to an `InMemoryVectorStore`. This
 keeps the retriever simple while still allowing custom behaviour to be added
 later. Both synchronous and asynchronous retrieval methods are provided.
+
+Usage:
+    The `search_documents` helper wraps a retriever and formats the retrieved
+    documents into a numbered list. The retriever can be created with
+    `create_custom_retriever`.
+
+    Example:
+        retriever = create_custom_retriever()
+        formatted = search_documents(retriever, "What is a retriever?")
+        print(formatted)
+
+    The retriever can also be used directly with `invoke` or `ainvoke`, and
+    the resulting documents can be passed to a chat model to answer a query
+    based on the retrieved context.
+
+    Example:
+        retriever = create_custom_retriever()
+        docs = retriever.invoke("What is a retriever?")
+        context = "\\n\\n".join(doc.page_content for doc in docs)
+        response = chat_model.invoke(
+            f"Answer the question based on the context.\\n\\n"
+            f"Context:\\n{context}\\n\\n"
+            f"Question: What is a retriever?"
+        )
+        print(response.content)
 """
 
 from typing import List
@@ -174,6 +199,22 @@ def create_custom_retriever() -> BaseRetriever:
         documents, embedding=SimpleEmbeddings()
     )
     return InMemoryCustomRetriever(vector_store=vector_store)
+
+
+def search_documents(retriever: BaseRetriever, query: str) -> str:
+    """Retrieve documents for a query and format them as a numbered list.
+
+    Args:
+        retriever: The retriever to use for document retrieval.
+        query: The query string to search for.
+
+    Returns:
+        A formatted string with each retrieved document on a separate line,
+        prefixed by its position.
+    """
+    docs = retriever.invoke(query)
+    lines = [f"{i + 1}. {doc.page_content}" for i, doc in enumerate(docs)]
+    return "\n".join(lines)
 
 
 def main() -> None:
