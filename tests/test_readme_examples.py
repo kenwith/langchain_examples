@@ -58,6 +58,21 @@ def get_readme_references():
     return normalized
 
 
+def get_readme_table_paths():
+    """Return all local paths mentioned in markdown table rows in the README."""
+    text = README.read_text(encoding="utf-8")
+    table_lines = [line for line in text.splitlines() if line.lstrip().startswith("|")]
+    table_text = "\n".join(table_lines)
+    paths = set()
+    for token in re.findall(r"[\w./\-]+", table_text):
+        token = token.replace("\\", "/")
+        if token.startswith("./"):
+            token = token[2:]
+        if "/" in token and not token.startswith(("http://", "https://")):
+            paths.add(token.strip("/"))
+    return paths
+
+
 def test_readme_lists_existing_examples():
     """Every .py file referenced in the README must exist in the repository."""
     example_files = get_example_files()
@@ -78,12 +93,22 @@ def test_all_examples_are_listed_in_readme():
     readme_references = get_readme_references()
     readme_basenames = {Path(ref).name for ref in readme_references}
     readme_paths = {ref for ref in readme_references if "/" in ref}
+    table_dirs = {p for p in get_readme_table_paths() if not p.endswith(".py")}
 
     missing = []
     for path in get_example_files():
         posix_path = path.as_posix()
         if posix_path in readme_paths or path.name in readme_basenames:
             continue
+        if any(posix_path.startswith(d.rstrip("/") + "/") for d in table_dirs):
+            continue
         missing.append(posix_path)
 
     assert not missing, f"Example files missing from README: {missing}"
+
+
+def test_readme_examples_table_contains_expected_entries():
+    """The README examples table must list examples/73 and examples/74."""
+    table_paths = get_readme_table_paths()
+    for example in ("examples/73", "examples/74"):
+        assert example in table_paths, f"README examples table missing {example}"
