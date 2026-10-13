@@ -13,9 +13,9 @@ Set the appropriate environment variable for your chosen provider (e.g.,
 This example also showcases the ``build_filtered_retriever`` function, which
 centralizes metadata filtering by constructing a retriever with the appropriate
 search kwargs. Additionally, the ``build_metadata_filter`` helper constructs
-filter expressions from explicit criteria, and the ``build_filter_from_query``
-helper derives metadata filters from simple query keywords, making it easy to
-filter directly from natural language input.
+filter expressions from explicit criteria or a simple user input string, and
+the ``build_filter_from_query`` helper derives metadata filters from simple
+query keywords, making it easy to filter directly from natural language input.
 """
 
 # ------------------------------------------------------------------
@@ -69,20 +69,32 @@ def build_vectorstore(documents):
     return InMemoryVectorStore.from_documents(documents, embedding=embeddings)
 
 
-def build_metadata_filter(category=None, year=None):
-    """Build a metadata filter expression from optional criteria.
+def build_metadata_filter(user_input=None, category=None, year=None):
+    """Build a metadata filter expression from user input or explicit criteria.
+
+    The ``user_input`` parameter accepts a simple string with key-value pairs
+    in the form ``key=value`` separated by spaces, e.g.,
+    ``"category=technology year=2023"``. Supported keys are ``category`` and
+    ``year``. Explicit ``category`` and ``year`` arguments override any values
+    parsed from ``user_input``.
 
     The returned filter is a dictionary suitable for use as the ``filter``
     argument in vector store search methods (e.g., ``similarity_search`` or
-    ``as_retriever``). Supported metadata fields are:
-
-    - ``category``: a string matching the document metadata ``category``.
-    - ``year``: an integer matching the document metadata ``year``.
-
-    If neither criterion is provided, an empty dictionary is returned, which
-    applies no filtering.
+    ``as_retriever``). If no criteria are provided, an empty dictionary is
+    returned, which applies no filtering.
     """
     filter_dict = {}
+    if user_input:
+        for token in user_input.split():
+            if "=" in token:
+                key, value = token.split("=", 1)
+                if key in ("category", "year"):
+                    if key == "year":
+                        try:
+                            value = int(value)
+                        except ValueError:
+                            continue
+                    filter_dict[key] = value
     if category is not None:
         filter_dict["category"] = category
     if year is not None:
