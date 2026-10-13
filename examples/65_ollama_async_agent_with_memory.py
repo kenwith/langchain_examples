@@ -4,6 +4,10 @@ Example 65: Async Agent with Memory using Ollama and LangGraph
 This example demonstrates how to build an asynchronous agent with conversation memory
 using Ollama as the chat model provider and LangGraph for orchestration.
 The agent uses a simple arithmetic tool and maintains conversation history across turns.
+
+The example exposes an `async def run_agent` helper that invokes the agent for a single
+turn with a given message and thread ID. This helper can be reused in tests or other
+applications to exercise the agent's memory and tool-calling behavior.
 """
 
 import asyncio
@@ -70,24 +74,26 @@ def create_agent():
     return graph.compile(checkpointer=checkpointer)
 
 
+async def run_agent(agent, message: str, thread_id: str = "1") -> str:
+    """Run a single turn against the agent and return the response text."""
+    result = await agent.ainvoke(
+        {"messages": [HumanMessage(content=message)]},
+        config={"configurable": {"thread_id": thread_id}},
+    )
+    return result["messages"][-1].content
+
+
 async def run_conversation():
     """Run a two-turn conversation demonstrating memory."""
     agent = create_agent()
-    config = {"configurable": {"thread_id": "1"}}
 
     # First turn
-    result = await agent.ainvoke(
-        {"messages": [HumanMessage(content="What is 2 + 3?")]},
-        config=config,
-    )
-    print(result["messages"][-1].content)
+    first_response = await run_agent(agent, "What is 2 + 3?")
+    print(first_response)
 
     # Second turn, referencing previous context
-    result = await agent.ainvoke(
-        {"messages": [HumanMessage(content="Now add 4 to that result.")]},
-        config=config,
-    )
-    print(result["messages"][-1].content)
+    second_response = await run_agent(agent, "Now add 4 to that result.")
+    print(second_response)
 
 
 if __name__ == "__main__":
