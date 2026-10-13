@@ -30,6 +30,24 @@ async def run_batch(prompts: List[str], llm_chain: LLMChain) -> List[Dict[str, U
     return list(results)
 
 
+def format_batch_results(results: List[Dict[str, Union[str, bool]]]) -> str:
+    """Format batch inference results into a consistent string.
+
+    Args:
+        results: A list of result dictionaries from run_batch.
+
+    Returns:
+        A formatted string with one numbered entry per result.
+    """
+    lines = []
+    for idx, res in enumerate(results, start=1):
+        if res.get("success"):
+            lines.append(f"{idx}. Prompt: {res['prompt']}\n   Result: {res['result']}")
+        else:
+            lines.append(f"{idx}. Prompt: {res['prompt']}\n   Error: {res['error']}")
+    return "\n".join(lines)
+
+
 async def main() -> None:
     """Run a sample batch inference."""
     llm = OpenAI(temperature=0)
@@ -41,8 +59,7 @@ async def main() -> None:
         "Explain quantum computing in one sentence.",
     ]
     results = await run_batch(prompts, llm_chain)
-    for res in results:
-        print(res)
+    print(format_batch_results(results))
 
 
 if __name__ == "__main__":
