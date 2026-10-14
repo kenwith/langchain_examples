@@ -56,6 +56,18 @@ def load_documents_from_directory(directory_path):
     return documents
 
 
+def load_sample_documents():
+    """Create sample documents from built-in texts.
+
+    Returns:
+        A list of Document objects containing the sample texts.
+    """
+    return [
+        Document(page_content=text, metadata={"source": "sample"})
+        for text in SAMPLE_TEXTS
+    ]
+
+
 def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
     """Load and split documents from a directory or built-in sample texts.
 
@@ -79,15 +91,9 @@ def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
                 "Falling back to sample texts.",
                 file=sys.stderr,
             )
-            documents = [
-                Document(page_content=text, metadata={"source": "sample"})
-                for text in SAMPLE_TEXTS
-            ]
+            documents = load_sample_documents()
     else:
-        documents = [
-            Document(page_content=text, metadata={"source": "sample"})
-            for text in SAMPLE_TEXTS
-        ]
+        documents = load_sample_documents()
 
     if not documents:
         print("No documents found to load.", file=sys.stderr)
@@ -159,6 +165,14 @@ def main():
         print(
             f"Error: Could not load vector store from '{PERSIST_DIR}'.\n"
             f"Details: {e}\n"
+            f"Run `python {os.path.basename(__file__)} --create` to create it.",
+            file=sys.stderr,
+        )
+        return
+
+    if not vectorstore.get()["ids"]:
+        print(
+            f"Error: The vector store at '{PERSIST_DIR}' is empty.\n"
             f"Run `python {os.path.basename(__file__)} --create` to create it.",
             file=sys.stderr,
         )
