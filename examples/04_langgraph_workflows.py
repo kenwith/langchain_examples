@@ -9,7 +9,7 @@ Graph structure:
   - process: Takes `input_data`, transforms it (uppercase), and stores it in `processed_data`.
   - finalize: Takes `processed_data`, validates it, and stores `validation_result` and `final_output`.
 - Edges:
-  - process -> finalize: Conditional edge based on `should_continue`.
+  - process -> finalize: Conditional edge based on `route_after_process`.
   - process -> END: Conditional edge when there is no processed data.
   - finalize -> END: Terminates the graph after finalization.
 
@@ -19,8 +19,9 @@ State flow:
   - processed_data: Transformed version of input_data (e.g., uppercased).
   - validation_result: Boolean indicating whether processed_data is valid.
   - final_output: Final string produced after validation and finalization.
-- Each node reads only the keys it needs and returns a partial state update.
-- A conditional edge function `should_continue` routes the graph to `finalize` or `END`
+- Each node reads only the keys it needs and returns a state update.
+- Helper functions `with_processed_data` and `with_validation_result` encapsulate state updates.
+- The routing helper `route_after_process` routes the graph to `finalize` or `END`
   based on whether processed data exists.
 """
 
@@ -48,6 +49,30 @@ class WorkflowState(TypedDict, total=False):
 State = WorkflowState
 
 
+# --- Helper functions for state updates ---
+
+def with_processed_data(state: State, processed: str) -> State:
+    """Return a new state with the processed_data field set to the given value."""
+    return {**state, "processed_data": processed}
+
+
+def with_validation_result(state: State, valid: bool, final: str) -> State:
+    """Return a new state with validation_result and final_output set."""
+    return {**state, "validation_result": valid, "final_output": final}
+
+
+# --- Helper functions for routing ---
+
+def has_processed_data(state: State) -> bool:
+    """Return True if processed_data is present and non-empty."""
+    return bool(state.get("processed_data"))
+
+
+def route_after_process(state: State) -> str:
+    """Route to finalize if processed data exists, otherwise terminate."""
+    return "finalize" if has_processed_data(state) else END
+
+
 # Node functions with type hints and concise docstrings
 def process_data(state: State) -> State:
     """Process input data (e.g., uppercase)."""
@@ -57,8 +82,8 @@ def process_data(state: State) -> State:
     # Transform the input (e.g., uppercase) to create the processed data.
     processed = input_data.upper()
 
-    # Write the processed data back to the state as a partial update.
-    return {"processed_data": processed}
+    # Write the processed data back to the state using the helper function.
+    return with_processed_data(state, processed)
 
 
 def finalize(state: State) -> State:
@@ -75,17 +100,8 @@ def finalize(state: State) -> State:
     else:
         final = "Validation failed."
 
-    # Write both the validation result and the final output to the state.
-    return {"validation_result": valid, "final_output": final}
-
-
-def should_continue(state: State) -> str:
-    """Determine the next node based on whether processed data exists."""
-    # If there is no processed data, skip finalization and terminate.
-    if not state.get("processed_data"):
-        return END
-    # Otherwise, proceed to the finalize node.
-    return "finalize"
+    # Write both the validation result and the final output using the helper function.
+    return with_validation_result(state, valid, final)
 
 
 # Build the graph
@@ -94,7 +110,7 @@ def build_graph() -> Any:
     workflow = StateGraph(WorkflowState)
 
     # --- Add nodes to the graph ---
-    # Each node is a function that takes the current state and returns a partial state update.
+    # Each node is a function that takes the current state and returns a state update.
     # The node name is used as a reference in edges.
 
     # Node: process
@@ -112,11 +128,11 @@ def build_graph() -> Any:
     # --- Graph structure ---
     # The workflow starts at the "process" node.
     #
-    #   process -> (should_continue) -> finalize -> END
+    #   process -> (route_after_process) -> finalize -> END
     #          \-> END
     #
     # 1. process: transforms raw input into processed_data.
-    # 2. should_continue: routes to finalize if processed_data exists, otherwise END.
+    # 2. route_after_process: routes to finalize if processed_data exists, otherwise END.
     # 3. finalize: checks processed_data and produces final_output.
     # 4. END: terminal node that stops execution.
 
@@ -124,11 +140,11 @@ def build_graph() -> Any:
     workflow.set_entry_point("process")
 
     # Conditional edge: process -> finalize or END
-    # After processing, the `should_continue` function decides whether to proceed
+    # After processing, the `route_after_process` function decides whether to proceed
     # to finalization or terminate early when no processed data is available.
     workflow.add_conditional_edges(
         "process",
-        should_continue,
+        route_after_process,
         {
             "finalize": "finalize",
             END: END,
