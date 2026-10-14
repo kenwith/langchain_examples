@@ -1,5 +1,15 @@
 """
-LangChain & LangGraph Examples Package
+LangChain & LangGraph Examples Package.
+
+This package contains runnable examples that demonstrate common LangChain
+and LangGraph patterns, from basic LLM calls to multi-step agent workflows.
+Each example module is self-contained and focuses on a single concept or
+integration, making it easy to run and adapt.
+
+Naming conventions:
+- Module names are descriptive and use lowercase words separated by underscores
+  (e.g., ``example_basic_llm``).
+- Shared utilities live in ``helpers`` and the CLI entry point in ``cli``.
 """
 
 from importlib.metadata import version, PackageNotFoundError
