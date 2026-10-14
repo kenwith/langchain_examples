@@ -11,6 +11,11 @@ returns the parsed response. This keeps the core chain logic separate from
 model configuration, so the same function can be reused with different
 providers and prompts.
 
+A format_response() helper is also provided. It wraps a raw model response
+in a simple header and trailing newline, making terminal output easier to
+read when running the example directly. The helper is intentionally small
+and can be adapted to suit different output requirements.
+
 Provider configuration:
 - OpenAI (default): set the OPENAI_API_KEY environment variable, or create
   a .env file in the project root with:
@@ -25,8 +30,9 @@ Provider configuration:
   with Ollama. Replace ChatOpenAI with ChatOllama(model="llama3.2").
 
 Expected output:
-A generated response from the model, e.g.:
+A formatted response from the model, e.g.:
 
+--- Response ---
 Why did the chicken cross the road?
 To get to the other side.
 """
@@ -54,12 +60,27 @@ def run_chain(llm, prompt_template, variables):
     return chain.invoke(variables)
 
 
+def format_response(response):
+    """Format a chain response for display.
+
+    Adds a simple header and trailing newline to make the output easier to
+    read when running the example from a terminal.
+
+    Args:
+        response: The raw string response from the chain.
+
+    Returns:
+        A formatted string with the response.
+    """
+    return f"--- Response ---\n{response}\n"
+
+
 def run_example():
     """Run the basic chain example."""
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     llm = ChatOpenAI(model=model, temperature=0.7)
     response = run_chain(llm, "Tell me a {adjective} joke.", {"adjective": "funny"})
-    print(response)
+    print(format_response(response))
 
 
 if __name__ == "__main__":
