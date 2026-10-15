@@ -1,3 +1,22 @@
+"""Retrieval-augmented generation (RAG) example using LangChain.
+
+This script builds a Chroma vector store from text files and answers questions
+using a chat model with retrieval context. It can be run in two modes:
+
+1. Create/update the vector store:
+   python examples/02_rag.py --create [directory_path]
+
+   If directory_path is omitted, the script uses built-in sample texts.
+
+2. Query an existing vector store:
+   python examples/02_rag.py
+
+Setup:
+- Install the required packages:
+  pip install langchain langchain-community langchain-openai chromadb
+- The OPENAI_API_KEY environment variable must be set to a valid OpenAI API key.
+- Optional: Place text files in a directory to use as the knowledge base.
+"""
 import os
 import sys
 
@@ -68,11 +87,38 @@ def load_sample_documents():
     ]
 
 
+def get_source_documents(directory_path=None):
+    """Load raw documents from a directory or fall back to sample texts.
+
+    This helper centralizes the source selection logic so callers can obtain
+    unfragmented documents without applying text splitting. If a directory is
+    provided but cannot be loaded or contains no text files, the built-in
+    sample texts are used as a fallback.
+
+    Args:
+        directory_path: Optional path to a directory containing .txt files.
+
+    Returns:
+        A list of Document objects, or an empty list if no source is available.
+    """
+    if directory_path:
+        documents = load_documents_from_directory(directory_path)
+        if not documents:
+            print(
+                "Falling back to sample texts.",
+                file=sys.stderr,
+            )
+            return load_sample_documents()
+        return documents
+
+    return load_sample_documents()
+
+
 def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
     """Load and split documents from a directory or built-in sample texts.
 
-    If a directory path is provided, all text files within that directory are
-    loaded. Otherwise, built-in sample texts are used as a fallback.
+    Uses `get_source_documents` to select the raw document source, then splits
+    the documents into chunks for indexing or retrieval.
 
     Args:
         directory_path: Optional path to a directory containing text files.
@@ -82,18 +128,7 @@ def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
     Returns:
         A list of document chunks, or an empty list if no documents are found.
     """
-    documents = []
-
-    if directory_path:
-        documents = load_documents_from_directory(directory_path)
-        if not documents:
-            print(
-                "Falling back to sample texts.",
-                file=sys.stderr,
-            )
-            documents = load_sample_documents()
-    else:
-        documents = load_sample_documents()
+    documents = get_source_documents(directory_path)
 
     if not documents:
         print("No documents found to load.", file=sys.stderr)
