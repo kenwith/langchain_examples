@@ -45,6 +45,7 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.retrievers import BaseRetriever
 from langchain_core.vectorstores import InMemoryVectorStore
+from pydantic import field_validator
 
 import hashlib
 import os
@@ -150,13 +151,37 @@ class InMemoryCustomRetriever(BaseRetriever):
     the framework for logging, tracing, and other callbacks. They are not used
     in this implementation.
 
+    The constructor and assignment of attributes are handled by `BaseRetriever`
+    through Pydantic. Input validation is performed to ensure that `k` is a
+    positive integer and that queries passed to the retrieval methods are
+    non-empty strings.
+
     Attributes:
         vector_store: The in-memory vector store used for similarity search.
         k: The number of documents to retrieve for each query. Defaults to 3.
+            Must be a positive integer.
     """
 
     vector_store: InMemoryVectorStore
     k: int = 3
+
+    @field_validator("k")
+    @classmethod
+    def validate_k(cls, value: int) -> int:
+        """Validate that `k` is a positive integer.
+
+        Args:
+            value: The number of documents to retrieve.
+
+        Returns:
+            The validated value.
+
+        Raises:
+            ValueError: If `value` is less than or equal to zero.
+        """
+        if value <= 0:
+            raise ValueError("k must be a positive integer")
+        return value
 
     def _get_relevant_documents(
         self, query: str, *, run_manager: CallbackManagerForRetrieverRun
@@ -168,7 +193,7 @@ class InMemoryCustomRetriever(BaseRetriever):
         it simply delegates to the underlying vector store's similarity search.
 
         Args:
-            query: The query string to search for.
+            query: The query string to search for. Must be a non-empty string.
             run_manager: Callback manager for the retriever run. Provided by
                 the framework for logging, tracing, and other callbacks. This
                 implementation does not use it, but it is required by the
@@ -176,7 +201,12 @@ class InMemoryCustomRetriever(BaseRetriever):
 
         Returns:
             A list of `Document` objects sorted by relevance to the query.
+
+        Raises:
+            ValueError: If `query` is None, empty, or whitespace-only.
         """
+        if not query or not query.strip():
+            raise ValueError("query must be a non-empty string")
         return self.vector_store.similarity_search(query, k=self.k)
 
     async def _aget_relevant_documents(
@@ -189,7 +219,7 @@ class InMemoryCustomRetriever(BaseRetriever):
         underlying vector store's asynchronous similarity search.
 
         Args:
-            query: The query string to search for.
+            query: The query string to search for. Must be a non-empty string.
             run_manager: Async callback manager for the retriever run. Provided
                 by the framework for logging, tracing, and other callbacks. This
                 implementation does not use it, but it is required by the
@@ -197,7 +227,12 @@ class InMemoryCustomRetriever(BaseRetriever):
 
         Returns:
             A list of `Document` objects sorted by relevance to the query.
+
+        Raises:
+            ValueError: If `query` is None, empty, or whitespace-only.
         """
+        if not query or not query.strip():
+            raise ValueError("query must be a non-empty string")
         return await self.vector_store.asimilarity_search(query, k=self.k)
 
 
