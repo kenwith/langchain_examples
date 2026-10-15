@@ -129,6 +129,8 @@ Each example is a self-contained file in the [examples directory](examples). The
 | 72_async_ollama_langgraph_react.py | Async Ollama LangGraph | Async LangGraph ReAct agent workflow with Ollama. |
 | 73_async_ollama_langgraph_plan_and_execute.py | Async Ollama LangGraph | Async LangGraph plan-and-execute workflow with Ollama. |
 | 74_async_ollama_langgraph_reflection.py | Async Ollama LangGraph | Async LangGraph reflection workflow with Ollama. |
+| 75_async_ollama_langgraph_map_reduce.py | Async Ollama LangGraph | Async LangGraph map-reduce workflow with Ollama. |
+| 76_async_ollama_langgraph_send.py | Async Ollama LangGraph | Async LangGraph workflow using the Send API for dynamic fan-out with Ollama. |
 
 The examples fall into the following categories:
 
@@ -149,7 +151,7 @@ Async examples demonstrate how to use LangChain's asynchronous API to build conc
 - **Async RAG**: Performing retrieval and generation steps asynchronously to reduce latency in document QA pipelines.
 - **Async agents**: Running agent loops and tool calls asynchronously, enabling more efficient handling of multi-step tasks.
 - **Async Ollama**: Running Ollama models asynchronously for chat, embeddings, tools, RAG, HyDE, reranking, structured output, and fallback. These files follow the `*_async_ollama_*.py` naming convention and require a local Ollama server.
-- **Async Ollama LangGraph**: Building stateful LangGraph workflows asynchronously with Ollama. These files follow the `*_async_ollama_langgraph_*.py` naming convention and include persistence, subgraphs, parallel execution, conditional edges, tools, RAG, retry, fallback, structured output, streaming, memory, routing, guardrails, caching, and other advanced patterns.
+- **Async Ollama LangGraph**: Building stateful LangGraph workflows asynchronously with Ollama. These files follow the `*_async_ollama_langgraph_*.py` naming convention and include persistence, subgraphs, parallel execution, conditional edges, tools, RAG, retry, fallback, structured output, streaming, memory, routing, guardrails, caching, map-reduce, dynamic fan-out, and other advanced patterns.
 
 An async example can be run with a command like:
 
@@ -168,5 +170,3 @@ An async Ollama LangGraph example can be run similarly:
 ```bash
 python examples/45_async_ollama_langgraph.py
 ```
-
-##
