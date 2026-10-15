@@ -15,6 +15,7 @@ import os
 import re
 from langchain.chat_models import init_chat_model
 from langchain_core.messages import HumanMessage, SystemMessage
+from langchain_core.prompts import ChatPromptTemplate
 
 # ---------------------------------------------------------------------------
 # Configuration (optional overrides via environment variables)
@@ -22,11 +23,66 @@ from langchain_core.messages import HumanMessage, SystemMessage
 MODEL_NAME = os.getenv("LANGCHAIN_MODEL", "gpt-4o")
 MODEL_PROVIDER = os.getenv("LANGCHAIN_MODEL_PROVIDER", "openai")
 
+DEFAULT_RUBRIC = (
+    "Evaluate the answer on a scale from 0 to 5, where 5 is the best.\n"
+    "Consider the following criteria:\n"
+    "- Correctness: Is the answer factually accurate?\n"
+    "- Completeness: Does the answer fully address the question?\n"
+    "- Clarity: Is the answer easy to understand and well-structured?\n"
+    "A score of 5 indicates the answer is correct, complete, and clear. "
+    "A score of 0 indicates the answer is entirely incorrect or irrelevant."
+)
+
+
+def build_evaluation_chain(
+    model_name: str = MODEL_NAME,
+    model_provider: str = MODEL_PROVIDER,
+):
+    """
+    Build a LangChain runnable that evaluates an answer against a rubric.
+
+    The chain expects a dictionary with keys:
+        - "question": the original question
+        - "answer": the generated answer
+        - "rubric": the scoring criteria
+
+    Args:
+        model_name: Name of the chat model to use.
+        model_provider: Provider of the chat model (e.g., "openai", "anthropic").
+
+    Returns:
+        A Runnable that accepts a dictionary and returns the judgment string.
+    """
+    model = init_chat_model(model_name, model_provider=model_provider)
+
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            SystemMessage(
+                content=(
+                    "You are an impartial judge. Evaluate the given answer strictly "
+                    "according to the provided rubric. Return your response in the "
+                    "following format:\n"
+                    "Score: <number>/5\nJustification: <brief explanation>\n"
+                    "The score must be a number from 0 to 5, where 5 is the best."
+                )
+            ),
+            HumanMessage(
+                content=(
+                    "Question: {question}\n\n"
+                    "Generated Answer: {answer}\n\n"
+                    "Rubric: {rubric}"
+                )
+            ),
+        ]
+    )
+
+    return prompt | model
+
 
 def judge_answer(
     question: str,
     generated_answer: str,
-    rubric: str,
+    rubric: str = DEFAULT_RUBRIC,
     model_name: str = MODEL_NAME,
     model_provider: str = MODEL_PROVIDER,
 ) -> str:
@@ -36,37 +92,21 @@ def judge_answer(
     Args:
         question: The original question.
         generated_answer: The answer to be judged.
-        rubric: A description of the scoring criteria.
+        rubric: A description of the scoring criteria. Defaults to DEFAULT_RUBRIC.
         model_name: Name of the chat model to use.
         model_provider: Provider of the chat model (e.g., "openai", "anthropic").
 
     Returns:
         A string containing the model's judgment (score and justification).
     """
-    # Instantiate the model
-    model = init_chat_model(model_name, model_provider=model_provider)
-
-    # System message sets the evaluation context and asks for a rubric-based score
-    system_message = SystemMessage(
-        content=(
-            "You are an impartial judge. Evaluate the given answer strictly according "
-            "to the provided rubric. Return your response in the following format:\n"
-            "Score: <number>/5\nJustification: <brief explanation>\n"
-            "The score must be a number from 0 to 5, where 5 is the best."
-        )
+    chain = build_evaluation_chain(model_name, model_provider)
+    response = chain.invoke(
+        {
+            "question": question,
+            "answer": generated_answer,
+            "rubric": rubric,
+        }
     )
-
-    # User message contains the question, answer, and rubric
-    user_message = HumanMessage(
-        content=(
-            f"Question: {question}\n\n"
-            f"Generated Answer: {generated_answer}\n\n"
-            f"Rubric: {rubric}"
-        )
-    )
-
-    # Generate the judgment
-    response = model.invoke([system_message, user_message])
     return response.content
 
 
@@ -101,16 +141,12 @@ def main():
     """Run a simple demo of the LLM-as-judge functionality."""
     question = "What is the capital of France?"
     generated_answer = "Paris is the capital of France."
-    rubric = (
-        "Score from 1 to 5 based on correctness, completeness, and clarity. "
-        "A score of 5 means the answer is correct, complete, and clear."
-    )
 
     print("=== LLM as Judge Demo ===\n")
     print(f"Question: {question}")
     print(f"Generated Answer: {generated_answer}\n")
 
-    judgment = judge_answer(question, generated_answer, rubric)
+    judgment = judge_answer(question, generated_answer)
     print("Judgment:")
     print(judgment)
 
