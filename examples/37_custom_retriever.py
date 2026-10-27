@@ -1,29 +1,31 @@
 """Example 37: Custom Retriever with InMemoryVectorStore.
 
-This example demonstrates how to build a custom retriever from an in-memory
-document list using `InMemoryVectorStore`, and how to use it with a chat model.
+This example demonstrates how to build custom retrievers from in-memory
+document lists. Two retrievers are provided:
 
-The custom retriever is implemented as a subclass of `BaseRetriever` and
-delegates the actual similarity search to an `InMemoryVectorStore`. This
-keeps the retriever simple while still allowing custom behaviour to be added
-later. Both synchronous and asynchronous retrieval methods are provided.
+1. `InMemoryCustomRetriever` – a retriever that delegates similarity search
+   to an `InMemoryVectorStore` with a deterministic embedding function.
+2. `SimpleInMemoryRetriever` – a lightweight retriever that scores documents
+   by simple word overlap with the query, without any vector store.
+
+Both retrievers are subclasses of `BaseRetriever` and provide synchronous and
+asynchronous retrieval methods. The `search_documents` helper formats the
+retrieved documents into a numbered list.
 
 Usage:
-    The `search_documents` helper wraps a retriever and formats the retrieved
-    documents into a numbered list. The retriever can be created with
-    `create_custom_retriever`.
+    The vector-store-based retriever can be created with
+    `create_custom_retriever` and used directly or with a chat model.
 
     Example:
         retriever = create_custom_retriever()
         formatted = search_documents(retriever, "What is a retriever?")
         print(formatted)
 
-    The retriever can also be used directly with `invoke` or `ainvoke`, and
-    the resulting documents can be passed to a chat model to answer a query
-    based on the retrieved context.
+    The simple keyword retriever can be created with `create_simple_retriever`
+    and used in the same way.
 
     Example:
-        retriever = create_custom_retriever()
+        retriever = create_simple_retriever()
         docs = retriever.invoke("What is a retriever?")
         context = "\\n\\n".join(doc.page_content for doc in docs)
         response = chat_model.invoke(
@@ -34,6 +36,7 @@ Usage:
         print(response.content)
 """
 
+from collections import Counter
 from typing import List
 
 from langchain.chat_models import init_chat_model
@@ -236,6 +239,118 @@ class InMemoryCustomRetriever(BaseRetriever):
         return await self.vector_store.asimilarity_search(query, k=self.k)
 
 
+class SimpleInMemoryRetriever(BaseRetriever):
+    """Simple in-memory retriever based on word overlap.
+
+    This retriever stores a list of documents directly in memory and scores
+    each document by the number of query words that appear in its text. The
+    top `k` documents with the highest scores are returned. It is provided as
+    an even simpler alternative to `InMemoryCustomRetriever` and does not
+    require embeddings or a vector store.
+
+    The scoring function counts unique query words found in the document text.
+    Documents with more matches are considered more relevant. Ties are broken
+    by the original order of the document list.
+
+    Attributes:
+        documents: The list of documents to search over.
+        k: The number of documents to retrieve for each query. Defaults to 3.
+            Must be a positive integer.
+    """
+
+    documents: List[Document]
+    k: int = 3
+
+    @field_validator("k")
+    @classmethod
+    def validate_k(cls, value: int) -> int:
+        """Validate that `k` is a positive integer.
+
+        Args:
+            value: The number of documents to retrieve.
+
+        Returns:
+            The validated value.
+
+        Raises:
+            ValueError: If `value` is less than or equal to zero.
+        """
+        if value <= 0:
+            raise ValueError("k must be a positive integer")
+        return value
+
+    def _score_document(self, query_words: set, doc: Document) -> int:
+        """Compute the overlap score between a query and a document.
+
+        Args:
+            query_words: A set of unique words from the query.
+            doc: The document to score.
+
+        Returns:
+            The number of query words that appear in the document text.
+        """
+        doc_words = set(doc.page_content.lower().split())
+        return len(query_words.intersection(doc_words))
+
+    def _get_relevant_documents(
+        self, query: str, *, run_manager: CallbackManagerForRetrieverRun
+    ) -> List[Document]:
+        """Retrieve documents relevant to the query.
+
+        This method is called by `BaseRetriever.invoke` and returns the top
+        `k` documents with the highest word-overlap scores.
+
+        Args:
+            query: The query string to search for. Must be a non-empty string.
+            run_manager: Callback manager for the retriever run. Provided by
+                the framework for logging, tracing, and other callbacks. This
+                implementation does not use it, but it is required by the
+                `BaseRetriever` interface.
+
+        Returns:
+            A list of `Document` objects sorted by relevance to the query.
+
+        Raises:
+            ValueError: If `query` is None, empty, or whitespace-only.
+        """
+        if not query or not query.strip():
+            raise ValueError("query must be a non-empty string")
+        query_words = set(query.lower().split())
+        scored = [
+            (self._score_document(query_words, doc), i, doc)
+            for i, doc in enumerate(self.documents)
+        ]
+        scored.sort(key=lambda x: (-x[0], x[1]))
+        return [doc for _, _, doc in scored[: self.k]]
+
+    async def _aget_relevant_documents(
+        self, query: str, *, run_manager: AsyncCallbackManagerForRetrieverRun
+    ) -> List[Document]:
+        """Asynchronously retrieve documents relevant to the query.
+
+        This method is called by `BaseRetriever.ainvoke` and returns the top
+        `k` documents with the highest word-overlap scores. Since the scoring
+        is purely in-memory and synchronous, this method simply calls the
+        synchronous implementation.
+
+        Args:
+            query: The query string to search for. Must be a non-empty string.
+            run_manager: Async callback manager for the retriever run. Provided
+                by the framework for logging, tracing, and other callbacks. This
+                implementation does not use it, but it is required by the
+                `BaseRetriever` interface.
+
+        Returns:
+            A list of `Document` objects sorted by relevance to the query.
+
+        Raises:
+            ValueError: If `query` is None, empty, or whitespace-only.
+        """
+        return self._get_relevant_documents(
+            query, run_manager=run_manager
+        )
+
+
 def create_custom_retriever() -> InMemoryCustomRetriever:
     """Create a custom retriever from an in-memory document list.
 
@@ -248,6 +363,16 @@ def create_custom_retriever() -> InMemoryCustomRetriever:
         documents, embedding=SimpleEmbeddings()
     )
     return InMemoryCustomRetriever(vector_store=vector_store)
+
+
+def create_simple_retriever() -> SimpleInMemoryRetriever:
+    """Create a simple in-memory retriever from the sample documents.
+
+    Returns:
+        A `SimpleInMemoryRetriever` instance configured with the sample
+        documents and default `k` value.
+    """
+    return SimpleInMemoryRetriever(documents=create_documents())
 
 
 def search_documents(retriever: BaseRetriever, query: str) -> str:
@@ -269,9 +394,9 @@ def search_documents(retriever: BaseRetriever, query: str) -> str:
 def main() -> None:
     """Run a simple retrieval-augmented generation demo.
 
-    The demo retrieves documents for a sample query, builds a context block
-    from the retrieved documents, and asks a chat model to answer the query
-    based on that context.
+    The demo retrieves documents for a sample query using the vector-store
+    based retriever, builds a context block from the retrieved documents, and
+    asks a chat model to answer the query based on that context.
     """
     retriever = create_custom_retriever()
     query = "What is a retriever?"
