@@ -26,9 +26,10 @@ model based on environment variables. The same code works with OpenAI,
 Anthropic, or any other provider supported by LangChain.
 
 The module also provides a `compress_documents` helper that wraps the
-compression retriever and returns a single concise summary string. This is
-useful when the compressed documents only need to be passed as a compact
-context block to a downstream model.
+compression retriever and applies a summarization prompt to the compressed
+documents, returning a single concise summary string. This is useful when the
+compressed documents only need to be passed as a compact context block to a
+downstream model.
 
 How to run:
 1. Install LangChain dependencies (langchain, langchain-core, and the package
@@ -48,7 +49,10 @@ How to run:
 
 To adapt this example:
 - Pass a custom `compression_llm` to `build_compression_retriever()` or
-  `compress_documents()` to use a different model for the extraction step.
+  `compress_documents()` to use a different model for the extraction and
+  summarization steps.
+- Pass a custom `summarization_prompt` to `compress_documents()` to control how
+  the compressed documents are summarized.
 - Pass a custom `candidate_retriever` to `build_compression_retriever()` or
   `compress_documents()` to use real retrieval logic, such as a vector store
   retriever, without modifying the helper.
@@ -57,12 +61,26 @@ To adapt this example:
 import os
 from typing import List, Optional
 
+from langchain.chains import LLMChain
 from langchain.chat_models import init_chat_model
 from langchain.retrievers import ContextualCompressionRetriever
 from langchain.retrievers.document_compressors import LLMChainExtractor
 from langchain_core.documents import Document
 from langchain_core.language_models import BaseChatModel
+from langchain_core.prompts import PromptTemplate
 from langchain_core.retrievers import BaseRetriever
+
+
+DEFAULT_SUMMARIZATION_PROMPT = PromptTemplate(
+    input_variables=["query", "documents"],
+    template=(
+        "Given the following documents, write a concise summary that answers "
+        "the query. Focus only on the information relevant to the query.\n\n"
+        "Query: {query}\n\n"
+        "Documents:\n{documents}\n\n"
+        "Concise summary:"
+    ),
+)
 
 
 class DummyRetriever(BaseRetriever):
@@ -143,30 +161,49 @@ def compress_documents(
     query: str,
     compression_llm: Optional[BaseChatModel] = None,
     candidate_retriever: Optional[BaseRetriever] = None,
+    summarization_prompt: Optional[PromptTemplate] = None,
 ) -> str:
     """Compress candidate documents for a query and return a concise summary.
 
     Builds a ContextualCompressionRetriever using the provided (or default)
     compression LLM and candidate retriever, invokes it with the query, and
-    joins the compressed document contents into a single string.
+    passes the compressed documents through a summarization prompt. The
+    resulting summary is returned as a single string.
 
     Args:
         query: The user query used to retrieve and compress documents.
-        compression_llm: A chat model instance to use for compression. If None,
-            a model is created from the MODEL_NAME and MODEL_PROVIDER
-            environment variables.
+        compression_llm: A chat model instance to use for compression and
+            summarization. If None, a model is created from the MODEL_NAME and
+            MODEL_PROVIDER environment variables.
         candidate_retriever: A retriever that returns candidate documents. If
             None, a DummyRetriever with sample documents is used.
+        summarization_prompt: A PromptTemplate that accepts ``query`` and
+            ``documents`` variables. If None, a default summarization prompt is
+            used.
 
     Returns:
-        A concise summary string containing the compressed document contents.
+        A concise summary string generated from the compressed documents.
     """
+    if compression_llm is None:
+        compression_llm = init_chat_model(
+            model=os.getenv("MODEL_NAME", "gpt-4o"),
+            model_provider=os.getenv("MODEL_PROVIDER", "openai"),
+            temperature=0,
+        )
+
     retriever = build_compression_retriever(
         compression_llm=compression_llm,
         candidate_retriever=candidate_retriever,
     )
     compressed_docs = retriever.invoke(query)
-    return "\n\n".join(doc.page_content for doc in compressed_docs)
+    documents_text = "\n\n".join(doc.page_content for doc in compressed_docs)
+
+    if summarization_prompt is None:
+        summarization_prompt = DEFAULT_SUMMARIZATION_PROMPT
+
+    chain = LLMChain(llm=compression_llm, prompt=summarization_prompt)
+    summary = chain.run(query=query, documents=documents_text)
+    return summary.strip() if summary else ""
 
 
 def main():
