@@ -11,6 +11,12 @@ returns the parsed response. This keeps the core chain logic separate from
 model configuration, so the same function can be reused with different
 providers and prompts.
 
+Within this module, the chain is invoked as follows:
+
+    llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.7)
+    response = run_chain(llm, "Tell me a {adjective} joke.", {"adjective": "funny"})
+    print(format_response(response))
+
 A format_response() helper is also provided. It wraps a raw model response
 in a simple header and trailing newline, making terminal output easier to
 read when running the example directly. The helper is intentionally small
