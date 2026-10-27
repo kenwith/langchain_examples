@@ -2,10 +2,15 @@
 Example 38: HyDE (Hypothetical Document Embeddings)
 
 This example demonstrates how to use hypothetical document embeddings
-for retrieval-augmented generation (RAG). A chat model generates a
-hypothetical document from the query, and that document is embedded
-and used to retrieve relevant documents from a corpus. The retrieved
-documents are then passed to the chat model to generate a grounded answer.
+for retrieval-augmented generation (RAG). HyDE (Hypothetical Document
+Embeddings) works by generating a hypothetical document—a plausible
+passage that would answer the query—using a language model. This
+hypothetical document is then embedded, and that embedding is used to
+retrieve relevant documents from a corpus. Because the hypothetical
+document captures the query's intent more fully than the raw query
+text, the retrieval step often yields more relevant results. The
+retrieved documents are then passed to the chat model to generate a
+grounded answer.
 
 Uses init_chat_model and init_embeddings for provider-agnostic model
 initialization. Requires API keys for the chosen providers.
@@ -17,8 +22,14 @@ from langchain.chat_models import init_chat_model
 from langchain.embeddings import init_embeddings
 
 
-def generate_hypothetical_document(query: str, chat_model) -> str:
-    """Generate a hypothetical document that would answer the query."""
+def generate_hyde_document(query: str, chat_model) -> str:
+    """Generate a hypothetical document that would answer the query.
+
+    This is the core HyDE step: a chat model writes a short, factual
+    passage that could plausibly be a search result for the given query.
+    The passage is not a real document but a synthetic one that captures
+    the semantic intent of the query.
+    """
     prompt = (
         "Write a short, factual passage that would be a good search result "
         "for the following query:\n\n"
@@ -98,7 +109,7 @@ def main() -> None:
     query = "What is HyDE and how does it improve RAG?"
 
     # Generate a hypothetical document from the query.
-    hypothetical_doc = generate_hypothetical_document(query, chat_model)
+    hypothetical_doc = generate_hyde_document(query, chat_model)
     print("Hypothetical document:\n", hypothetical_doc, "\n")
 
     # Embed the hypothetical document and retrieve relevant documents.
