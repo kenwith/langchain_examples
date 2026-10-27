@@ -3,8 +3,9 @@
 This example demonstrates how to add a reranking step to improve retrieval quality.
 It uses a cross-encoder model to rerank documents retrieved by a vector store.
 The example includes helper functions `build_reranker` and `rerank_documents` to make
-the reranking step easy to reuse, plus `format_documents` and `print_results` for
-readable output. It also evaluates retrieval quality before and after reranking.
+the reranking step easy to reuse, plus `format_documents`, `format_results`, and
+`print_results` for readable output. It also evaluates retrieval quality before and
+after reranking.
 """
 
 from typing import Callable, List, Optional, Sequence, Set, Tuple
@@ -108,18 +109,39 @@ def rerank_documents(
     return reranked, scores
 
 
-def format_documents(documents: Sequence[Document]) -> str:
-    """Format documents for readable output."""
+def format_results(
+    documents: Sequence[Document],
+    scores: Optional[Sequence[Optional[float]]] = None,
+) -> str:
+    """Format reranked documents with scores for readable output.
+
+    Args:
+        documents: The documents to format.
+        scores: Optional parallel list of scores. If provided, these are used
+            instead of reading the `rerank_score` metadata from each document.
+            If omitted, the metadata value is used when present.
+
+    Returns:
+        A formatted string with document numbers, sources, scores, and content.
+    """
     lines = []
     for i, doc in enumerate(documents, start=1):
         lines.append(f"Document {i}:")
         lines.append(f"  Source: {doc.metadata.get('source', 'unknown')}")
-        score = doc.metadata.get("rerank_score")
+        if scores is not None and i - 1 < len(scores):
+            score = scores[i - 1]
+        else:
+            score = doc.metadata.get("rerank_score")
         if score is not None:
             lines.append(f"  Rerank Score: {score:.4f}")
         lines.append(f"  Content: {doc.page_content[:200]}...")
         lines.append("")
     return "\n".join(lines)
+
+
+def format_documents(documents: Sequence[Document]) -> str:
+    """Format documents for readable output."""
+    return format_results(documents)
 
 
 def print_results(title: str, documents: Sequence[Document]) -> None:
@@ -211,9 +233,10 @@ def main() -> None:
     # Rerank the retrieved documents using the convenience helper
     reranked_docs, rerank_scores = rerank_documents(query, initial_docs, top_k=2)
 
-    print_results("=== After Reranking ===", reranked_docs)
+    print("=== After Reranking ===")
+    print(format_results(reranked_docs, rerank_scores))
+    print()
     print(f"Precision@2 (reranked): {precision_at_k(reranked_docs, relevant_sources, 2):.2f}")
-    print("Rerank scores:", [f"{s:.4f}" if s is not None else "N/A" for s in rerank_scores])
     print()
 
 
