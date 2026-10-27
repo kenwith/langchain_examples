@@ -6,7 +6,11 @@ to compress retrieved documents to only the most relevant parts.
 Contextual compression is a retrieval technique that sits between a base
 retriever and the final prompt context. It reduces the amount of irrelevant
 text in retrieved documents by using a language model to extract only the
-sentences that are relevant to the query.
+sentences that are relevant to the query. For example, a retrieved document
+about LangChain might contain several sentences about installation and only one
+sentence about the query "What is contextual compression?"; the compressor
+keeps only that sentence, so the downstream prompt receives a much smaller
+context block.
 
 The pipeline in this example has three stages:
 
@@ -29,7 +33,9 @@ The module also provides a `compress_documents` helper that wraps the
 compression retriever and applies a summarization prompt to the compressed
 documents, returning a single concise summary string. This is useful when the
 compressed documents only need to be passed as a compact context block to a
-downstream model.
+downstream model. The helper further reduces the context by distilling the
+already-compressed documents into one summary, which is especially helpful when
+the final prompt has a tight token budget.
 
 How to run:
 1. Install LangChain dependencies (langchain, langchain-core, and the package
@@ -165,10 +171,12 @@ def compress_documents(
 ) -> str:
     """Compress candidate documents for a query and return a concise summary.
 
-    Builds a ContextualCompressionRetriever using the provided (or default)
-    compression LLM and candidate retriever, invokes it with the query, and
-    passes the compressed documents through a summarization prompt. The
-    resulting summary is returned as a single string.
+    This helper first runs the query through a ContextualCompressionRetriever,
+    which removes irrelevant sentences from the candidate documents. It then
+    passes the compressed documents through a summarization prompt, producing a
+    single string that contains only the information needed to answer the query.
+    The result is a minimal context block that can be inserted into a prompt
+    without wasting tokens on unrelated content.
 
     Args:
         query: The user query used to retrieve and compress documents.
