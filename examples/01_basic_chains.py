@@ -75,7 +75,7 @@ def format_response(response):
     return f"--- Response ---\n{response}\n"
 
 
-def run_example():
+def main():
     """Run the basic chain example."""
     model = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
     llm = ChatOpenAI(model=model, temperature=0.7)
@@ -84,4 +84,4 @@ def run_example():
 
 
 if __name__ == "__main__":
-    run_example()
+    main()
