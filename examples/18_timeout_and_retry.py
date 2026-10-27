@@ -42,6 +42,7 @@ def retry_with_backoff(
     jitter_factor: float = 1.0,
     exceptions: tuple[type[Exception], ...] = (Exception,),
     should_retry: Callable[[Exception], bool] | None = None,
+    timeout: float | None = None,
     **kwargs: Any,
 ) -> T:
     """Retry a function with exponential backoff and jitter.
@@ -59,6 +60,9 @@ def retry_with_backoff(
         should_retry: Optional callable that takes an exception and returns
             True if the failure is retryable, False otherwise. When provided,
             this overrides the exceptions parameter.
+        timeout: Optional total time limit in seconds for all attempts. If
+            exceeded, the last exception is raised. If no exception has
+            occurred yet, a TimeoutError is raised.
         **kwargs: Keyword arguments for func.
 
     Returns:
@@ -66,7 +70,8 @@ def retry_with_backoff(
 
     Raises:
         The last exception if all retries are exhausted or a non-retryable
-        failure occurs.
+        failure occurs. If timeout is exceeded, raises TimeoutError or the
+        last exception if one was caught.
     """
 
     def is_retryable(exc: Exception) -> bool:
@@ -74,17 +79,31 @@ def retry_with_backoff(
             return should_retry(exc)
         return isinstance(exc, exceptions)
 
+    start_time = time.monotonic() if timeout is not None else None
+
     for attempt in range(max_retries + 1):
+        if start_time is not None and time.monotonic() - start_time > timeout:
+            raise TimeoutError(f"Operation timed out after {timeout} seconds")
+
         try:
             return func(*args, **kwargs)
         except Exception as e:
             if attempt == max_retries or not is_retryable(e):
                 raise
+
             sleep_time = exponential_backoff_with_jitter(
                 attempt, base_delay, max_delay, jitter_factor
             )
+
+            if start_time is not None:
+                remaining_time = timeout - (time.monotonic() - start_time)
+                if remaining_time <= 0:
+                    raise TimeoutError(f"Operation timed out after {timeout} seconds")
+                sleep_time = min(sleep_time, remaining_time)
+
             print(f"Attempt {attempt + 1} failed: {e}. Retrying in {sleep_time:.2f}s...")
             time.sleep(sleep_time)
+
     raise RuntimeError("Unreachable")  # type: ignore[unreachable]
 
 
@@ -95,6 +114,7 @@ def retryable(
     jitter_factor: float = 1.0,
     exceptions: tuple[type[Exception], ...] = (Exception,),
     should_retry: Callable[[Exception], bool] | None = None,
+    timeout: float | None = None,
 ) -> Callable[[Callable[..., T]], Callable[..., T]]:
     """Return a decorator that retries a function with exponential backoff.
 
@@ -108,6 +128,7 @@ def retryable(
             should_retry is provided.
         should_retry: Optional callable that takes an exception and returns
             True if the failure is retryable, False otherwise.
+        timeout: Optional total time limit in seconds for all attempts.
 
     Returns:
         A decorator that wraps the given function with retry logic.
@@ -125,6 +146,7 @@ def retryable(
                 jitter_factor=jitter_factor,
                 exceptions=exceptions,
                 should_retry=should_retry,
+                timeout=timeout,
                 **kwargs,
             )
 
@@ -141,7 +163,7 @@ def flaky_operation() -> str:
     return "Success"
 
 
-@retryable(max_retries=5, exceptions=(ConnectionError,))
+@retryable(max_retries=5, exceptions=(ConnectionError,), timeout=10.0)
 def decorated_flaky_operation() -> str:
     """Simulate an operation that fails often, with retry applied."""
     if random.random() < 0.7:
@@ -157,6 +179,7 @@ if __name__ == "__main__":
         flaky_operation,
         max_retries=5,
         exceptions=(ConnectionError,),
+        timeout=10.0,
     )
     print(f"Result: {result}")
 
