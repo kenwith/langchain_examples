@@ -1,68 +1,77 @@
 """
-Example: Fallback Chain with Logging and Retry
+Example: Fallback Chains for Model Errors.
 
-Demonstrates how to configure a fallback chain that retries once after a
-rate-limit error and then uses a different model configuration if the retry
-also fails. The fallback event is logged via the standard logging module.
+This example demonstrates how to use the `run_with_fallback` helper to
+handle errors from a model by trying a sequence of fallback callables.
+If the primary model call raises an exception (e.g., rate limit, timeout),
+the helper catches the error and invokes the next callable in the chain.
+This pattern is useful for building robust LLM applications that can
+gracefully degrade when a model provider fails.
+
+The fallback chain can include different models, cached responses, or
+simple heuristic responses. The helper stops at the first successful call.
+If all fallbacks fail, the last exception is re-raised.
 """
 
-import logging
 import time
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.runnables import RunnableLambda
-from langchain_core.output_parsers import StrOutputParser
-
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+from typing import Any, Callable, Sequence
 
 
 class RateLimitError(Exception):
     """Raised when the model API rate limit is exceeded."""
 
-    def __init__(self, message, retry_after=1.0):
-        super().__init__(message)
-        self.retry_after = retry_after
+
+def call_model(prompt: str) -> str:
+    """Simulate a primary model call that sometimes fails."""
+    if "test" in prompt:
+        raise RateLimitError("Rate limit exceeded")
+    return f"Model response to: {prompt}"
 
 
-# Primary model that raises a rate-limit error for demonstration purposes.
-def primary_model(_messages):
-    raise RateLimitError("Rate limit exceeded", retry_after=0.5)
+def call_fallback(prompt: str) -> str:
+    """A simple fallback that always succeeds."""
+    return f"Fallback response to: {prompt}"
 
 
-# Retry wrapper that waits for the specified retry_after period and then
-# attempts the primary model once more.
-def retry_model(messages):
-    try:
-        return primary_model(messages)
-    except RateLimitError as e:
-        logger.info(
-            "Rate limit exceeded, waiting %.2f seconds before retry",
-            e.retry_after,
-        )
-        time.sleep(e.retry_after)
-        return primary_model(messages)
+def run_with_fallback(
+    funcs: Sequence[Callable[..., Any]], *args: Any, **kwargs: Any
+) -> Any:
+    """
+    Try each callable in `funcs` in order.
+
+    Args:
+        funcs: A sequence of callables to try.
+        *args, **kwargs: Arguments passed to each callable.
+
+    Returns:
+        The result of the first callable that does not raise an exception.
+
+    Raises:
+        The last exception if all callables fail.
+    """
+    last_exc: Exception | None = None
+    for func in funcs:
+        try:
+            return func(*args, **kwargs)
+        except Exception as exc:
+            last_exc = exc
+            print(f"Error: {exc}; trying next fallback...")
+    if last_exc:
+        raise last_exc
+    raise RuntimeError("No callables provided")
 
 
-# Fallback model that handles rate-limit errors by retrying with a different
-# model configuration.
-def fallback_model(_messages):
-    logger.info(
-        "Fallback event: rate limit still exceeded, retrying with a different model configuration"
-    )
-    return "This response came from the fallback model with a different configuration."
+def main() -> None:
+    """Run the example fallback chain."""
+    prompt = "test query"
+    # Simulate rate limiting: wait and retry with fallback.
+    wait_time = 0.5
+    print("Rate limit exceeded, waiting %.2f seconds" % wait_time)
+    time.sleep(wait_time)
 
-
-primary = RunnableLambda(retry_model)
-fallback = RunnableLambda(fallback_model)
-
-# Build a model with fallback support that only catches rate-limit errors.
-model = primary.with_fallbacks([fallback], exceptions=(RateLimitError,))
-
-# Create a simple chain: prompt -> model -> output parser.
-prompt = ChatPromptTemplate.from_template("Tell me a joke about {topic}")
-chain = prompt | model | StrOutputParser()
+    result = run_with_fallback([call_model, call_fallback], prompt)
+    print(result)
 
 
 if __name__ == "__main__":
-    result = chain.invoke({"topic": "programming"})
-    print(result)
+    main()
