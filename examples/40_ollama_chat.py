@@ -20,11 +20,22 @@ export OLLAMA_BASE_URL="http://your-ollama-server:11434"
 
 ## Usage
 
-Run the script:
+Run the interactive chat loop:
 
 ```bash
 python examples/40_ollama_chat.py
 ```
+
+### Single Turn
+
+The `chat_once` helper sends one prompt to the model and returns the response text:
+
+```python
+response = chat_once("What is the capital of France?")
+print(response)
+```
+
+This is useful for scripting or testing a single prompt without starting an interactive session.
 
 ## Example Output
 
@@ -32,7 +43,8 @@ python examples/40_ollama_chat.py
 
 ## Functions
 
-- `main()` - the main chat loop
+- `main()` - the main interactive chat loop
+- `chat_once(prompt)` - send a single prompt and return the response text
 """
 
 import os
@@ -40,32 +52,66 @@ import os
 from langchain.chat_models import init_chat_model
 
 
-def main():
-    """Run an interactive chat loop with Ollama."""
+def _create_ollama_llm():
+    """Create an Ollama chat model using init_chat_model.
+
+    Returns:
+        The initialized chat model.
+
+    Raises:
+        RuntimeError: If the model cannot be initialized, with a helpful message.
+    """
     model = "llama3.2"
     base_url = os.getenv("OLLAMA_BASE_URL")
 
-    # Pass base_url only if explicitly set, otherwise rely on default (localhost:11434)
     kwargs = {}
     if base_url:
         kwargs["base_url"] = base_url
 
     try:
-        llm = init_chat_model(model, model_provider="ollama", **kwargs)
+        return init_chat_model(model, model_provider="ollama", **kwargs)
     except ConnectionError:
-        # Friendly message when the Ollama server is unreachable
-        print("Error: Cannot connect to the Ollama server.")
+        message = "Error: Cannot connect to the Ollama server.\n"
         if base_url:
-            print(f"  Tried to reach: {base_url}")
+            message += f"  Tried to reach: {base_url}\n"
         else:
-            print("  Default URL: http://localhost:11434")
-        print("Make sure Ollama is installed and running.")
-        print("If it's not running, start it with: `ollama serve`")
-        return
+            message += "  Default URL: http://localhost:11434\n"
+        message += "Make sure Ollama is installed and running.\n"
+        message += "If it's not running, start it with: `ollama serve`"
+        raise RuntimeError(message) from None
     except Exception as e:
-        print(f"An error occurred while initializing the model: {e}")
-        print(f"Make sure the model '{model}' is pulled. You can pull it with: `ollama pull {model}`")
-        print("Also verify that the Ollama server is reachable.")
+        message = (
+            f"An error occurred while initializing the model: {e}\n"
+            f"Make sure the model '{model}' is pulled. You can pull it with: "
+            f"`ollama pull {model}`\n"
+            "Also verify that the Ollama server is reachable."
+        )
+        raise RuntimeError(message) from None
+
+
+def chat_once(prompt: str) -> str:
+    """Send a single prompt to the Ollama model and return the response text.
+
+    Args:
+        prompt: The user message to send.
+
+    Returns:
+        The model's response content as a string.
+
+    Raises:
+        RuntimeError: If the model cannot be initialized.
+    """
+    llm = _create_ollama_llm()
+    response = llm.invoke(prompt)
+    return response.content
+
+
+def main():
+    """Run an interactive chat loop with Ollama."""
+    try:
+        llm = _create_ollama_llm()
+    except RuntimeError as e:
+        print(e)
         return
 
     print("Ollama chat initialized. Type 'exit' or 'quit' to end the conversation.")
