@@ -55,19 +55,19 @@ Each example is a self-contained file in the [examples directory](examples). The
 
 | Example File | Category | Description |
 | --- | --- | --- |
-| 01_basic_chains.py | Basics | Builds a simple LLM chain with a prompt template and output parser. |
-| 02_basic_llm.py | Basics | Demonstrates a direct LLM call with a single prompt. |
-| 03_basic_output_parser.py | Basics | Shows how to use output parsers to get structured responses. |
-| 04_basic_memory.py | Basics | Adds conversation memory to a chain. |
-| 05_basic_sequential.py | Basics | Chains multiple prompts together sequentially. |
-| 06_basic_router.py | Basics | Routes input to different prompts based on content. |
-| 07_basic_retry.py | Basics | Adds retry logic to handle transient errors. |
-| 08_basic_fallback.py | Basics | Configures fallback models and chains. |
-| 09_basic_cache.py | Basics | Caches LLM responses to reduce cost and latency. |
-| 10_basic_structured.py | Basics | Generates structured output from a model. |
-| 11_basic_tools.py | Basics | Provides tools to a model for function calling. |
-| 12_basic_embeddings.py | Basics | Generates text embeddings and measures similarity. |
-| 13_basic_vectorstore.py | Basics | Stores and retrieves documents with a vector store. |
+| 01_basic_chains.py | Basic | Builds a simple LLM chain with a prompt template and output parser. |
+| 02_basic_llm.py | Basic | Demonstrates a direct LLM call with a single prompt. |
+| 03_basic_output_parser.py | Basic | Shows how to use output parsers to get structured responses. |
+| 04_basic_memory.py | Basic | Adds conversation memory to a chain. |
+| 05_basic_sequential.py | Basic | Chains multiple prompts together sequentially. |
+| 06_basic_router.py | Basic | Routes input to different prompts based on content. |
+| 07_basic_retry.py | Basic | Adds retry logic to handle transient errors. |
+| 08_basic_fallback.py | Basic | Configures fallback models and chains. |
+| 09_basic_cache.py | Basic | Caches LLM responses to reduce cost and latency. |
+| 10_basic_structured.py | Basic | Generates structured output from a model. |
+| 11_basic_tools.py | Basic | Provides tools to a model for function calling. |
+| 12_basic_embeddings.py | Basic | Generates text embeddings and measures similarity. |
+| 13_basic_vectorstore.py | Basic | Stores and retrieves documents with a vector store. |
 | 14_rag.py | RAG | Implements retrieval-augmented generation using a vector store. |
 | 15_rag_hyde.py | RAG | Uses HyDE to improve retrieval quality. |
 | 16_rag_multi_query.py | RAG | Generates multiple queries for better retrieval. |
@@ -131,15 +131,17 @@ Each example is a self-contained file in the [examples directory](examples). The
 | 74_async_ollama_langgraph_reflection.py | Async Ollama LangGraph | Async LangGraph reflection workflow with Ollama. |
 | 75_async_ollama_langgraph_map_reduce.py | Async Ollama LangGraph | Async LangGraph map-reduce workflow with Ollama. |
 | 76_async_ollama_langgraph_send.py | Async Ollama LangGraph | Async LangGraph workflow using the Send API for dynamic fan-out with Ollama. |
+| 77_retrieval_grader.py | RAG | Grades retrieved documents for relevance to a query using an LLM. |
 
 The examples fall into the following categories:
 
-- **Basics**: LLM calls, chains, memory, output parsers, retries, fallbacks, caching, structured output, tools, embeddings, and vector stores.
-- **Retrieval-Augmented Generation (RAG)**: Vector stores, embeddings, document QA, HyDE, multi-query, and reranking.
+- **Basic**: LLM calls, chains, memory, output parsers, retries, fallbacks, caching, structured output, tools, embeddings, and vector stores.
+- **Retrieval-Augmented Generation (RAG)**: Vector stores, embeddings, document QA, HyDE, multi-query, reranking, and retrieval grading.
 - **Agents**: ReAct agents, tool use, and conversational agents.
 - **LangGraph**: Workflows, state, conditional edges, persistence, subgraphs, parallel execution, and human-in-the-loop.
-- **Async**: Concurrent LLM calls, async chains, async RAG, async agents, and async Ollama examples, including structured output and fallback.
-- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, tools, RAG, HyDE, reranking, structured output, and fallback. Ollama files use the `*_ollama_*.py` naming convention. Async Ollama examples are also available, combining the `*_async_*.py` and `*_ollama_*.py` naming conventions. These examples require a locally running Ollama server.
+- **Async**: Concurrent LLM calls, async chains, async RAG, and async agents.
+- **Ollama**: Local LLM examples using [Ollama](https://ollama.ai), including chat, embeddings, tools, RAG, HyDE, reranking, structured output, and fallback. Ollama files use the `*_ollama_*.py` naming convention and require a locally running Ollama server.
+- **Async Ollama**: Async versions of the Ollama examples for chat, embeddings, tools, RAG, HyDE, reranking, structured output, and fallback. These files combine the `*_async_*.py` and `*_ollama_*.py` naming conventions and require a local Ollama server.
 - **Async Ollama LangGraph**: Async LangGraph workflows that run entirely with Ollama models. These examples combine the `*_async_*.py`, `*_ollama_*.py`, and `*_langgraph_*.py` naming conventions and require a local Ollama server.
 
 ## Async Examples
