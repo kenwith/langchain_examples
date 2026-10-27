@@ -2,7 +2,9 @@
 """RAG example with source attribution.
 
 This example builds a simple retrieval-augmented generation (RAG) pipeline
-that returns the sources used to answer a question.
+that returns the sources used to answer a question. Retrieved source
+documents are deduplicated and formatted as a bulleted list with the source
+name and a short content snippet.
 """
 
 import os
@@ -24,6 +26,18 @@ def deduplicate_sources(source_documents):
             seen.add(source)
             unique_documents.append(doc)
     return unique_documents
+
+
+def format_sources(source_documents):
+    """Format source documents into a readable string with deduplicated sources and snippets."""
+    unique_docs = deduplicate_sources(source_documents)
+    lines = []
+    for doc in unique_docs:
+        source = doc.metadata.get("source")
+        snippet = doc.page_content[:100].replace("\n", " ")
+        lines.append(f"- {source}")
+        lines.append(f"  Snippet: {snippet}...")
+    return "\n".join(lines)
 
 
 def main():
@@ -84,15 +98,7 @@ def main():
     # Print answer
     print("Answer:", result["result"])
     print("\nSources used:")
-
-    # Print unique sources
-    unique_docs = deduplicate_sources(result.get("source_documents", []))
-    for doc in unique_docs:
-        source = doc.metadata.get("source")
-        print(f"- {source}")
-        # Optionally print a snippet
-        snippet = doc.page_content[:100].replace("\n", " ")
-        print(f"  Snippet: {snippet}...")
+    print(format_sources(result.get("source_documents", [])))
     print()
 
 
