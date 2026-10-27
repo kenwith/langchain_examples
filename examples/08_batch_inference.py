@@ -1,4 +1,14 @@
-"""Batch inference example using LangChain."""
+"""Batch inference example using LangChain.
+
+This module shows how to run batch inference with LangChain in a
+provider-agnostic way. The core function, `run_batch`, relies only on the
+asynchronous interface of `LLMChain`, so the same batch logic can be used
+with any LangChain-compatible LLM, whether from OpenAI, Anthropic, Hugging
+Face, or another provider.
+
+The module also includes formatting helpers to present batch results in a
+uniform way, covering both success and error cases.
+"""
 
 import asyncio
 from typing import Callable, Dict, List, Optional, Union
@@ -51,7 +61,7 @@ async def run_batch(
     return results
 
 
-def format_batch_results(results: List[Dict[str, Union[str, bool]]]) -> str:
+def _format_batch_results(results: List[Dict[str, Union[str, bool]]]) -> str:
     """Format batch inference results into a consistent string.
 
     Args:
@@ -67,6 +77,21 @@ def format_batch_results(results: List[Dict[str, Union[str, bool]]]) -> str:
         else:
             lines.append(f"{idx}. Prompt: {res['prompt']}\n   Error: {res['error']}")
     return "\n".join(lines)
+
+
+def format_batch_results(results: List[Dict[str, Union[str, bool]]]) -> str:
+    """Format batch inference results into a consistent string.
+
+    This is a public wrapper around the internal `_format_batch_results`
+    helper.
+
+    Args:
+        results: A list of result dictionaries from run_batch.
+
+    Returns:
+        A formatted string with one numbered entry per result.
+    """
+    return _format_batch_results(results)
 
 
 def show_progress(completed: int, total: int) -> None:
