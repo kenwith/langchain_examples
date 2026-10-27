@@ -14,7 +14,8 @@ using a chat model with retrieval context. It can be run in two modes:
 Setup:
 - Install the required packages:
   pip install langchain langchain-community langchain-openai chromadb
-- The OPENAI_API_KEY environment variable must be set to a valid OpenAI API key.
+- The OPENAI_API_KEY environment variable must be set to a valid OpenAI API key for embeddings.
+- Optional: Set CHAT_MODEL and CHAT_MODEL_PROVIDER to use a different chat model. Provider-specific API keys may also need to be set.
 - Optional: Place text files in a directory to use as the knowledge base.
 """
 import os
@@ -23,14 +24,16 @@ import sys
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
+from langchain.chat_models import init_chat_model
 from langchain.text_splitter import CharacterTextSplitter
-from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.documents import Document
 
 DATA_FILE = "data.txt"
 PERSIST_DIR = "db"
+CHAT_MODEL = os.getenv("CHAT_MODEL", "gpt-3.5-turbo")
+CHAT_MODEL_PROVIDER = os.getenv("CHAT_MODEL_PROVIDER", "openai")
 
 SAMPLE_TEXTS = [
     "The president delivered a speech to the nation, emphasizing the importance of unity and progress.",
@@ -189,6 +192,47 @@ def format_docs(docs):
     return "\n\n".join(formatted)
 
 
+def build_chain(retriever, llm):
+    """Build a RAG chain for retrieval-augmented generation.
+
+    The chain retrieves relevant documents for a user query, formats them as
+    context via `format_docs`, and passes the context and question to the
+    model using a prompt template.
+
+    Args:
+        retriever: A retriever from the vector store.
+        llm: A chat model instance.
+
+    Returns:
+        A Runnable representing the complete RAG chain.
+    """
+    prompt = ChatPromptTemplate.from_messages(
+        [
+            (
+                "system",
+                "You are a helpful assistant. Answer questions based on the provided context. "
+                "When you use information from a source, cite it by name (e.g., Source 1 (sample)). "
+                "At the end of your answer, include a 'Sources:' section that lists every source you used.",
+            ),
+            ("human", "Context: {context}\n\nQuestion: {input}"),
+        ]
+    )
+
+    # Retrieval step: fetch relevant documents from the vector store
+    # based on the user's query, then format them into a context string
+    # using format_docs. If no documents are retrieved, format_docs
+    # returns a fallback message.
+    # Generation step: pass the context and the original question to the
+    # LLM via the prompt template, and generate the final answer.
+    return (
+        RunnablePassthrough.assign(
+            context=lambda x: format_docs(retriever.invoke(x["input"]))
+        )
+        | prompt
+        | llm
+    )
+
+
 def main():
     """Run the RAG pipeline."""
     try:
@@ -215,34 +259,9 @@ def main():
 
     retriever = vectorstore.as_retriever()
 
-    llm = ChatOpenAI(model="gpt-3.5-turbo")
+    llm = init_chat_model(model=CHAT_MODEL, model_provider=CHAT_MODEL_PROVIDER)
 
-    prompt = ChatPromptTemplate.from_messages(
-        [
-            (
-                "system",
-                "You are a helpful assistant. Answer questions based on the provided context. "
-                "When you use information from a source, cite it by name (e.g., Source 1 (sample)). "
-                "At the end of your answer, include a 'Sources:' section that lists every source you used.",
-            ),
-            ("human", "Context: {context}\n\nQuestion: {input}"),
-        ]
-    )
-
-    # Build the RAG chain using LCEL.
-    # 1. Retrieval step: fetch relevant documents from the vector store
-    #    based on the user's query, then format them into a context string
-    #    using format_docs. If no documents are retrieved, format_docs
-    #    returns a fallback message.
-    # 2. Generation step: pass the context and the original question to the
-    #    LLM via the prompt template, and generate the final answer.
-    rag_chain = (
-        RunnablePassthrough.assign(
-            context=lambda x: format_docs(retriever.invoke(x["input"]))
-        )
-        | prompt
-        | llm
-    )
+    rag_chain = build_chain(retriever, llm)
 
     query = "What did the president say about Ketanji Brown Jackson?"
     response = rag_chain.invoke({"input": query})
