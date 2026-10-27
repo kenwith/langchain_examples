@@ -13,6 +13,11 @@ generated answers against a predefined rubric. The judge returns a numeric
 score and feedback. The example is fully asynchronous and works with any
 provider supported by `init_chat_model` (e.g., OpenAI, Anthropic, Groq, etc.).
 
+The `judge_async` helper provides a single asynchronous entry point that
+creates the judge model and scores an answer in one call. The lower-level
+`create_judge` and `score_answer` functions are also available for custom
+workflows.
+
 To run this example, set the appropriate API key environment variable for the
 chosen model provider (e.g., `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GROQ_API_KEY`).
 The default model is `"gpt-4o"` but can be overridden via the `MODEL_NAME`
@@ -101,13 +106,37 @@ Your JSON response:
     return score, feedback
 
 
+async def judge_async(
+    question: str,
+    answer: str,
+    rubric: str,
+    model_name: str | None = None,
+    temperature: float = 0.0,
+) -> Tuple[int, str]:
+    """
+    Asynchronously create a judge model and score an answer against a rubric.
+
+    This is a convenience wrapper around `create_judge` and `score_answer`.
+
+    Args:
+        question: The question that was asked.
+        answer: The generated answer to be scored.
+        rubric: The scoring rubric.
+        model_name: Optional model name. Defaults to the `MODEL_NAME`
+            environment variable or `"gpt-4o"`.
+        temperature: Sampling temperature. Defaults to 0.0 for deterministic scoring.
+
+    Returns:
+        A tuple containing the numeric score (0-10) and feedback text.
+    """
+    judge = create_judge(model_name, temperature)
+    return await score_answer(question, answer, rubric, judge)
+
+
 async def main() -> None:
     """
-    Main async demo: create a judge, score a sample answer, and print the result.
+    Main async demo: score a sample answer using the `judge_async` helper.
     """
-    # Create the judge model (provider-agnostic).
-    judge = create_judge()
-
     # Example question, answer, and rubric.
     question = "What is the capital of France?"
     answer = "The capital of France is Paris."
@@ -118,7 +147,7 @@ async def main() -> None:
 """
 
     print("Scoring answer...")
-    score, feedback = await score_answer(question, answer, rubric, judge)
+    score, feedback = await judge_async(question, answer, rubric)
     print(f"Score: {score}/10")
     print(f"Feedback: {feedback}")
 
