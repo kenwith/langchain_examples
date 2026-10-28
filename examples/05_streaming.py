@@ -2,7 +2,8 @@
 
 This example demonstrates three approaches to streaming token generation:
 
-1. Direct iteration: the `stream` method yields chunks as they are produced.
+1. Direct iteration: the `stream` method yields chunks as they are produced,
+   and a `stream_tokens()` helper encapsulates the token-by-token loop.
 2. Callback handler: a callback object receives token events during generation.
 3. Custom callback: a helper function creates a handler with a user-defined
    token callback for specialized processing (e.g., formatting or logging).
@@ -16,6 +17,22 @@ import time
 
 from langchain_core.callbacks import BaseCallbackHandler
 from langchain_openai import ChatOpenAI
+
+
+def stream_tokens(llm, prompt):
+    """Yield tokens from the LLM as they are generated.
+
+    Args:
+        llm: A LangChain chat model that supports streaming.
+        prompt: The user prompt to send.
+
+    Yields:
+        str: Each token as it is generated.
+    """
+    for chunk in llm.stream(prompt):
+        token = chunk.content
+        if token:
+            yield token
 
 
 def stream_with_metrics(llm, prompt):
@@ -32,12 +49,10 @@ def stream_with_metrics(llm, prompt):
     start_time = time.perf_counter()
     chunks = []
 
-    for chunk in llm.stream(prompt):
-        token = chunk.content
-        if token:
-            chunks.append(token)
-            token_count += 1
-            print(token, end="", flush=True)
+    for token in stream_tokens(llm, prompt):
+        chunks.append(token)
+        token_count += 1
+        print(token, end="", flush=True)
 
     elapsed_time = time.perf_counter() - start_time
     print("\n\n--- Streaming Summary ---")
