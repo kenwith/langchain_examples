@@ -3,7 +3,7 @@
 This example builds a LangGraph that generates a draft response with a
 provider-agnostic chat model, then pauses for human approval before
 returning the final result. The graph uses an explicit `interrupt_before`
-checkpoint to pause before the `human_review` node, and resumes with
+checkpoint to pause before a dedicated `approval` node, and resumes with
 `Command(resume=...)`.
 
 Set the `MODEL_NAME` environment variable to choose a model, e.g.
@@ -38,13 +38,15 @@ def generate_draft(state: State) -> dict:
     return {"draft": response.content}
 
 
-def human_review(state: State) -> dict:
-    """Process the human decision after the interrupt checkpoint.
+def approval(state: State) -> dict:
+    """Validate and apply the human decision after the interrupt checkpoint.
 
     The approval decision is merged into the state by `Command(resume=...)`.
-    This node runs after the graph resumes and exists primarily as the
-    explicit checkpoint target.
+    This node is the dedicated approval checkpoint where additional review
+    logic can be applied before the final result is produced.
     """
+    if "approved" not in state:
+        raise ValueError("Approval decision missing from state.")
     return {}
 
 
@@ -59,16 +61,16 @@ def build_graph():
     """Build and compile the human-in-the-loop graph."""
     graph = StateGraph(State)
     graph.add_node("generate_draft", generate_draft)
-    graph.add_node("human_review", human_review)
+    graph.add_node("approval", approval)
     graph.add_node("finalize", finalize)
 
     graph.add_edge(START, "generate_draft")
-    graph.add_edge("generate_draft", "human_review")
-    graph.add_edge("human_review", "finalize")
+    graph.add_edge("generate_draft", "approval")
+    graph.add_edge("approval", "finalize")
     graph.add_edge("finalize", END)
 
-    # Explicit checkpoint: pause before the human_review node.
-    return graph.compile(interrupt_before=["human_review"])
+    # Explicit checkpoint: pause before the dedicated approval node.
+    return graph.compile(interrupt_before=["approval"])
 
 
 def resume_graph(graph, config, approved: bool):
@@ -81,7 +83,7 @@ def main():
     graph = build_graph()
     config = {"configurable": {"thread_id": "demo-thread"}}
 
-    # Start the graph. It will pause before `human_review` due to the
+    # Start the graph. It will pause before `approval` due to the
     # explicit `interrupt_before` checkpoint.
     result = graph.invoke(
         {"query": "Explain LangGraph in one sentence."},
