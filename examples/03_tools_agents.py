@@ -7,11 +7,14 @@ from langchain.tools import tool
 def calculator(expression: str) -> str:
     """Evaluate a mathematical expression safely.
 
-    This tool accepts a string containing a mathematical expression and evaluates
-    it using Python's eval() with a restricted global namespace. The math module
-    is available for functions such as sqrt, sin, cos, and log. If the expression
-    is invalid or raises an exception, an error message is returned instead of
-    raising an exception to the caller.
+    This tool is intended for arithmetic and mathematical calculations. The
+    agent selects this tool when the question involves numeric expressions,
+    formulas, or operations such as addition, subtraction, multiplication,
+    division, powers, roots, or logarithms. The input is a string containing a
+    mathematical expression, evaluated using Python's eval() with a restricted
+    global namespace. The math module is available for functions such as sqrt,
+    sin, cos, and log. If the expression is invalid or raises an exception, an
+    error message is returned instead of raising an exception to the caller.
 
     Args:
         expression: A string representing a mathematical expression, e.g.,
@@ -33,8 +36,9 @@ def multiply(a: int, b: int) -> int:
     """Multiply two integers and return the product.
 
     This tool is registered as a LangChain tool and expects two integer inputs.
-    It is useful for arithmetic multiplication when the agent needs to combine
-    quantities or calculate products.
+    The agent selects this tool when the task requires multiplying exactly two
+    integer factors, such as calculating a product, total, area, or scaled
+    quantity. The input should be a JSON string with keys "a" and "b".
 
     Args:
         a: The first integer factor.
@@ -47,6 +51,9 @@ def multiply(a: int, b: int) -> int:
 
 
 def main() -> None:
+    # The tool descriptions are the main signal the agent uses to decide which
+    # tool to invoke for a given question. Each description should state the
+    # purpose of the tool and the expected input format.
     tools = [
         Tool(
             name="Calculator",
@@ -78,6 +85,10 @@ Question: {input}
 Thought:"""
 
     llm = OpenAI(temperature=0)
+    # The ZERO_SHOT_REACT_DESCRIPTION agent determines which tool to use at
+    # each step by reading the tool names and descriptions and selecting the
+    # most relevant one for the observed question. It then formats the action
+    # input according to the tool's expected schema.
     agent = initialize_agent(
         tools,
         llm,
@@ -87,6 +98,8 @@ Thought:"""
         suffix=suffix,
     )
 
+    # The agent may iterate through several Thought/Action/Observation cycles
+    # before it has enough information to produce a final answer.
     question = "What is 2 + 2?"
     answer = agent.run(question)
     print(answer)
