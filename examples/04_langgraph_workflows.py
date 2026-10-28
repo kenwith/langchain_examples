@@ -23,6 +23,13 @@ State flow:
 - Helper functions `with_processed_data` and `with_validation_result` encapsulate state updates.
 - The routing helper `route_after_process` routes the graph to `finalize` or `END`
   based on whether processed data exists.
+
+Node transition details:
+- Graph execution starts at the `process` node.
+- From `process`, a conditional edge invokes `route_after_process`:
+  - If `processed_data` is present and non-empty, the transition goes to `finalize`.
+  - Otherwise, the transition goes directly to `END`.
+- From `finalize`, an unconditional edge terminates the graph at `END`.
 """
 
 from typing import Any, Optional, TypedDict
