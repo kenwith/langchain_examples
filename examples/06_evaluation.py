@@ -67,8 +67,8 @@ class RequiredKeywordsEvaluator(StringEvaluator):
         }
 
 
-def main() -> None:
-    """Run the evaluation with the custom keyword evaluator."""
+def run_evaluation() -> "EvaluationResults":
+    """Run the evaluation and return the results."""
     # Define the required keywords for the task.
     required_keywords = ["langchain", "evaluation"]
 
@@ -86,11 +86,37 @@ def main() -> None:
 
     # Initialize the LangSmith client and run the evaluation.
     client = Client()
-    evaluate(
+    results = evaluate(
         "my_dataset",
         data=client.list_dataset_runs("my_dataset"),
         evaluators=eval_config,
     )
+    return results
+
+
+def format_results(results) -> None:
+    """Print evaluation results in a readable format."""
+    print("Evaluation Results")
+    print("------------------")
+    for res in results.results:
+        print(f"{res.key}: {res.score}")
+
+        # Show additional details when available.
+        metadata = getattr(res, "metadata", None) or {}
+        missing_keywords = metadata.get("missing_keywords")
+        if missing_keywords:
+            print(f"  Missing keywords: {', '.join(missing_keywords)}")
+
+        comment = getattr(res, "comment", None)
+        if comment:
+            print(f"  Comment: {comment}")
+    print("------------------")
+
+
+def main() -> None:
+    """Run the evaluation and display the results."""
+    results = run_evaluation()
+    format_results(results)
 
 
 if __name__ == "__main__":
