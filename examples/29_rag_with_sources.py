@@ -4,7 +4,8 @@
 This example builds a simple retrieval-augmented generation (RAG) pipeline
 that returns the sources used to answer a question. Retrieved source
 documents are deduplicated and formatted as a bulleted list with the source
-name and a short content snippet.
+name and a short content snippet. The formatted sources are included in the
+returned answer dictionary under the key "sources".
 """
 
 import os
@@ -95,10 +96,13 @@ def main():
 
     result = qa.invoke({"query": question})
 
+    # Include formatted sources in the returned answer dictionary
+    result["sources"] = format_sources(result.get("source_documents", []))
+
     # Print answer
     print("Answer:", result["result"])
     print("\nSources used:")
-    print(format_sources(result.get("source_documents", [])))
+    print(result["sources"])
     print()
 
 
