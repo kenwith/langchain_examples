@@ -58,19 +58,24 @@ def get_readme_references():
     return normalized
 
 
-def get_readme_table_paths():
-    """Return all local paths mentioned in markdown table rows in the README."""
+def get_readme_table_path_list():
+    """Return all local paths mentioned in markdown table rows in the README, preserving duplicates."""
     text = README.read_text(encoding="utf-8")
     table_lines = [line for line in text.splitlines() if line.lstrip().startswith("|")]
     table_text = "\n".join(table_lines)
-    paths = set()
+    paths = []
     for token in re.findall(r"[\w./\-]+", table_text):
         token = token.replace("\\", "/")
         if token.startswith("./"):
             token = token[2:]
         if "/" in token and not token.startswith(("http://", "https://")):
-            paths.add(token.strip("/"))
+            paths.append(token.strip("/"))
     return paths
+
+
+def get_readme_table_paths():
+    """Return all local paths mentioned in markdown table rows in the README."""
+    return set(get_readme_table_path_list())
 
 
 def test_readme_lists_existing_examples():
@@ -131,3 +136,19 @@ def test_readme_examples_table_contains_expected_entries():
     table_paths = get_readme_table_paths()
     for example in ("examples/73", "examples/74"):
         assert example in table_paths, f"README examples table missing {example}"
+
+
+def test_readme_examples_table_paths_exist():
+    """Every path in the README examples table must exist in the repository."""
+    missing = []
+    for path in get_readme_table_path_list():
+        if not (ROOT / path).exists():
+            missing.append(path)
+    assert not missing, f"README examples table references non-existent paths: {missing}"
+
+
+def test_readme_examples_table_has_no_duplicate_entries():
+    """The README examples table must not contain duplicate paths."""
+    paths = get_readme_table_path_list()
+    duplicates = {p for p in paths if paths.count(p) > 1}
+    assert not duplicates, f"README examples table contains duplicate entries: {duplicates}"
