@@ -7,6 +7,15 @@ The flow:
 3. Build a chain from the prompt and LLM.
 4. Run the chain with input variables.
 5. Print the response.
+
+Provider setup:
+This example uses OpenAI as the LLM provider. The provider requires an API key
+to be available in the environment. The key must be stored in the
+OPENAI_API_KEY environment variable before running the module. The API key is
+never hardcoded; it is read from the environment at runtime. Alternative
+providers can be used by replacing the OpenAI LLM initialization with another
+LangChain LLM wrapper and providing the corresponding credentials via
+environment variables.
 """
 
 import os
@@ -15,12 +24,8 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
 
-def main():
-    """Execute the basic chain example."""
-    # Ensure API key is set
-    if "OPENAI_API_KEY" not in os.environ:
-        raise ValueError("OPENAI_API_KEY environment variable not set.")
-
+def run_example(product: str) -> str:
+    """Run the prompt chain for a given product and return the response."""
     # Define prompt template
     prompt = PromptTemplate(
         input_variables=["product"],
@@ -33,8 +38,17 @@ def main():
     # Create chain
     chain = LLMChain(llm=llm, prompt=prompt)
 
-    # Run the chain
-    result = chain.run("eco-friendly water bottles")
+    # Run the chain and return the result
+    return chain.run(product)
+
+
+def main():
+    """Execute the basic chain example."""
+    # Ensure API key is set
+    if "OPENAI_API_KEY" not in os.environ:
+        raise ValueError("OPENAI_API_KEY environment variable not set.")
+
+    result = run_example("eco-friendly water bottles")
     print(result)
 
 
