@@ -30,7 +30,6 @@ from langchain.prompts import ChatPromptTemplate
 from langchain_core.runnables import RunnablePassthrough
 from langchain_core.documents import Document
 
-DATA_FILE = "data.txt"
 PERSIST_DIR = "db"
 CHAT_MODEL = os.getenv("CHAT_MODEL", "gpt-3.5-turbo")
 CHAT_MODEL_PROVIDER = os.getenv("CHAT_MODEL_PROVIDER", "openai")
@@ -43,99 +42,56 @@ SAMPLE_TEXTS = [
 ]
 
 
-def load_documents_from_directory(directory_path):
-    """Load all text documents from a directory.
-
-    Args:
-        directory_path: Path to a directory containing .txt files.
-
-    Returns:
-        A list of loaded documents, or an empty list if the directory
-        does not exist or contains no text files.
-    """
-    try:
-        loader = DirectoryLoader(
-            directory_path,
-            glob="**/*.txt",
-            loader_cls=TextLoader,
-            loader_kwargs={"encoding": "utf-8"},
-        )
-        documents = loader.load()
-    except FileNotFoundError:
-        print(
-            f"Error: Directory '{directory_path}' not found.",
-            file=sys.stderr,
-        )
-        return []
-
-    if not documents:
-        print(
-            f"No text files found in directory '{directory_path}'.",
-            file=sys.stderr,
-        )
-        return []
-
-    return documents
-
-
-def load_sample_documents():
-    """Create sample documents from built-in texts.
-
-    Returns:
-        A list of Document objects containing the sample texts.
-    """
-    return [
-        Document(page_content=text, metadata={"source": "sample"})
-        for text in SAMPLE_TEXTS
-    ]
-
-
-def get_source_documents(directory_path=None):
-    """Load raw documents from a directory or fall back to sample texts.
-
-    This helper centralizes the source selection logic so callers can obtain
-    unfragmented documents without applying text splitting. If a directory is
-    provided but cannot be loaded or contains no text files, the built-in
-    sample texts are used as a fallback.
-
-    Args:
-        directory_path: Optional path to a directory containing .txt files.
-
-    Returns:
-        A list of Document objects, or an empty list if no source is available.
-    """
-    if directory_path:
-        documents = load_documents_from_directory(directory_path)
-        if not documents:
-            print(
-                "Falling back to sample texts.",
-                file=sys.stderr,
-            )
-            return load_sample_documents()
-        return documents
-
-    return load_sample_documents()
-
-
 def load_documents(directory_path=None, chunk_size=1000, chunk_overlap=0):
     """Load and split documents from a directory or built-in sample texts.
 
-    Uses `get_source_documents` to select the raw document source, then splits
-    the documents into chunks for indexing or retrieval.
+    This function is the single extension point for custom data sources.
+    To use a custom source, replace the document loading logic below with
+    code that returns a list of Document objects. The rest of the script
+    will use those documents for indexing and retrieval.
 
     Args:
-        directory_path: Optional path to a directory containing text files.
+        directory_path: Optional path to a directory containing .txt files.
+            If not provided, built-in sample texts are used.
         chunk_size: Maximum size of each text chunk.
         chunk_overlap: Number of characters to overlap between chunks.
 
     Returns:
         A list of document chunks, or an empty list if no documents are found.
     """
-    documents = get_source_documents(directory_path)
+    documents = []
+
+    if directory_path:
+        try:
+            loader = DirectoryLoader(
+                directory_path,
+                glob="**/*.txt",
+                loader_cls=TextLoader,
+                loader_kwargs={"encoding": "utf-8"},
+            )
+            documents = loader.load()
+        except FileNotFoundError:
+            print(
+                f"Error: Directory '{directory_path}' not found.",
+                file=sys.stderr,
+            )
+        except Exception as e:
+            print(
+                f"Error loading documents from '{directory_path}': {e}",
+                file=sys.stderr,
+            )
 
     if not documents:
-        print("No documents found to load.", file=sys.stderr)
-        return []
+        if directory_path:
+            print(
+                f"No text files found in directory '{directory_path}'. "
+                "Falling back to sample texts.",
+                file=sys.stderr,
+            )
+        documents = [
+            Document(page_content=text, metadata={"source": "sample"})
+            for text in SAMPLE_TEXTS
+        ]
 
     text_splitter = CharacterTextSplitter(
         chunk_size=chunk_size, chunk_overlap=chunk_overlap
