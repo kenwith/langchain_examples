@@ -24,21 +24,19 @@ from langchain.prompts import PromptTemplate
 from langchain.chains import LLMChain
 
 
-def run_example(product: str) -> str:
-    """Run the prompt chain for a given product and return the response."""
-    # Define prompt template
+def build_chain() -> LLMChain:
+    """Build and return the LLM chain used in this example."""
     prompt = PromptTemplate(
         input_variables=["product"],
         template="What is a good name for a company that makes {product}?",
     )
-
-    # Initialize LLM
     llm = OpenAI(temperature=0.9)
+    return LLMChain(llm=llm, prompt=prompt)
 
-    # Create chain
-    chain = LLMChain(llm=llm, prompt=prompt)
 
-    # Run the chain and return the result
+def run_example(product: str) -> str:
+    """Run the prompt chain for a given product and return the response."""
+    chain = build_chain()
     return chain.run(product)
 
 
