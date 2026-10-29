@@ -20,6 +20,10 @@ This Thought/Action/Observation cycle continues until the agent has enough
 information to answer the question. The retriever tool is wrapped with a
 retry decorator to handle transient failures.
 
+After the agent finishes, the final answer is augmented with metadata from the
+retrieved documents (source, title, and URL) so users can verify where the
+agent obtained its information.
+
 Prerequisites:
 - Set OPENAI_API_KEY environment variable (or another supported provider)
 - Install required packages:
@@ -49,28 +53,48 @@ SAMPLE_DOCUMENTS = [
     Document(
         page_content="LangChain is a framework for developing applications "
         "powered by language models.",
-        metadata={"source": "langchain_framework"},
+        metadata={
+            "source": "langchain_framework",
+            "title": "LangChain Framework Overview",
+            "url": "https://docs.langchain.com/docs/intro",
+        },
     ),
     Document(
         page_content="Agents use a language model to choose a sequence of "
         "actions to take to accomplish a goal.",
-        metadata={"source": "agents_overview"},
+        metadata={
+            "source": "agents_overview",
+            "title": "Agents Overview",
+            "url": "https://docs.langchain.com/docs/concepts/agents",
+        },
     ),
     Document(
         page_content="Retrieval-augmented generation (RAG) combines a "
         "retrieval step with a generation step to produce answers grounded "
         "in external knowledge.",
-        metadata={"source": "rag_concept"},
+        metadata={
+            "source": "rag_concept",
+            "title": "Retrieval-Augmented Generation (RAG)",
+            "url": "https://docs.langchain.com/docs/concepts/rag",
+        },
     ),
     Document(
         page_content="A retriever tool fetches relevant document chunks from "
         "a vector store based on a natural language query.",
-        metadata={"source": "retriever_tool"},
+        metadata={
+            "source": "retriever_tool",
+            "title": "Retriever Tools",
+            "url": "https://docs.langchain.com/docs/how_to/retriever_tools",
+        },
     ),
     Document(
         page_content="The ReAct loop alternates between reasoning (Thought) "
         "and acting (Action) until a final answer is reached.",
-        metadata={"source": "react_loop"},
+        metadata={
+            "source": "react_loop",
+            "title": "ReAct Loop",
+            "url": "https://docs.langchain.com/docs/concepts/react",
+        },
     ),
 ]
 
@@ -122,6 +146,8 @@ def create_retriever_tool() -> Tool:
     The tool is called by the agent during the ReAct loop. It embeds the
     query, retrieves the top-k matching documents from FAISS, and returns
     the formatted chunks as the observation for the agent to reason over.
+    Each chunk includes its full metadata (source, title, URL) so the agent
+    can cite it in the final answer.
     """
     vectorstore = create_vectorstore()
     retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
@@ -138,8 +164,14 @@ def create_retriever_tool() -> Tool:
             )
         formatted = []
         for doc in docs:
-            source = doc.metadata.get("source", "unknown")
-            formatted.append(f"{doc.page_content}\n(Source: {source})")
+            metadata = doc.metadata
+            source = metadata.get("source", "unknown")
+            title = metadata.get("title", "N/A")
+            url = metadata.get("url", "N/A")
+            formatted.append(
+                f"Source: {source}\nTitle: {title}\nURL: {url}\n"
+                f"Content: {doc.page_content}"
+            )
         return "\n\n".join(formatted)
 
     return Tool.from_function(
@@ -149,15 +181,15 @@ def create_retriever_tool() -> Tool:
             "Search the LangChain documentation for relevant context. "
             "Use this tool when you need to answer questions about LangChain, "
             "agents, RAG, or related concepts. The result includes the source "
-            "name for each retrieved chunk."
+            "name, title, and URL for each retrieved chunk."
         ),
     )
 
 
 def format_sources(intermediate_steps):
-    """Render retrieved sources as a formatted citation list.
+    """Render retrieved document metadata as a formatted citation list.
 
-    Extracts source names from the tool observations in the agent's
+    Extracts source, title, and URL from the tool observations in the agent's
     intermediate steps and returns them as a bulleted "Sources:" section.
 
     Args:
@@ -165,22 +197,35 @@ def format_sources(intermediate_steps):
             agent executor when return_intermediate_steps=True.
 
     Returns:
-        A string like "\\n\\nSources:\\n- source1\\n- source2" or an empty
+        A string like "\\n\\nSources:\\n- source (title) - url" or an empty
         string if no sources are found.
     """
     import re
 
     sources = set()
     for _, observation in intermediate_steps:
-        # The observation is the tool output string, which contains
-        # lines like "(Source: source_name)"
-        matches = re.findall(r"\(Source: ([^)]+)\)", observation)
-        sources.update(matches)
+        # The observation contains blocks like:
+        # Source: ...
+        # Title: ...
+        # URL: ...
+        # Content: ...
+        matches = re.findall(
+            r"Source: ([^\n]+)\nTitle: ([^\n]+)\nURL: ([^\n]+)",
+            observation,
+        )
+        for source, title, url in matches:
+            if url and url != "N/A":
+                sources.add((source, title, url))
+            else:
+                sources.add((source, title, ""))
 
     if not sources:
         return ""
 
-    source_lines = "\n".join(f"- {source}" for source in sorted(sources))
+    source_lines = "\n".join(
+        f"- {source} ({title})" + (f" - {url}" if url else "")
+        for source, title, url in sorted(sources)
+    )
     return f"\n\nSources:\n{source_lines}"
 
 
@@ -189,6 +234,8 @@ def create_agent(llm, tools):
 
     The prompt instructs the model to use the ReAct format: Thought, Action,
     Action Input, Observation, and repeat until a Final Answer is reached.
+    The model is asked to cite source names inline, but to leave the
+    structured metadata list to the post-processing step.
     """
     prompt = PromptTemplate.from_template(
         """You are an assistant with access to the following tools:
@@ -206,9 +253,10 @@ Observation: the result of the action
 Thought: I now know the final answer
 Final Answer: the final answer to the original input question
 
-When providing the final answer, always cite the source names from the
-retrieved context. For example: "According to [source name], ..." or
-"Based on [source name], ...". This helps users verify the response.
+When providing the final answer, cite the source names from the retrieved
+context. For example: "According to [source name], ..." or "Based on
+[source name], ...". Do not create a "Sources:" section; the system will
+append retrieved document metadata after your answer.
 
 Begin!
 
@@ -252,9 +300,9 @@ def main():
     response = agent_executor.invoke({"input": question})
     answer = response["output"]
 
-    # Append a formatted source list if the agent didn't already include one
+    # Append a formatted source list with retrieved document metadata
     sources = format_sources(response.get("intermediate_steps", []))
-    if sources and "Sources:" not in answer:
+    if sources:
         answer += sources
 
     print(f"\nAnswer: {answer}")
