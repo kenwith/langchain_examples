@@ -22,6 +22,7 @@ async def run_batch(
     prompts: List[str],
     llm_chain: LLMChain,
     batch_size: int = 2,
+    max_concurrency: Optional[int] = None,
     progress_callback: Optional[Callable[[int, int], None]] = None,
 ) -> List[Dict[str, Union[str, bool]]]:
     """Process multiple inputs in batches using asyncio.
@@ -31,25 +32,45 @@ async def run_batch(
         llm_chain: An LLMChain instance with async support.
         batch_size: Maximum number of prompts to process concurrently per batch.
             If zero or negative, all prompts are processed in a single batch.
+        max_concurrency: Maximum number of prompts processed concurrently across
+            all batches. If None or non-positive, no limit is applied.
         progress_callback: An optional callback invoked after each batch with
             the number of completed prompts and the total number of prompts.
 
     Returns:
         A list of dictionaries, each containing the prompt, result or error,
         and a success flag.
+
+    Raises:
+        ValueError: If `prompts` is None.
     """
-    async def process_prompt(prompt: str) -> Dict[str, Union[str, bool]]:
-        try:
-            result = await llm_chain.arun(prompt)
-            return {"prompt": prompt, "result": result, "success": True}
-        except Exception as e:
-            return {"prompt": prompt, "error": str(e), "success": False}
+    if prompts is None:
+        raise ValueError("prompts cannot be None")
 
     total = len(prompts)
     if total == 0:
         return []
 
+    # Validate and normalize batch_size
     effective_batch_size = batch_size if batch_size > 0 else total
+
+    # Create a semaphore to limit overall concurrency
+    if max_concurrency is not None and max_concurrency > 0:
+        semaphore = asyncio.Semaphore(max_concurrency)
+    else:
+        semaphore = None
+
+    async def process_prompt(prompt: str) -> Dict[str, Union[str, bool]]:
+        try:
+            if semaphore is not None:
+                async with semaphore:
+                    result = await llm_chain.arun(prompt)
+            else:
+                result = await llm_chain.arun(prompt)
+            return {"prompt": prompt, "result": result, "success": True}
+        except Exception as e:
+            return {"prompt": prompt, "error": str(e), "success": False}
+
     results = []
     for start in range(0, total, effective_batch_size):
         batch = prompts[start:start + effective_batch_size]
@@ -115,7 +136,11 @@ async def main() -> None:
         "Explain quantum computing in one sentence.",
     ]
     results = await run_batch(
-        prompts, llm_chain, batch_size=1, progress_callback=show_progress
+        prompts,
+        llm_chain,
+        batch_size=1,
+        max_concurrency=2,
+        progress_callback=show_progress,
     )
     print(format_batch_results(results))
 
