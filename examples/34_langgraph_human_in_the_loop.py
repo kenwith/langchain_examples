@@ -4,7 +4,9 @@ This example builds a LangGraph that generates a draft response with a
 provider-agnostic chat model, then pauses for human approval before
 returning the final result. The graph uses an explicit `interrupt_before`
 checkpoint to pause before a dedicated `approval` node, and resumes with
-`Command(resume=...)`.
+`Command(resume=...)`. After the approval node, conditional edges route
+to either an approved finalization path or a rejection path, making the
+human decision visible in the graph structure.
 
 Set the `MODEL_NAME` environment variable to choose a model, e.g.
 `openai:gpt-4o-mini` or `anthropic:claude-3-5-sonnet-latest`. You will also
@@ -39,21 +41,31 @@ def generate_draft(state: State) -> dict:
 
 
 def approval(state: State) -> dict:
-    """Validate and apply the human decision after the interrupt checkpoint.
+    """Validate the human decision after the interrupt checkpoint.
 
     The approval decision is merged into the state by `Command(resume=...)`.
     This node is the dedicated approval checkpoint where additional review
-    logic can be applied before the final result is produced.
+    logic can be applied before routing to the appropriate final output.
     """
     if "approved" not in state:
         raise ValueError("Approval decision missing from state.")
     return {}
 
 
+def route_after_approval(state: State) -> str:
+    """Route to finalize or reject based on the human approval decision."""
+    if state.get("approved"):
+        return "finalize"
+    return "reject"
+
+
 def finalize(state: State) -> dict:
-    """Return the final result based on human approval."""
-    if state["approved"]:
-        return {"result": state["draft"]}
+    """Return the approved draft as the final result."""
+    return {"result": state["draft"]}
+
+
+def reject(state: State) -> dict:
+    """Return a rejection message when the human declines the draft."""
     return {"result": "Request rejected by human."}
 
 
@@ -63,13 +75,23 @@ def build_graph():
     graph.add_node("generate_draft", generate_draft)
     graph.add_node("approval", approval)
     graph.add_node("finalize", finalize)
+    graph.add_node("reject", reject)
 
     graph.add_edge(START, "generate_draft")
     graph.add_edge("generate_draft", "approval")
-    graph.add_edge("approval", "finalize")
+    graph.add_conditional_edges(
+        "approval",
+        route_after_approval,
+        {"finalize": "finalize", "reject": "reject"},
+    )
     graph.add_edge("finalize", END)
+    graph.add_edge("reject", END)
 
-    # Explicit checkpoint: pause before the dedicated approval node.
+    # Compile the graph with an explicit interrupt before the approval node.
+    # This creates a checkpoint: the first invocation executes all nodes up
+    # to but not including `approval`, then returns with an `__interrupt__`
+    # payload instead of a final result. The application can then present
+    # the draft to a human and resume the graph with their decision.
     return graph.compile(interrupt_before=["approval"])
 
 
@@ -83,8 +105,11 @@ def main():
     graph = build_graph()
     config = {"configurable": {"thread_id": "demo-thread"}}
 
-    # Start the graph. It will pause before `approval` due to the
-    # explicit `interrupt_before` checkpoint.
+    # Invoking the graph for the first time runs `generate_draft` and then
+    # pauses before `approval`. The returned state includes an `__interrupt__`
+    # key containing the interrupt payload. Execution is suspended at the
+    # `approval` checkpoint and resumes only when `Command(resume=...)` is
+    # passed to invoke with the same thread config.
     result = graph.invoke(
         {"query": "Explain LangGraph in one sentence."},
         config,
@@ -98,7 +123,10 @@ def main():
         print("Unexpected: graph did not interrupt.")
         return
 
-    # Resume the graph with human approval using the dedicated resume function.
+    # Resume with `Command(resume={"approved": ...})`. The command value is
+    # merged into the state before the interrupted `approval` node is
+    # executed, and the conditional edges then follow the visible
+    # approve/reject routing.
     result = resume_graph(graph, config, approved=True)
     print("\nFinal result after approval:")
     print(result["result"])
