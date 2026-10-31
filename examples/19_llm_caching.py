@@ -69,6 +69,7 @@ def print_cache_stats(cache: CountingCache):
 
 def clear_cache(cache: CountingCache):
     """Clear the cache contents and reset hit/miss counters."""
+    print("Clearing cache...")
     cache.clear()
 
 
