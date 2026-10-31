@@ -16,6 +16,17 @@ never hardcoded; it is read from the environment at runtime. Alternative
 providers can be used by replacing the OpenAI LLM initialization with another
 LangChain LLM wrapper and providing the corresponding credentials via
 environment variables.
+
+Expected output:
+The example prints a generated company name for the given product. Because
+LLM responses are non-deterministic, the exact output will vary, for example
+"EcoBottle Co." or "GreenWave Bottles".
+
+Reuse:
+The build_chain() function constructs the LLMChain and can be reused in other
+modules by importing this module. The run_example(product) function accepts a
+product description and returns the model's suggestion as a string, allowing
+callers to integrate the chain into larger workflows.
 """
 
 import os
