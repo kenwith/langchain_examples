@@ -51,6 +51,18 @@ def multiply(a: int, b: int) -> int:
 
 
 def main() -> None:
+    """Build and run a zero-shot ReAct agent with custom tools.
+
+    This function constructs a LangChain agent using the
+    ZERO_SHOT_REACT_DESCRIPTION agent type. It provides a custom prefix and
+    suffix that define the prompt format, and registers two tools: a calculator
+    for mathematical expressions and a multiplier for integer products. The
+    agent is then run on a sample arithmetic question to demonstrate the tool
+    selection and execution flow.
+
+    Returns:
+        None. The function prints the agent's final answer to the console.
+    """
     # The tool descriptions are the main signal the agent uses to decide which
     # tool to invoke for a given question. Each description should state the
     # purpose of the tool and the expected input format.
