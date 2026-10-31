@@ -98,26 +98,4 @@ Each example is a self-contained file in the [examples directory](examples). The
 | 41_async_ollama_hyde.py | Async Ollama | Async HyDE with Ollama. |
 | 42_async_ollama_rerank.py | Async Ollama | Async reranking with Ollama. |
 | 43_async_ollama_structured.py | Async Ollama | Async structured output with Ollama. |
-| 44_async_ollama_fallback.py | Async Ollama | Async fallback with Ollama. |
-| 45_async_ollama_langgraph.py | Async Ollama LangGraph | Async LangGraph workflow with Ollama. |
-| 46_async_ollama_langgraph_persistence.py | Async Ollama LangGraph | Async LangGraph persistence with Ollama. |
-| 47_async_ollama_langgraph_subgraphs.py | Async Ollama LangGraph | Async LangGraph subgraphs with Ollama. |
-| 48_async_ollama_langgraph_parallel.py | Async Ollama LangGraph | Async parallel LangGraph nodes with Ollama. |
-| 49_async_ollama_langgraph_human_in_the_loop.py | Async Ollama LangGraph | Async human-in-the-loop workflow with Ollama. |
-| 50_async_ollama_langgraph_conditional.py | Async Ollama LangGraph | Async LangGraph workflow with conditional edges using Ollama. |
-| 51_async_ollama_langgraph_tools.py | Async Ollama LangGraph | Async LangGraph agent with tool use and Ollama. |
-| 52_async_ollama_langgraph_rag.py | Async Ollama LangGraph | Async LangGraph RAG workflow with Ollama. |
-| 53_async_ollama_langgraph_retry.py | Async Ollama LangGraph | Async LangGraph workflow with retry logic using Ollama. |
-| 54_async_ollama_langgraph_fallback.py | Async Ollama LangGraph | Async LangGraph workflow with model fallback using Ollama. |
-| 55_async_ollama_langgraph_structured.py | Async Ollama LangGraph | Async LangGraph workflow with structured output using Ollama. |
-| 56_async_ollama_langgraph_streaming.py | Async Ollama LangGraph | Async LangGraph workflow with streaming output using Ollama. |
-| 57_async_ollama_langgraph_memory.py | Async Ollama LangGraph | Async LangGraph workflow with conversation memory using Ollama. |
-| 58_async_ollama_langgraph_hybrid.py | Async Ollama LangGraph | Async LangGraph workflow combining local Ollama and cloud models. |
-| 59_async_ollama_langgraph_multi_agent.py | Async Ollama LangGraph | Async LangGraph workflow with multiple agents using Ollama. |
-| 60_async_ollama_langgraph_router.py | Async Ollama LangGraph | Async LangGraph workflow with routing logic using Ollama. |
-| 61_async_ollama_langgraph_guardrails.py | Async Ollama LangGraph | Async LangGraph workflow with guardrails using Ollama. |
-| 62_async_ollama_langgraph_cache.py | Async Ollama LangGraph | Async LangGraph workflow with response caching using Ollama. |
-| 63_async_ollama_langgraph_embeddings.py | Async Ollama LangGraph | Async LangGraph workflow using Ollama embeddings for retrieval. |
-| 64_async_ollama_langgraph_rerank.py | Async Ollama LangGraph | Async LangGraph workflow with reranking using Ollama. |
-| 65_async_ollama_langgraph_hyde.py | Async Ollama LangGraph | Async LangGraph workflow with HyDE using Ollama. |
-| 66_async_ollama_langgraph_multi_query.py | Async Ollama LangGraph | Async Lang
+| 44_async_ollama_fallback.py | Async Ollama | Async fallback with Oll
