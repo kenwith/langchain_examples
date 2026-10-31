@@ -7,12 +7,13 @@ that evaluator in an evaluation run using LangChain's evaluation framework.
 
 from __future__ import annotations
 
+import os
 from typing import List, Optional
 
+from langchain.chat_models import init_chat_model
 from langchain.evaluation import EvaluatorType
 from langchain.evaluation.schema import StringEvaluator
 from langchain.smith import RunEvalConfig
-from langchain.llms import OpenAI
 from langsmith import Client
 from langsmith.evaluation import evaluate
 
@@ -67,13 +68,30 @@ class RequiredKeywordsEvaluator(StringEvaluator):
         }
 
 
-def run_evaluation() -> "EvaluationResults":
-    """Run the evaluation and return the results."""
-    # Define the required keywords for the task.
-    required_keywords = ["langchain", "evaluation"]
+def build_evaluator(required_keywords: List[str]) -> RunEvalConfig:
+    """Build the evaluation configuration.
 
+    This helper creates a custom keyword evaluator and a provider-agnostic
+    chat model for the built-in QA evaluator. The model is configured through
+    the ``EVAL_MODEL`` and ``EVAL_MODEL_PROVIDER`` environment variables,
+    making the example usable with any LangChain-supported chat model provider.
+
+    Args:
+        required_keywords: List of keywords that must be present in responses.
+
+    Returns:
+        A ``RunEvalConfig`` containing both the built-in QA evaluator and the
+        custom keyword evaluator.
+    """
     # Create the custom evaluator.
     custom_evaluator = RequiredKeywordsEvaluator(required_keywords)
+
+    # Initialize a provider-agnostic chat model for the built-in evaluator.
+    # Configure the model and provider through environment variables.
+    eval_llm = init_chat_model(
+        model=os.getenv("EVAL_MODEL", "gpt-4o"),
+        model_provider=os.getenv("EVAL_MODEL_PROVIDER", "openai"),
+    )
 
     # Configure the evaluation run to include both a standard evaluator
     # and the custom keyword evaluator.
@@ -81,8 +99,19 @@ def run_evaluation() -> "EvaluationResults":
         evaluators=[
             EvaluatorType.QA,
             custom_evaluator,
-        ]
+        ],
+        eval_llm=eval_llm,
     )
+    return eval_config
+
+
+def run_evaluation() -> "EvaluationResults":
+    """Run the evaluation and return the results."""
+    # Define the required keywords for the task.
+    required_keywords = ["langchain", "evaluation"]
+
+    # Build the evaluation configuration using the helper.
+    eval_config = build_evaluator(required_keywords)
 
     # Initialize the LangSmith client and run the evaluation.
     client = Client()
