@@ -22,11 +22,13 @@ import argparse
 import os
 import sys
 
-from langchain.chains import RetrievalQA
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_core.documents import Document
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
 
@@ -56,6 +58,19 @@ def load_documents(directory_path: str | None) -> list[Document]:
         loader = DirectoryLoader(directory_path, glob="**/*.txt", loader_cls=TextLoader)
         return loader.load()
     return [Document(page_content=text) for text in SAMPLE_TEXTS]
+
+
+def format_docs(docs: list[Document]) -> str:
+    """Join the content of retrieved documents into a single string.
+
+    Args:
+        docs: A list of Document objects retrieved from the vector store.
+
+    Returns:
+        A single string containing the page content of each document,
+        separated by blank lines.
+    """
+    return "\n\n".join(doc.page_content for doc in docs)
 
 
 def build_retriever(
@@ -122,8 +137,18 @@ def main() -> None:
         model=os.getenv("CHAT_MODEL", "gpt-3.5-turbo"),
         temperature=0,
     )
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=chat_model, chain_type="stuff", retriever=retriever
+
+    prompt = PromptTemplate.from_template(
+        "Answer the question based only on the following context:\n\n"
+        "{context}\n\n"
+        "Question: {question}\n"
+        "Answer:"
+    )
+    qa_chain = (
+        {"context": retriever | format_docs, "question": RunnablePassthrough()}
+        | prompt
+        | chat_model
+        | StrOutputParser()
     )
 
     print("RAG query mode. Type 'exit' or 'quit' to stop.")
@@ -137,7 +162,7 @@ def main() -> None:
         if not question:
             continue
         answer = qa_chain.invoke(question)
-        print(f"Answer: {answer['result']}")
+        print(f"Answer: {answer}")
 
 
 if __name__ == "__main__":
