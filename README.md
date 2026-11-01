@@ -98,4 +98,25 @@ Each example is a self-contained file in the [examples directory](examples). The
 | 41_async_ollama_hyde.py | Async Ollama | Async HyDE with Ollama. |
 | 42_async_ollama_rerank.py | Async Ollama | Async reranking with Ollama. |
 | 43_async_ollama_structured.py | Async Ollama | Async structured output with Ollama. |
-| 44_async_ollama_fallback.py | Async Ollama | Async fallback with Oll
+| 44_async_ollama_fallback.py | Async Ollama | Async fallback with Ollama. |
+| 45_async_adaptive_rag.py | Async RAG | Implements an adaptive RAG pipeline asynchronously. |
+
+## Async Examples
+
+The async examples demonstrate how to use LangChain's asynchronous APIs to build concurrent applications. They cover basic async chains, RAG, agents, and Ollama integrations. These examples are included in the table above and can be run with `asyncio.run()` or an async event loop.
+
+## Testing
+
+Tests are located in the `tests` directory. Run the test suite with:
+
+```bash
+pytest
+```
+
+## Contributing
+
+Contributions are welcome. Please open an issue or submit a pull request on the [GitHub repository](https://github.com/kenwith/langchain_examples). Ensure that new examples follow the existing naming and documentation conventions.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
