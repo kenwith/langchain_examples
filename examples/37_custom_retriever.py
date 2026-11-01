@@ -12,6 +12,10 @@ Both retrievers are subclasses of `BaseRetriever` and provide synchronous and
 asynchronous retrieval methods. The `search_documents` helper formats the
 retrieved documents into a numbered list.
 
+Empty queries are handled gracefully: both retrievers return an empty list
+when the query is `None`, empty, or whitespace-only, instead of raising an
+error. No-result cases are also handled gracefully, returning an empty list.
+
 Usage:
     The vector-store-based retriever can be created with
     `create_custom_retriever` and used directly or with a chat model.
@@ -156,8 +160,8 @@ class InMemoryCustomRetriever(BaseRetriever):
 
     The constructor and assignment of attributes are handled by `BaseRetriever`
     through Pydantic. Input validation is performed to ensure that `k` is a
-    positive integer and that queries passed to the retrieval methods are
-    non-empty strings.
+    positive integer. Empty or whitespace-only queries are handled gracefully
+    and return an empty list.
 
     Attributes:
         vector_store: The in-memory vector store used for similarity search.
@@ -195,8 +199,12 @@ class InMemoryCustomRetriever(BaseRetriever):
         list of documents most relevant to the query. In this implementation,
         it simply delegates to the underlying vector store's similarity search.
 
+        Empty or whitespace-only queries are handled gracefully and return an
+        empty list.
+
         Args:
-            query: The query string to search for. Must be a non-empty string.
+            query: The query string to search for. If `None`, empty, or
+                whitespace-only, an empty list is returned.
             run_manager: Callback manager for the retriever run. Provided by
                 the framework for logging, tracing, and other callbacks. This
                 implementation does not use it, but it is required by the
@@ -204,12 +212,11 @@ class InMemoryCustomRetriever(BaseRetriever):
 
         Returns:
             A list of `Document` objects sorted by relevance to the query.
-
-        Raises:
-            ValueError: If `query` is None, empty, or whitespace-only.
+            If the query is empty or no documents are found, an empty list
+            is returned.
         """
         if not query or not query.strip():
-            raise ValueError("query must be a non-empty string")
+            return []
         return self.vector_store.similarity_search(query, k=self.k)
 
     async def _aget_relevant_documents(
@@ -221,8 +228,12 @@ class InMemoryCustomRetriever(BaseRetriever):
         list of documents most relevant to the query. It delegates to the
         underlying vector store's asynchronous similarity search.
 
+        Empty or whitespace-only queries are handled gracefully and return an
+        empty list.
+
         Args:
-            query: The query string to search for. Must be a non-empty string.
+            query: The query string to search for. If `None`, empty, or
+                whitespace-only, an empty list is returned.
             run_manager: Async callback manager for the retriever run. Provided
                 by the framework for logging, tracing, and other callbacks. This
                 implementation does not use it, but it is required by the
@@ -230,12 +241,11 @@ class InMemoryCustomRetriever(BaseRetriever):
 
         Returns:
             A list of `Document` objects sorted by relevance to the query.
-
-        Raises:
-            ValueError: If `query` is None, empty, or whitespace-only.
+            If the query is empty or no documents are found, an empty list
+            is returned.
         """
         if not query or not query.strip():
-            raise ValueError("query must be a non-empty string")
+            return []
         return await self.vector_store.asimilarity_search(query, k=self.k)
 
 
@@ -251,6 +261,9 @@ class SimpleInMemoryRetriever(BaseRetriever):
     The scoring function counts unique query words found in the document text.
     Documents with more matches are considered more relevant. Ties are broken
     by the original order of the document list.
+
+    Empty or whitespace-only queries are handled gracefully and return an
+    empty list.
 
     Attributes:
         documents: The list of documents to search over.
@@ -300,8 +313,12 @@ class SimpleInMemoryRetriever(BaseRetriever):
         This method is called by `BaseRetriever.invoke` and returns the top
         `k` documents with the highest word-overlap scores.
 
+        Empty or whitespace-only queries are handled gracefully and return an
+        empty list.
+
         Args:
-            query: The query string to search for. Must be a non-empty string.
+            query: The query string to search for. If `None`, empty, or
+                whitespace-only, an empty list is returned.
             run_manager: Callback manager for the retriever run. Provided by
                 the framework for logging, tracing, and other callbacks. This
                 implementation does not use it, but it is required by the
@@ -309,12 +326,11 @@ class SimpleInMemoryRetriever(BaseRetriever):
 
         Returns:
             A list of `Document` objects sorted by relevance to the query.
-
-        Raises:
-            ValueError: If `query` is None, empty, or whitespace-only.
+            If the query is empty or no documents match, an empty list is
+            returned.
         """
         if not query or not query.strip():
-            raise ValueError("query must be a non-empty string")
+            return []
         query_words = set(query.lower().split())
         scored = [
             (self._score_document(query_words, doc), i, doc)
@@ -333,8 +349,12 @@ class SimpleInMemoryRetriever(BaseRetriever):
         is purely in-memory and synchronous, this method simply calls the
         synchronous implementation.
 
+        Empty or whitespace-only queries are handled gracefully and return an
+        empty list.
+
         Args:
-            query: The query string to search for. Must be a non-empty string.
+            query: The query string to search for. If `None`, empty, or
+                whitespace-only, an empty list is returned.
             run_manager: Async callback manager for the retriever run. Provided
                 by the framework for logging, tracing, and other callbacks. This
                 implementation does not use it, but it is required by the
@@ -342,9 +362,8 @@ class SimpleInMemoryRetriever(BaseRetriever):
 
         Returns:
             A list of `Document` objects sorted by relevance to the query.
-
-        Raises:
-            ValueError: If `query` is None, empty, or whitespace-only.
+            If the query is empty or no documents match, an empty list is
+            returned.
         """
         return self._get_relevant_documents(
             query, run_manager=run_manager
@@ -378,15 +397,21 @@ def create_simple_retriever() -> SimpleInMemoryRetriever:
 def search_documents(retriever: BaseRetriever, query: str) -> str:
     """Retrieve documents for a query and format them as a numbered list.
 
+    If no documents are retrieved, a message indicating that no documents
+    were found is returned.
+
     Args:
         retriever: The retriever to use for document retrieval.
         query: The query string to search for.
 
     Returns:
         A formatted string with each retrieved document on a separate line,
-        prefixed by its position.
+        prefixed by its position. If no documents are found, returns
+        "No documents found."
     """
     docs = retriever.invoke(query)
+    if not docs:
+        return "No documents found."
     lines = [f"{i + 1}. {doc.page_content}" for i, doc in enumerate(docs)]
     return "\n".join(lines)
 
@@ -396,7 +421,8 @@ def main() -> None:
 
     The demo retrieves documents for a sample query using the vector-store
     based retriever, builds a context block from the retrieved documents, and
-    asks a chat model to answer the query based on that context.
+    asks a chat model to answer the query based on that context. If no
+    documents are retrieved, a message is printed and the demo exits early.
     """
     retriever = create_custom_retriever()
     query = "What is a retriever?"
@@ -404,6 +430,10 @@ def main() -> None:
     print("Retrieving documents for query:", query)
     retrieved_docs = retriever.invoke(query)
     print(f"Retrieved {len(retrieved_docs)} documents.\n")
+
+    if not retrieved_docs:
+        print("No documents found. Exiting.")
+        return
 
     context = "\n\n".join(doc.page_content for doc in retrieved_docs)
     chat_model = init_chat_model(os.getenv("CHAT_MODEL", "openai:gpt-4o-mini"))
