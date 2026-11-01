@@ -131,6 +131,23 @@ def test_examples_directory_files_are_listed_in_readme_table():
     assert not missing, f"Example files under examples/ missing from README examples table: {missing}"
 
 
+def test_all_example_files_are_referenced_in_readme_table():
+    """Every example file in the repository must be represented in the README examples table."""
+    table_paths = get_readme_table_paths()
+    table_dirs = {p for p in table_paths if not p.endswith(".py")}
+
+    missing = []
+    for path in get_example_files():
+        posix_path = path.as_posix()
+        covered = posix_path in table_paths or any(
+            posix_path.startswith(d.rstrip("/") + "/") for d in table_dirs
+        )
+        if not covered:
+            missing.append(posix_path)
+
+    assert not missing, f"Example files missing from README examples table: {missing}"
+
+
 def test_readme_examples_table_contains_expected_entries():
     """The README examples table must list examples/73 and examples/74."""
     table_paths = get_readme_table_paths()
