@@ -8,6 +8,7 @@ retrieval is retried. If the answer is not grounded, the query is also rewritten
 and the process repeats.
 """
 
+import logging
 from typing import Literal, TypedDict
 
 from langchain.chat_models import init_chat_model
@@ -16,6 +17,8 @@ from langchain_core.documents import Document
 from langchain_core.pydantic_v1 import BaseModel, Field
 from langchain_core.vectorstores import InMemoryVectorStore
 from langgraph.graph import END, START, StateGraph
+
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # State definition
@@ -97,6 +100,7 @@ def build_graph(llm, retriever):
         """Retrieve documents based on the current question."""
         question = state["question"]
         documents = retriever.invoke(question)
+        logger.info("Retrieved %d document(s) for question: %s", len(documents), question)
         return {"documents": documents}
 
     # ------------------------------------------------------------------
@@ -116,8 +120,18 @@ def build_graph(llm, retriever):
                 f"Is it relevant? Answer 'yes' or 'no'."
             )
             score = grader.invoke(prompt)
+            logger.info(
+                "Document relevance: %s | document: %s",
+                score.binary_score,
+                doc.page_content[:80],
+            )
             if score.binary_score == "yes":
                 filtered_docs.append(doc)
+        logger.info(
+            "Retrieval grading: kept %d of %d document(s)",
+            len(filtered_docs),
+            len(documents),
+        )
         return {"documents": filtered_docs}
 
     # ------------------------------------------------------------------
@@ -133,6 +147,7 @@ def build_graph(llm, retriever):
             f"New question:"
         )
         new_question = llm.invoke(prompt).content
+        logger.info("Query transform: '%s' -> '%s'", question, new_question)
         return {
             "question": new_question,
             "iterations": state["iterations"] + 1,
@@ -152,7 +167,9 @@ def build_graph(llm, retriever):
             f"Question: {question}\n"
             f"Answer:"
         )
+        logger.info("Generating answer using %d document(s)", len(documents))
         generation = llm.invoke(prompt).content
+        logger.info("Generated answer: %s", generation[:120])
         return {"generation": generation}
 
     # ------------------------------------------------------------------
@@ -171,7 +188,9 @@ def build_graph(llm, retriever):
             f"Is the answer grounded in the documents? Answer 'yes' or 'no'."
         )
         score = grader.invoke(prompt)
-        return {"grounded": score.binary_score == "yes"}
+        grounded = score.binary_score == "yes"
+        logger.info("Groundedness grading: %s", score.binary_score)
+        return {"grounded": grounded}
 
     # ------------------------------------------------------------------
     # Conditional edges
@@ -179,13 +198,27 @@ def build_graph(llm, retriever):
     def decide_to_generate(state):
         """If no relevant documents, rewrite the query; otherwise generate."""
         if len(state["documents"]) == 0:
+            logger.info("Routing: no relevant documents -> transform_query")
             return "transform_query"
+        logger.info(
+            "Routing: %d relevant document(s) -> generate",
+            len(state["documents"]),
+        )
         return "generate"
 
     def decide_to_finish(state):
         """If answer is grounded or max iterations reached, finish; else rewrite."""
         if state["grounded"] or state["iterations"] >= max_iterations:
+            logger.info(
+                "Routing: grounded=%s, iterations=%d -> end",
+                state["grounded"],
+                state["iterations"],
+            )
             return "end"
+        logger.info(
+            "Routing: not grounded, iterations=%d -> transform_query",
+            state["iterations"],
+        )
         return "transform_query"
 
     # ------------------------------------------------------------------
@@ -230,6 +263,10 @@ def build_graph(llm, retriever):
 
 def main():
     """Run a demo query through the self-corrective RAG pipeline."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s: %(message)s",
+    )
     llm = init_chat_model(model="openai:gpt-4o", temperature=0)
     retriever = create_retriever()
     app = build_graph(llm, retriever)
