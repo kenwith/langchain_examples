@@ -29,7 +29,6 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langchain_core.vectorstores import VectorStoreRetriever
 from langchain_openai import ChatOpenAI
 
 # Default persist directory for the Chroma vector store.
@@ -69,6 +68,42 @@ def load_documents(directory_path: str | None) -> list[Document]:
     return _sample_documents()
 
 
+def create_vector_store(
+    documents: list[Document], persist_directory: str = PERSIST_DIRECTORY
+) -> Chroma:
+    """Create and persist a Chroma vector store from the given documents.
+
+    Args:
+        documents: A list of Document objects to index.
+        persist_directory: Directory where the Chroma vector store is persisted.
+
+    Returns:
+        A Chroma vector store containing the embedded documents.
+    """
+    embeddings = OpenAIEmbeddings()
+    vectorstore = Chroma.from_documents(
+        documents=documents,
+        embedding=embeddings,
+        persist_directory=persist_directory,
+    )
+    return vectorstore
+
+
+def load_vector_store(persist_directory: str = PERSIST_DIRECTORY) -> Chroma:
+    """Load an existing Chroma vector store from disk.
+
+    Args:
+        persist_directory: Directory where the Chroma vector store is persisted.
+
+    Returns:
+        The Chroma vector store loaded from the specified directory.
+    """
+    embeddings = OpenAIEmbeddings()
+    return Chroma(
+        persist_directory=persist_directory, embedding_function=embeddings
+    )
+
+
 def format_docs(docs: list[Document]) -> str:
     """Join the content of retrieved documents into a single string.
 
@@ -80,30 +115,6 @@ def format_docs(docs: list[Document]) -> str:
         separated by blank lines.
     """
     return "\n\n".join(doc.page_content for doc in docs)
-
-
-def build_retriever(
-    documents: list[Document], persist_directory: str = PERSIST_DIRECTORY
-) -> VectorStoreRetriever:
-    """Build and return a retriever from the given documents.
-
-    Creates a Chroma vector store from the documents, persists it to the
-    specified directory, and returns a retriever for querying.
-
-    Args:
-        documents: A list of Document objects to index.
-        persist_directory: Directory where the Chroma vector store is persisted.
-
-    Returns:
-        A retriever object that can be used to retrieve relevant documents.
-    """
-    embeddings = OpenAIEmbeddings()
-    vectorstore = Chroma.from_documents(
-        documents=documents,
-        embedding=embeddings,
-        persist_directory=persist_directory,
-    )
-    return vectorstore.as_retriever()
 
 
 def main() -> None:
@@ -124,7 +135,7 @@ def main() -> None:
         directory_path = args.create if args.create != "" else None
         documents = load_documents(directory_path)
         print(f"Loaded {len(documents)} documents.")
-        build_retriever(documents)
+        create_vector_store(documents)
         print(f"Vector store created/updated at {PERSIST_DIRECTORY}.")
         return
 
@@ -136,10 +147,7 @@ def main() -> None:
         )
         sys.exit(1)
 
-    embeddings = OpenAIEmbeddings()
-    vectorstore = Chroma(
-        persist_directory=PERSIST_DIRECTORY, embedding_function=embeddings
-    )
+    vectorstore = load_vector_store()
     retriever = vectorstore.as_retriever()
 
     chat_model = ChatOpenAI(
