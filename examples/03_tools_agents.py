@@ -1,9 +1,10 @@
 import math
-from langchain.agents import initialize_agent, Tool, AgentType
+from langchain.agents import initialize_agent, AgentType
 from langchain.llms import OpenAI
 from langchain.tools import tool
 
 
+@tool("Calculator")
 def calculator(expression: str) -> str:
     """Evaluate a mathematical expression safely.
 
@@ -67,11 +68,7 @@ def main() -> None:
     # tool to invoke for a given question. Each description should state the
     # purpose of the tool and the expected input format.
     tools = [
-        Tool(
-            name="Calculator",
-            func=calculator,
-            description="Useful for math calculations. Input should be a mathematical expression.",
-        ),
+        calculator,
         multiply,
     ]
 
