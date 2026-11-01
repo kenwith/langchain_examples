@@ -34,6 +34,19 @@ calls, or chain executions occur at import time. The LLM chain is only invoked
 inside the main() function, which runs only when this file is executed directly
 as a script. Therefore, importing this module in another program does not
 require an API key and does not consume resources until a function is called.
+
+Usage:
+    Run the script directly to see the example in action:
+        python examples/01_basic_chains.py
+    The main() function can also be imported and called programmatically,
+    but it requires the OPENAI_API_KEY environment variable to be set.
+
+Customization:
+    To use a different product description, modify the argument passed to
+    run_example() inside main(). To switch to a different LLM provider,
+    replace the OpenAI initialization in build_chain() with another LangChain
+    LLM wrapper and ensure the corresponding credentials are available in the
+    environment.
 """
 
 import os
