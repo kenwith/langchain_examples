@@ -1,11 +1,22 @@
 """Example 05: Streaming output.
 
-Use a StreamingStdOutCallbackHandler and print token deltas so the example shows
-incremental output.
+Use a StreamingStdOutCallbackHandler for synchronous streaming and an
+async helper using astream_events for asynchronous token streaming.
+Both print token deltas so the example shows incremental output.
 """
+
+import asyncio
 
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.llms import OpenAI
+
+
+async def stream_tokens_async(llm: OpenAI, prompt: str) -> None:
+    """Stream tokens asynchronously using astream_events."""
+    async for event in llm.astream_events(prompt, version="v1"):
+        if event["event"] == "on_llm_new_token":
+            print(event["data"]["chunk"], end="", flush=True)
+    print()
 
 
 def main() -> None:
@@ -20,9 +31,19 @@ def main() -> None:
     prompt = "Write a short poem about streaming output."
     print("Prompt:")
     print(prompt)
-    print("\nStreaming response:")
+
+    print("\nSynchronous streaming response:")
     llm(prompt)
     print()
+
+    async_llm = OpenAI(
+        model="gpt-3.5-turbo-instruct",
+        temperature=0.7,
+        max_tokens=256,
+        streaming=True,
+    )
+    print("\nAsynchronous streaming response:")
+    asyncio.run(stream_tokens_async(async_llm, prompt))
 
 
 if __name__ == "__main__":
