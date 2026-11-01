@@ -30,10 +30,16 @@ Node transition details:
   - If `processed_data` is present and non-empty, the transition goes to `finalize`.
   - Otherwise, the transition goes directly to `END`.
 - From `finalize`, an unconditional edge terminates the graph at `END`.
+
+Reusability:
+- The state schema is defined as a TypedDict (`WorkflowState`), making the data contract explicit.
+- The `build_graph()` function constructs and compiles the graph, allowing the workflow to be reused
+  by simply calling this function whenever a new instance is needed.
+- A convenience helper `create_initial_state()` is provided to initialize a state with default values.
 """
 
 from typing import Any, Optional, TypedDict
-from langgraph.graph import StateGraph, END
+from langgraph.graph import StateGraph, END, CompiledStateGraph
 
 
 # Define the state schema as a TypedDict
@@ -112,7 +118,7 @@ def finalize(state: State) -> State:
 
 
 # Build the graph
-def build_graph() -> Any:
+def build_graph() -> CompiledStateGraph:
     """Construct and compile the LangGraph state graph."""
     workflow = StateGraph(WorkflowState)
 
@@ -166,7 +172,17 @@ def build_graph() -> Any:
     return workflow.compile()
 
 
-def invoke_graph(initial_state: State, app: Optional[Any] = None) -> State:
+def create_initial_state(input_data: str = "") -> WorkflowState:
+    """Create a new workflow state with the given input data and default values."""
+    return {
+        "input_data": input_data,
+        "processed_data": None,
+        "validation_result": None,
+        "final_output": None,
+    }
+
+
+def invoke_graph(initial_state: State, app: Optional[CompiledStateGraph] = None) -> State:
     """Run the workflow using an optionally pre-built graph."""
     # If no app is provided, build one using the default build_graph function.
     if app is None:
@@ -175,9 +191,22 @@ def invoke_graph(initial_state: State, app: Optional[Any] = None) -> State:
     return app.invoke(initial_state)
 
 
+# Public API for this module
+__all__ = [
+    "WorkflowState",
+    "State",
+    "build_graph",
+    "create_initial_state",
+    "invoke_graph",
+    "process_data",
+    "finalize",
+    "route_after_process",
+]
+
+
 if __name__ == "__main__":
     # Example input: a simple string to be processed by the workflow.
-    initial_state: State = {"input_data": "Hello LangGraph"}
+    initial_state = create_initial_state("Hello LangGraph")
 
     # Run the workflow using the helper function.
     result = invoke_graph(initial_state)
