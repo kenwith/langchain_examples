@@ -14,7 +14,7 @@ A collection of practical, runnable examples for building applications with Lang
 
 ## Overview
 
-LangChain is a framework for developing applications powered by language models. This repository contains a set of examples that demonstrate how to use LangChain to build everything from simple LLM calls to complex agents and retrieval-augmented generation (RAG) systems.
+LangChain is a framework for developing applications powered by language models. This repository contains a set of examples that demonstrate how to use LangChain to build everything from simple LLM calls to complex agents and retrieval-augmented generation (RAG) systems, including advanced retrieval techniques such as HyDE, multi-query retrieval, reranking, adaptive RAG, and RAG-Fusion.
 
 ## Quick Start
 
@@ -100,10 +100,14 @@ Each example is a self-contained file in the [examples directory](examples). The
 | 43_async_ollama_structured.py | Async Ollama | Async structured output with Ollama. |
 | 44_async_ollama_fallback.py | Async Ollama | Async fallback with Ollama. |
 | 45_async_adaptive_rag.py | Async RAG | Implements an adaptive RAG pipeline asynchronously. |
+| 46_rag_fusion.py | RAG | Implements RAG-Fusion by generating multiple related queries and fusing the retrieved results. |
+| 47_ollama_rag_fusion.py | Ollama | Runs RAG-Fusion with Ollama for generation and embeddings. |
+| 48_async_rag_fusion.py | Async RAG | Runs a RAG-Fusion pipeline asynchronously. |
+| 49_async_ollama_rag_fusion.py | Async Ollama | Runs RAG-Fusion asynchronously with Ollama. |
 
 ## Async Examples
 
-The async examples demonstrate how to use LangChain's asynchronous APIs to build concurrent applications. They cover basic async chains, RAG, agents, and Ollama integrations. These examples are included in the table above and can be run with `asyncio.run()` or an async event loop.
+The async examples demonstrate how to use LangChain's asynchronous APIs to build concurrent applications. They cover basic async chains, RAG, agents, Ollama integrations, and advanced RAG variants such as adaptive RAG and RAG-Fusion. These examples are included in the table above and can be run with `asyncio.run()` or an async event loop.
 
 ## Testing
 
