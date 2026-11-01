@@ -27,6 +27,13 @@ The build_chain() function constructs the LLMChain and can be reused in other
 modules by importing this module. The run_example(product) function accepts a
 product description and returns the model's suggestion as a string, allowing
 callers to integrate the chain into larger workflows.
+
+Import behavior:
+The module is safe to import without side effects. No network requests, API
+calls, or chain executions occur at import time. The LLM chain is only invoked
+inside the main() function, which runs only when this file is executed directly
+as a script. Therefore, importing this module in another program does not
+require an API key and does not consume resources until a function is called.
 """
 
 import os
