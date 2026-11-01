@@ -44,6 +44,15 @@ SAMPLE_TEXTS = [
 ]
 
 
+def _sample_documents() -> list[Document]:
+    """Create a list of sample documents from the built-in texts.
+
+    Returns:
+        A list of Document objects created from SAMPLE_TEXTS.
+    """
+    return [Document(page_content=text) for text in SAMPLE_TEXTS]
+
+
 def load_documents(directory_path: str | None) -> list[Document]:
     """Load documents from a directory or return built-in sample texts.
 
@@ -57,7 +66,7 @@ def load_documents(directory_path: str | None) -> list[Document]:
     if directory_path:
         loader = DirectoryLoader(directory_path, glob="**/*.txt", loader_cls=TextLoader)
         return loader.load()
-    return [Document(page_content=text) for text in SAMPLE_TEXTS]
+    return _sample_documents()
 
 
 def format_docs(docs: list[Document]) -> str:
