@@ -19,6 +19,17 @@ Workflow steps:
    using the chat model, and collects the outputs in the "results" field.
 4. The graph returns the final state with both "plan" and "results".
 
+State transitions:
+- Initial state: {"request": str}
+- After planner: {"request": str, "plan": [str, ...]}
+- After executor: {"request": str, "plan": [str, ...], "results": [str, ...]}
+
+Node responsibilities:
+- planner: Accepts the initial state, uses the chat model to decompose the
+  request into discrete steps, and returns the updated state with "plan" filled.
+- executor: Accepts the state after planning, executes each step in order,
+  and returns the final state with "results" populated.
+
 The state is defined by the `PlanExecuteState` TypedDict, which ensures
 that each node receives and returns a consistent dictionary structure.
 """
