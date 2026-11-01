@@ -27,7 +27,8 @@ The pipeline in this example has three stages:
 
 The example is provider-agnostic: it uses init_chat_model() to create a chat
 model based on environment variables. The same code works with OpenAI,
-Anthropic, or any other provider supported by LangChain.
+Anthropic, or any other provider supported by LangChain. If MODEL_PROVIDER is
+not set, the provider is inferred from the model name.
 
 The module also provides a `compress_documents` helper that wraps the
 compression retriever and applies a summarization prompt to the compressed
@@ -148,7 +149,7 @@ def build_compression_retriever(
     if compression_llm is None:
         compression_llm = init_chat_model(
             model=os.getenv("MODEL_NAME", "gpt-4o"),
-            model_provider=os.getenv("MODEL_PROVIDER", "openai"),
+            model_provider=os.getenv("MODEL_PROVIDER"),
             temperature=0,
         )
 
@@ -195,7 +196,7 @@ def compress_documents(
     if compression_llm is None:
         compression_llm = init_chat_model(
             model=os.getenv("MODEL_NAME", "gpt-4o"),
-            model_provider=os.getenv("MODEL_PROVIDER", "openai"),
+            model_provider=os.getenv("MODEL_PROVIDER"),
             temperature=0,
         )
 
