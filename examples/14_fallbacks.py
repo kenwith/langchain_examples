@@ -8,9 +8,16 @@ the helper catches the error and invokes the next callable in the chain.
 This pattern is useful for building robust LLM applications that can
 gracefully degrade when a model provider fails.
 
-The fallback chain can include different models, cached responses, or
-simple heuristic responses. The helper stops at the first successful call.
-If all fallbacks fail, the last exception is re-raised.
+Fallback model selection:
+- Choose fallbacks that are independent from the primary provider, such as
+  a different vendor, a local model, a cached response, or a heuristic rule.
+- Order fallbacks from most desirable to least desirable. The helper stops
+  at the first successful call, so the first fallback should be the one that
+  best balances quality and availability.
+- The `create_fallback_model` helper can generate simple fallback callables
+  with a custom name and response prefix, which is convenient for testing
+  and for scenarios where a lightweight response is acceptable.
+- If all fallbacks fail, the last exception is re-raised.
 """
 
 import time
@@ -29,8 +36,26 @@ def call_model(prompt: str) -> str:
 
 
 def call_fallback(prompt: str) -> str:
-    """A simple fallback that always succeeds."""
+    """A simple heuristic fallback that always succeeds."""
     return f"Fallback response to: {prompt}"
+
+
+def create_fallback_model(model_name: str, response_prefix: str) -> Callable[[str], str]:
+    """
+    Create a fallback model callable.
+
+    Args:
+        model_name: A name for the fallback model, used for identification.
+        response_prefix: A prefix to include in the generated response.
+
+    Returns:
+        A callable that accepts a prompt and returns a simulated response.
+    """
+    def fallback_model(prompt: str) -> str:
+        return f"{response_prefix} response to: {prompt}"
+
+    fallback_model.__name__ = model_name
+    return fallback_model
 
 
 def run_with_fallback(
@@ -69,7 +94,8 @@ def main() -> None:
     print("Rate limit exceeded, waiting %.2f seconds" % wait_time)
     time.sleep(wait_time)
 
-    result = run_with_fallback([call_model, call_fallback], prompt)
+    backup_model = create_fallback_model("backup", "Backup")
+    result = run_with_fallback([call_model, backup_model, call_fallback], prompt)
     print(result)
 
 
