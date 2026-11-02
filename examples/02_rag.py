@@ -21,6 +21,7 @@ Setup:
 import argparse
 import os
 import sys
+from collections.abc import Iterable
 
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.embeddings import OpenAIEmbeddings
@@ -104,17 +105,18 @@ def load_vector_store(persist_directory: str = PERSIST_DIRECTORY) -> Chroma:
     )
 
 
-def format_docs(docs: list[Document]) -> str:
+def format_docs(docs: Iterable[Document], separator: str = "\n\n") -> str:
     """Join the content of retrieved documents into a single string.
 
     Args:
-        docs: A list of Document objects retrieved from the vector store.
+        docs: An iterable of Document objects retrieved from the vector store.
+        separator: The string used to separate document contents.
 
     Returns:
         A single string containing the page content of each document,
-        separated by blank lines.
+        separated by `separator`.
     """
-    return "\n\n".join(doc.page_content for doc in docs)
+    return separator.join(doc.page_content for doc in docs)
 
 
 def main() -> None:
