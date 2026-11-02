@@ -9,10 +9,14 @@ import os
 
 from langchain.chat_models import init_chat_model
 from langchain_core.documents import Document
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.retrievers import BaseRetriever
 from langchain_core.vectorstores import InMemoryVectorStore
 from langchain_openai import OpenAIEmbeddings
+
+from helpers import fuse_documents
 
 DEFAULT_NUM_QUERIES = 3
 DEFAULT_RRF_K = 60
@@ -33,7 +37,7 @@ RAG_PROMPT = ChatPromptTemplate.from_template(
 
 async def generate_search_queries(
     question: str,
-    model,
+    model: BaseChatModel,
     num_queries: int = DEFAULT_NUM_QUERIES,
 ) -> list[str]:
     """Generate multiple search queries from a single question."""
@@ -45,31 +49,10 @@ async def generate_search_queries(
     return queries[:num_queries]
 
 
-def reciprocal_rank_fusion(
-    retrieved_docs: list[list[Document]],
-    k: int = DEFAULT_RRF_K,
-) -> list[Document]:
-    """Fuse multiple ranked document lists using reciprocal rank fusion."""
-    fused_scores = {}
-    for docs in retrieved_docs:
-        for rank, doc in enumerate(docs):
-            doc_id = doc.page_content
-            if doc_id not in fused_scores:
-                fused_scores[doc_id] = {"score": 0.0, "doc": doc}
-            fused_scores[doc_id]["score"] += 1.0 / (k + rank + 1)
-
-    sorted_docs = sorted(
-        fused_scores.values(),
-        key=lambda item: item["score"],
-        reverse=True,
-    )
-    return [item["doc"] for item in sorted_docs]
-
-
 async def retrieve_and_fuse(
     question: str,
-    retriever,
-    model,
+    retriever: BaseRetriever,
+    model: BaseChatModel,
     num_queries: int = DEFAULT_NUM_QUERIES,
     k: int = DEFAULT_RRF_K,
 ) -> list[Document]:
@@ -77,7 +60,7 @@ async def retrieve_and_fuse(
     queries = await generate_search_queries(question, model, num_queries)
     retrieval_tasks = [retriever.ainvoke(query) for query in queries]
     retrieved_docs = await asyncio.gather(*retrieval_tasks)
-    return reciprocal_rank_fusion(retrieved_docs, k=k)
+    return fuse_documents(retrieved_docs, k=k)
 
 
 def format_docs(docs: list[Document]) -> str:
@@ -88,7 +71,7 @@ def format_docs(docs: list[Document]) -> str:
 async def generate_answer(
     question: str,
     fused_docs: list[Document],
-    model,
+    model: BaseChatModel,
 ) -> str:
     """Generate a final answer from fused documents."""
     chain = RAG_PROMPT | model | StrOutputParser()
