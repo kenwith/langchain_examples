@@ -6,6 +6,8 @@ from langchain_core.embeddings import Embeddings
 from langchain_community.vectorstores import InMemoryVectorStore
 from typing import List
 
+from metadata_filtering_rag import build_metadata_filter
+
 
 class FakeEmbeddings(Embeddings):
     """Deterministic fake embeddings for testing."""
@@ -89,3 +91,47 @@ def test_retriever_metadata_filter(vector_store: InMemoryVectorStore) -> None:
     docs = retriever.invoke("volatile")
     assert docs
     assert all(doc.metadata["category"] == "finance" for doc in docs)
+
+
+def test_build_metadata_filter_valid_single_condition() -> None:
+    """A single valid key:value condition is parsed into a filter dict."""
+    assert build_metadata_filter("category:science") == {"category": "science"}
+
+
+def test_build_metadata_filter_valid_multiple_conditions() -> None:
+    """Multiple space-separated key:value conditions are combined."""
+    assert build_metadata_filter("category:science language:fr") == {
+        "category": "science",
+        "language": "fr",
+    }
+
+
+def test_build_metadata_filter_extra_whitespace_is_ignored() -> None:
+    """Extra whitespace between conditions does not affect parsing."""
+    assert build_metadata_filter("  category:science   language:fr  ") == {
+        "category": "science",
+        "language": "fr",
+    }
+
+
+def test_build_metadata_filter_empty_string() -> None:
+    """An empty query string produces an empty filter dict."""
+    assert build_metadata_filter("") == {}
+
+
+def test_build_metadata_filter_invalid_missing_colon() -> None:
+    """A condition without a colon is rejected."""
+    with pytest.raises(ValueError):
+        build_metadata_filter("category science")
+
+
+def test_build_metadata_filter_invalid_empty_value() -> None:
+    """A condition with an empty value is rejected."""
+    with pytest.raises(ValueError):
+        build_metadata_filter("category:")
+
+
+def test_build_metadata_filter_invalid_empty_key() -> None:
+    """A condition with an empty key is rejected."""
+    with pytest.raises(ValueError):
+        build_metadata_filter(":science")
