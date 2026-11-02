@@ -139,12 +139,21 @@ def build_filter_from_query(query):
     return build_metadata_filter(category=category, year=year)
 
 
-def build_filtered_retriever(vectorstore, filter_dict, k=3):
+def build_filtered_retriever(vectorstore, filter_dict=None, k=3, user_input=None, category=None, year=None):
     """Build a retriever that applies metadata filtering.
 
     This centralizes the metadata filter configuration. The returned retriever
     will use the given filter and top-k value for all its searches.
+
+    The filter can be supplied directly via ``filter_dict``, or constructed
+    from explicit criteria or a simple user input string using
+    ``build_metadata_filter``. If both ``filter_dict`` and other criteria are
+    provided, ``filter_dict`` takes precedence.
     """
+    if filter_dict is None:
+        filter_dict = build_metadata_filter(
+            user_input=user_input, category=category, year=year
+        )
     return vectorstore.as_retriever(search_kwargs={"filter": filter_dict, "k": k})
 
 
