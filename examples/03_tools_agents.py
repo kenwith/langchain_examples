@@ -1,5 +1,5 @@
 import math
-from langchain.agents import initialize_agent, AgentType
+from langchain.agents import initialize_agent, AgentType, AgentExecutor
 from langchain.llms import OpenAI
 from langchain.tools import tool
 
@@ -51,18 +51,16 @@ def multiply(a: int, b: int) -> int:
     return a * b
 
 
-def main() -> None:
-    """Build and run a zero-shot ReAct agent with custom tools.
+def build_agent() -> AgentExecutor:
+    """Build and return a zero-shot ReAct agent with custom tools.
 
     This function constructs a LangChain agent using the
     ZERO_SHOT_REACT_DESCRIPTION agent type. It provides a custom prefix and
     suffix that define the prompt format, and registers two tools: a calculator
-    for mathematical expressions and a multiplier for integer products. The
-    agent is then run on a sample arithmetic question to demonstrate the tool
-    selection and execution flow.
+    for mathematical expressions and a multiplier for integer products.
 
     Returns:
-        None. The function prints the agent's final answer to the console.
+        An initialized LangChain agent.
     """
     # The tool descriptions are the main signal the agent uses to decide which
     # tool to invoke for a given question. Each description should state the
@@ -106,6 +104,12 @@ Thought:"""
         prefix=prefix,
         suffix=suffix,
     )
+    return agent
+
+
+def main() -> None:
+    """Build the agent and run it on a sample arithmetic question."""
+    agent = build_agent()
 
     # The agent may iterate through several Thought/Action/Observation cycles
     # before it has enough information to produce a final answer.
