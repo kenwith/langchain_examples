@@ -12,6 +12,10 @@ within a LangGraph state graph and combine their results into a final output.
 The graph first generates a topic, then two independent nodes write a short
 story and a poem about that topic, and finally a combine node merges both
 pieces into a single response.
+
+The workflow is exposed through the `build_graph` function, which returns a
+compiled LangGraph graph. A `run` helper is also provided for convenient
+execution and testing.
 """
 
 import os
@@ -77,14 +81,54 @@ def combine_results(state: GraphState) -> dict:
     return {"combined_output": combined}
 
 
-def build_graph():
-    """Build the LangGraph graph."""
+def build_graph(model=None, temperature: float = 0.7):
+    """Build the LangGraph graph.
+
+    Args:
+        model: An optional model instance. If None, a model is created from
+            the MODEL environment variable (default "gpt-4o-mini") using the
+            provided temperature.
+        temperature: The temperature to use when creating a model. Ignored if
+            `model` is provided.
+
+    Returns:
+        A compiled LangGraph graph.
+    """
+    # Create the model once if not injected, so all nodes share the same instance.
+    if model is None:
+        model = init_chat_model(
+            model=os.getenv("MODEL", "gpt-4o-mini"),
+            temperature=temperature,
+        )
+
+    def _generate_topic(state: GraphState) -> dict:
+        """Generate a topic using the shared model."""
+        if state.get("topic"):
+            return {"topic": state["topic"]}
+        response = model.invoke(
+            "Suggest a single, interesting topic for a short story and a poem. "
+            "Return only the topic name, no extra text."
+        )
+        return {"topic": response.content.strip()}
+
+    def _write_story(state: GraphState) -> dict:
+        """Write a short story using the shared model."""
+        prompt = f"Write a short story (2-3 sentences) about: {state['topic']}"
+        response = model.invoke(prompt)
+        return {"story": response.content.strip()}
+
+    def _write_poem(state: GraphState) -> dict:
+        """Write a short poem using the shared model."""
+        prompt = f"Write a short poem (2-3 lines) about: {state['topic']}"
+        response = model.invoke(prompt)
+        return {"poem": response.content.strip()}
+
     graph = StateGraph(GraphState)
 
     # Add nodes
-    graph.add_node("generate_topic", generate_topic)
-    graph.add_node("write_story", write_story)
-    graph.add_node("write_poem", write_poem)
+    graph.add_node("generate_topic", _generate_topic)
+    graph.add_node("write_story", _write_story)
+    graph.add_node("write_poem", _write_poem)
     graph.add_node("combine_results", combine_results)
 
     # Define edges
@@ -98,7 +142,24 @@ def build_graph():
     return graph.compile()
 
 
-if __name__ == "__main__":
+def run(topic: str = "") -> str:
+    """Run the graph with the given topic and return the combined output.
+
+    Args:
+        topic: The topic to use. If empty, the graph will generate one.
+
+    Returns:
+        The combined story and poem as a string.
+    """
     app = build_graph()
-    result = app.invoke({"topic": ""})  # empty topic triggers generation
-    print(result["combined_output"])
+    result = app.invoke({"topic": topic})
+    return result["combined_output"]
+
+
+def main() -> None:
+    """Execute the example and print the combined output."""
+    print(run(""))
+
+
+if __name__ == "__main__":
+    main()
