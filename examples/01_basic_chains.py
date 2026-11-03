@@ -2,6 +2,20 @@
 
 This module demonstrates a simple LLMChain with a prompt template.
 
+A chain in LangChain is a sequence of components that processes an input and
+produces an output. In this example, the chain combines a prompt template and
+an LLM to generate a response. The prompt template defines the structure of the
+input and the instruction, while the LLM provides the generative capability.
+The chain orchestrates the data flow: it formats the prompt with the given
+input, sends it to the LLM, and returns the model's output. This pattern allows
+for reusable and composable building blocks, where each component can be
+swapped or extended independently.
+
+For a quick inline demonstration, the chain can be built and invoked directly:
+`LLMChain(llm=OpenAI(), prompt=PromptTemplate(...)).run("eco-friendly water bottles")`
+returns a generated company name. The full example below shows the recommended
+structure with separate functions for clarity.
+
 Chain flow:
 1. Define a prompt template. The template declares the input variables and
    contains the instruction that will be sent to the language model.
