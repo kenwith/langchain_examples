@@ -81,6 +81,20 @@ def load_documents(directory_path: str | None) -> list[Document]:
     return _sample_documents()
 
 
+def load_documents_from_args(args: argparse.Namespace) -> list[Document]:
+    """Load documents based on parsed command-line arguments.
+
+    Args:
+        args: Parsed arguments from argparse.
+
+    Returns:
+        A list of Document objects loaded from the directory specified by
+        ``args.create``, or the built-in sample texts if no directory is given.
+    """
+    directory_path = args.create if args.create != "" else None
+    return load_documents(directory_path)
+
+
 def create_vector_store(
     documents: list[Document], persist_directory: str = PERSIST_DIRECTORY
 ) -> Chroma:
@@ -146,8 +160,7 @@ def main() -> None:
 
     if args.create is not None:
         # Create mode: load documents and build the vector store.
-        directory_path = args.create if args.create != "" else None
-        documents = load_documents(directory_path)
+        documents = load_documents_from_args(args)
         print(f"Loaded {len(documents)} documents.")
         create_vector_store(documents)
         print(f"Vector store created/updated at {PERSIST_DIRECTORY}.")
