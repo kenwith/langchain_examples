@@ -60,6 +60,10 @@ def dispatch_parallel_tool_calls(tool_calls, tools, logger=None):
     as error ToolMessages so the agent can recover gracefully. Tool calls are
     sorted by name before execution for deterministic result ordering.
 
+    Note: The returned list of ToolMessages is ordered according to the sorted
+    tool calls (by name), not by the order in which the concurrent executions
+    complete. This ensures a stable, predictable output regardless of timing.
+
     Args:
         tool_calls: List of tool call dicts from an AIMessage.
         tools: List of LangChain tools.
@@ -124,6 +128,8 @@ def dispatch_parallel_tool_calls(tool_calls, tools, logger=None):
     # and `as_completed` yields futures as they finish. Results are placed
     # into the preallocated list by the original sorted index, so the final
     # order is deterministic even though execution is concurrent.
+    # The order of the returned messages corresponds to the sorted tool calls,
+    # NOT the order in which the futures complete.
     with ThreadPoolExecutor(max_workers=max(1, len(sorted_tool_calls))) as executor:
         future_to_index = {
             executor.submit(execute_tool_call, i, tc): i
