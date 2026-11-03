@@ -7,7 +7,8 @@ with any LangChain-compatible LLM, whether from OpenAI, Anthropic, Hugging
 Face, or another provider.
 
 The module also includes formatting helpers to present batch results in a
-uniform way, covering both success and error cases.
+uniform way, covering both success and error cases, and a display function
+for a clean, human-readable output.
 """
 
 import asyncio
@@ -115,6 +116,23 @@ def format_batch_results(results: List[Dict[str, Union[str, bool]]]) -> str:
     return _format_batch_results(results)
 
 
+def display_batch_results(results: List[Dict[str, Union[str, bool]]]) -> None:
+    """Display batch inference results in a clean, human-readable format.
+
+    This function prints a header, each result (or error), and a summary
+    of successful and failed prompts.
+
+    Args:
+        results: A list of result dictionaries from run_batch.
+    """
+    print("Batch Inference Results")
+    print("=======================")
+    print(format_batch_results(results))
+    successes = sum(1 for r in results if r.get("success"))
+    failures = len(results) - successes
+    print(f"\nSummary: {successes} succeeded, {failures} failed out of {len(results)} total.")
+
+
 def show_progress(completed: int, total: int) -> None:
     """Print batch processing progress.
 
@@ -142,7 +160,7 @@ async def main() -> None:
         max_concurrency=2,
         progress_callback=show_progress,
     )
-    print(format_batch_results(results))
+    display_batch_results(results)
 
 
 if __name__ == "__main__":
