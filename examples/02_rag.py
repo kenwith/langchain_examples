@@ -53,6 +53,19 @@ def _sample_documents() -> list[Document]:
     return [Document(page_content=text) for text in SAMPLE_TEXTS]
 
 
+def load_documents_from_directory(directory_path: str) -> list[Document]:
+    """Load all text documents from a directory.
+
+    Args:
+        directory_path: Path to a directory containing text files.
+
+    Returns:
+        A list of Document objects loaded from all .txt files in the directory.
+    """
+    loader = DirectoryLoader(directory_path, glob="**/*.txt", loader_cls=TextLoader)
+    return loader.load()
+
+
 def load_documents(directory_path: str | None) -> list[Document]:
     """Load documents from a directory or return built-in sample texts.
 
@@ -64,8 +77,7 @@ def load_documents(directory_path: str | None) -> list[Document]:
         A list of Document objects loaded from the directory or the built-in samples.
     """
     if directory_path:
-        loader = DirectoryLoader(directory_path, glob="**/*.txt", loader_cls=TextLoader)
-        return loader.load()
+        return load_documents_from_directory(directory_path)
     return _sample_documents()
 
 
