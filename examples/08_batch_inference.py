@@ -32,7 +32,7 @@ async def run_batch(
         prompts: A list of prompt strings to process.
         llm_chain: An LLMChain instance with async support.
         batch_size: Maximum number of prompts to process concurrently per batch.
-            If zero or negative, all prompts are processed in a single batch.
+            Must be a positive integer.
         max_concurrency: Maximum number of prompts processed concurrently across
             all batches. If None or non-positive, no limit is applied.
         progress_callback: An optional callback invoked after each batch with
@@ -43,17 +43,19 @@ async def run_batch(
         and a success flag.
 
     Raises:
-        ValueError: If `prompts` is None.
+        ValueError: If `prompts` is None or `batch_size` is not a positive integer.
     """
     if prompts is None:
         raise ValueError("prompts cannot be None")
+
+    if not isinstance(batch_size, int) or isinstance(batch_size, bool) or batch_size <= 0:
+        raise ValueError("batch_size must be a positive integer")
 
     total = len(prompts)
     if total == 0:
         return []
 
-    # Validate and normalize batch_size
-    effective_batch_size = batch_size if batch_size > 0 else total
+    effective_batch_size = batch_size
 
     # Create a semaphore to limit overall concurrency
     if max_concurrency is not None and max_concurrency > 0:
