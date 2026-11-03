@@ -18,6 +18,8 @@ from langchain.llms import OpenAI
 async def stream_tokens_async(llm: OpenAI, prompt: str) -> None:
     """Stream tokens asynchronously using astream_events."""
     async for event in llm.astream_events(prompt, version="v1"):
+        # The on_llm_new_token event fires for each token produced by the model.
+        # Printing the chunk incrementally displays the response in real time.
         if event["event"] == "on_llm_new_token":
             print(event["data"]["chunk"], end="", flush=True)
     print()
