@@ -140,6 +140,17 @@ def create_vectorstore():
     return FAISS.from_documents(SAMPLE_DOCUMENTS, embeddings)
 
 
+def create_retriever():
+    """Create a retriever over the sample vector store.
+
+    The retriever is configured to return the top 3 matching document chunks
+    for a given query. It is used by the retriever tool and can also be
+    tested independently.
+    """
+    vectorstore = create_vectorstore()
+    return vectorstore.as_retriever(search_kwargs={"k": 3})
+
+
 def create_retriever_tool() -> Tool:
     """Create a retriever tool that searches the vector store.
 
@@ -149,8 +160,7 @@ def create_retriever_tool() -> Tool:
     Each chunk includes its full metadata (source, title, URL) so the agent
     can cite it in the final answer.
     """
-    vectorstore = create_vectorstore()
-    retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
+    retriever = create_retriever()
 
     @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0)
     def search(query: str) -> str:
