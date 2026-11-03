@@ -11,13 +11,21 @@ class ChatBot:
     def ask(self, prompt: str) -> str:
         return self.conversation.predict(input=prompt)
 
+    def clear_memory(self):
+        """Clear the conversation memory."""
+        self.memory.clear()
+
 def conversation_loop():
     bot = ChatBot()
-    print("Chatbot ready. Type 'exit' to quit.")
+    print("Chatbot ready. Type 'exit' to quit, 'clear' to reset memory.")
     while True:
         user_input = input("You: ")
         if user_input.lower() == "exit":
             break
+        if user_input.lower() == "clear":
+            bot.clear_memory()
+            print("Memory cleared.")
+            continue
         response = bot.ask(user_input)
         print(f"Bot: {response}")
 
