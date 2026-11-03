@@ -131,12 +131,46 @@ def run_evaluation() -> "EvaluationResults":
     return results
 
 
+def _evaluator_description(key: str) -> str:
+    """Return a human-readable description for a given evaluator key."""
+    descriptions = {
+        "required_keywords": "Checks that all required keywords are present in the response.",
+        "qa": "Assesses the quality of the response against a reference answer using a chat model.",
+    }
+    return descriptions.get(key, "No description available.")
+
+
 def format_results(results) -> None:
-    """Print evaluation results in a readable format."""
+    """Print evaluation results in a readable format with clear metric names."""
     print("Evaluation Results")
     print("------------------")
+
+    # Track pass/fail counts for a summary.
+    passed = 0
+    failed = 0
+
     for res in results.results:
-        print(f"{res.key}: {res.score}")
+        evaluator_name = res.key
+        score = res.score
+
+        # Print a clear header for each evaluator.
+        print(f"\nEvaluator: {evaluator_name}")
+        print(f"  Description: {_evaluator_description(evaluator_name)}")
+
+        # Print the score with an explanation.
+        if score == 1.0:
+            print(f"  Score: 1.0 (pass)")
+            passed += 1
+        elif score == 0.0:
+            print(f"  Score: 0.0 (fail)")
+            failed += 1
+        else:
+            print(f"  Score: {score:.2f}")
+            # For non-binary scores, consider a threshold for pass/fail.
+            if score >= 0.5:
+                passed += 1
+            else:
+                failed += 1
 
         # Show additional details when available.
         metadata = getattr(res, "metadata", None) or {}
@@ -147,6 +181,10 @@ def format_results(results) -> None:
         comment = getattr(res, "comment", None)
         if comment:
             print(f"  Comment: {comment}")
+
+    # Print a summary of the evaluation run.
+    print("\n------------------")
+    print(f"Summary: {passed} passed, {failed} failed out of {len(results.results)} evaluators.")
     print("------------------")
 
 
