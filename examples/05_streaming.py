@@ -3,6 +3,10 @@
 Use a StreamingStdOutCallbackHandler for synchronous streaming and an
 async helper using astream_events for asynchronous token streaming.
 Both print token deltas so the example shows incremental output.
+
+Note: Streaming support varies by provider. This example uses OpenAI's
+legacy LLM interface. For other providers, adapt the callback handler or
+event names to match the provider's streaming implementation.
 """
 
 import asyncio
