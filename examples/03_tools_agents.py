@@ -51,13 +51,42 @@ def multiply(a: int, b: int) -> int:
     return a * b
 
 
+def _ensure_unique_tool_names(tools: list) -> list:
+    """Ensure tool names are unique by appending a suffix if needed.
+
+    This function checks for duplicate tool names and renames any conflicting
+    tools by appending "_1", "_2", etc., until a unique name is found. The
+    modification is performed in-place on the tool objects.
+
+    Args:
+        tools: A list of LangChain tool objects.
+
+    Returns:
+        The same list with unique tool names.
+    """
+    seen = set()
+    for tool in tools:
+        name = tool.name
+        if name in seen:
+            suffix = 1
+            new_name = f"{name}_{suffix}"
+            while new_name in seen:
+                suffix += 1
+                new_name = f"{name}_{suffix}"
+            tool.name = new_name
+        seen.add(tool.name)
+    return tools
+
+
 def build_agent() -> AgentExecutor:
     """Build and return a zero-shot ReAct agent with custom tools.
 
     This function constructs a LangChain agent using the
     ZERO_SHOT_REACT_DESCRIPTION agent type. It provides a custom prefix and
     suffix that define the prompt format, and registers two tools: a calculator
-    for mathematical expressions and a multiplier for integer products.
+    for mathematical expressions and a multiplier for integer products. The
+    tool names are checked for duplicates and renamed if necessary. The prefix
+    is generated dynamically from the final tool names and descriptions.
 
     Returns:
         An initialized LangChain agent.
@@ -70,15 +99,20 @@ def build_agent() -> AgentExecutor:
         multiply,
     ]
 
-    prefix = """You are an AI assistant that uses tools to answer questions. You have access to the following tools:
+    # Ensure unique tool names to avoid conflicts.
+    tools = _ensure_unique_tool_names(tools)
 
-Calculator: Useful for math calculations. Input should be a mathematical expression.
-multiply: Multiplies two integers. Input should be a JSON string with keys "a" and "b", e.g., '{"a": 3, "b": 4}'.
+    # Build the prefix dynamically using the actual tool names and descriptions.
+    tool_lines = "\n".join([f"{t.name}: {t.description}" for t in tools])
+    tool_names = ", ".join([t.name for t in tools])
+    prefix = f"""You are an AI assistant that uses tools to answer questions. You have access to the following tools:
+
+{tool_lines}
 
 Use the following format:
 Question: the input question
 Thought: you should always think about what to do
-Action: the action to take, should be one of [Calculator, multiply]
+Action: the action to take, should be one of [{tool_names}]
 Action Input: the input to the action
 Observation: the result of the action
 ... (this Thought/Action/Action Input/Observation can repeat N times)
