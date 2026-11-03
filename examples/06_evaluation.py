@@ -3,6 +3,14 @@
 This script demonstrates how to define a custom evaluator that checks whether
 the model's response contains a set of required keywords, and how to include
 that evaluator in an evaluation run using LangChain's evaluation framework.
+
+The evaluation run uses the following evaluators:
+
+- ``RequiredKeywordsEvaluator``: A custom evaluator that verifies the
+  presence of a predefined list of required keywords in the model's response.
+  It returns a score of 1.0 if all keywords are found and 0.0 otherwise.
+- ``EvaluatorType.QA``: A built-in evaluator that uses a chat model to assess
+  the quality of the model's response against a reference answer.
 """
 
 from __future__ import annotations
