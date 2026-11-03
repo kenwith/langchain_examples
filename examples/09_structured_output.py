@@ -38,6 +38,14 @@ class Joke(BaseModel):
         return v
 
 
+# Expected JSON schema for the structured output:
+# {
+#   "setup": {"type": "string", "description": "The setup of the joke"},
+#   "punchline": {"type": "string", "description": "The punchline of the joke"},
+#   "rating": {"enum": ["funny", "not funny"], "description": "How funny the joke is"}
+# }
+
+
 def main() -> None:
     llm = ChatOpenAI(model="gpt-4o-mini")
     prompt = ChatPromptTemplate.from_messages(
