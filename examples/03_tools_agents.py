@@ -1,7 +1,10 @@
+import logging
 import math
 from langchain.agents import initialize_agent, AgentType, AgentExecutor
 from langchain.llms import OpenAI
 from langchain.tools import tool
+
+logger = logging.getLogger(__name__)
 
 
 @tool("Calculator")
@@ -29,6 +32,7 @@ def calculator(expression: str) -> str:
         result = eval(expression, {"__builtins__": {}}, {"math": math})
         return str(result)
     except Exception as e:
+        logger.warning("Calculator tool failed for expression '%s': %s", expression, e)
         return f"Error: {e}"
 
 
@@ -48,7 +52,11 @@ def multiply(a: int, b: int) -> int:
     Returns:
         The product of a and b as an integer.
     """
-    return a * b
+    try:
+        return a * b
+    except Exception as e:
+        logger.warning("Multiply tool failed for a=%s, b=%s: %s", a, b, e)
+        return f"Error: {e}"
 
 
 def _ensure_unique_tool_names(tools: list) -> list:
