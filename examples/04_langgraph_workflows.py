@@ -42,7 +42,9 @@ from typing import Any, Optional, TypedDict
 from langgraph.graph import StateGraph, END, CompiledStateGraph
 
 
-# Define the state schema as a TypedDict
+# The state schema is defined as a TypedDict. Using total=False means that not all keys
+# need to be present in every state update; nodes may return only the fields they change.
+# LangGraph uses this schema to validate and merge state transitions between nodes.
 class WorkflowState(TypedDict, total=False):
     """State passed between nodes in the workflow.
 
@@ -150,11 +152,16 @@ def build_graph() -> CompiledStateGraph:
     # 4. END: terminal node that stops execution.
 
     # Entry point: execution starts at the "process" node.
+    # The graph always begins here, regardless of the initial state contents.
     workflow.set_entry_point("process")
 
     # Conditional edge: process -> finalize or END
-    # After processing, the `route_after_process` function decides whether to proceed
-    # to finalization or terminate early when no processed data is available.
+    # The `route_after_process` function returns a key that matches one of the mapping keys.
+    # LangGraph uses the returned string to select the next node from the mapping.
+    # In this workflow:
+    #   - "finalize" routes to the finalize node when processed_data exists.
+    #   - END routes to the terminal node when processed_data is missing/empty.
+    # The mapping keys must match the possible return values of the routing function.
     workflow.add_conditional_edges(
         "process",
         route_after_process,
@@ -166,6 +173,7 @@ def build_graph() -> CompiledStateGraph:
 
     # Edge: finalize -> END
     # After producing the final output, terminate the graph execution.
+    # This is an unconditional edge because finalize always completes the workflow.
     workflow.add_edge("finalize", END)
 
     # Compile the graph into an executable app and return it.
