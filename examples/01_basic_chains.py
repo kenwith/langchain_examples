@@ -1,12 +1,19 @@
 """Basic chain example.
 
 This module demonstrates a simple LLMChain with a prompt template.
-The flow:
-1. Define a prompt template.
-2. Create an LLM (e.g., OpenAI).
-3. Build a chain from the prompt and LLM.
-4. Run the chain with input variables.
-5. Print the response.
+
+Chain flow:
+1. Define a prompt template. The template declares the input variables and
+   contains the instruction that will be sent to the language model.
+2. Create an LLM instance, such as OpenAI, with optional settings like
+   temperature. This instance represents the model that generates the response.
+3. Build an LLMChain from the prompt and the LLM. The chain handles the
+   formatting of the prompt and the invocation of the model.
+4. Run the chain with the input variables. The chain fills the template with
+   the provided values, sends the formatted prompt to the LLM, and returns the
+   generated text.
+5. Print the response. The example prints the generated company name to the
+   console.
 
 Provider setup:
 This example uses OpenAI as the LLM provider. The provider requires an API key
@@ -40,6 +47,31 @@ Usage:
         python examples/01_basic_chains.py
     The main() function can also be imported and called programmatically,
     but it requires the OPENAI_API_KEY environment variable to be set.
+
+Usage example:
+    The following snippet demonstrates how to use the module's functions
+    programmatically. Because the filename begins with a digit, the module
+    is loaded with importlib:
+
+    import importlib
+    basic_chains = importlib.import_module("examples.01_basic_chains")
+    result = basic_chains.run_example("eco-friendly water bottles")
+    print(result)
+
+    The chain can also be constructed and invoked directly:
+
+    from langchain.llms import OpenAI
+    from langchain.prompts import PromptTemplate
+    from langchain.chains import LLMChain
+
+    prompt = PromptTemplate(
+        input_variables=["product"],
+        template="What is a good name for a company that makes {product}?",
+    )
+    llm = OpenAI(temperature=0.9)
+    chain = LLMChain(llm=llm, prompt=prompt)
+    response = chain.run("eco-friendly water bottles")
+    print(response)
 
 Customization:
     To use a different product description, modify the argument passed to
