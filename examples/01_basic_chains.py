@@ -29,19 +29,22 @@ Chain flow:
 5. Print the response. The example prints the generated company name to the
    console.
 
-Provider setup:
+Provider configuration:
 This example uses OpenAI as the LLM provider. The provider requires an API key
 to be available in the environment. The key must be stored in the
 OPENAI_API_KEY environment variable before running the module. The API key is
-never hardcoded; it is read from the environment at runtime. Alternative
-providers can be used by replacing the OpenAI LLM initialization with another
+never hardcoded; it is read from the environment at runtime. For local
+development, the variable can be exported in the shell or loaded from a .env
+file by an external tool such as python-dotenv. Alternative providers can be
+used by replacing the OpenAI LLM initialization in build_chain() with another
 LangChain LLM wrapper and providing the corresponding credentials via
 environment variables.
 
 Expected output:
 The example prints a generated company name for the given product. Because
-LLM responses are non-deterministic, the exact output will vary, for example
-"EcoBottle Co." or "GreenWave Bottles".
+LLM responses are non-deterministic, the exact output will vary. Example
+outputs include "EcoBottle Co." or "GreenWave Bottles". The response is
+printed as a single line to the console.
 
 Reuse:
 The build_chain() function constructs the LLMChain and can be reused in other
@@ -118,8 +121,12 @@ def run_example(product: str) -> str:
 
 
 def main():
-    """Execute the basic chain example."""
-    # Ensure API key is set
+    """Run the example and print the model's generated company name.
+
+    The function verifies that the OPENAI_API_KEY environment variable is
+    present, executes the chain for a sample product, and prints the response
+    to standard output.
+    """
     if "OPENAI_API_KEY" not in os.environ:
         raise ValueError("OPENAI_API_KEY environment variable not set.")
 
