@@ -1,8 +1,18 @@
 """Example 05: Streaming output.
 
-Use a StreamingStdOutCallbackHandler for synchronous streaming and an
-async helper using astream_events for asynchronous token streaming.
-Both print token deltas so the example shows incremental output.
+Use a StreamingStdOutCallbackHandler for synchronous streaming and a
+stream_response helper using astream_events for asynchronous token and
+tool streaming. Both print token deltas so the example shows incremental
+output.
+
+Token streaming behavior:
+  - The `on_llm_new_token` event fires for each token produced by the model.
+  - Printing the chunk incrementally displays the response in real time.
+
+Tool streaming behavior:
+  - The `on_tool_start` event fires when a tool begins execution.
+  - The `on_tool_end` event fires after a tool completes, with the tool output.
+  - The `on_tool_error` event fires if a tool raises an exception.
 
 Note: Streaming support varies by provider. This example uses OpenAI's
 legacy LLM interface. For other providers, adapt the callback handler or
@@ -10,18 +20,34 @@ event names to match the provider's streaming implementation.
 """
 
 import asyncio
+from typing import Any
 
 from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.llms import OpenAI
 
 
-async def stream_tokens_async(llm: OpenAI, prompt: str) -> None:
-    """Stream tokens asynchronously using astream_events."""
+async def stream_response(llm: Any, prompt: str) -> None:
+    """Stream tokens and tool events from an LLM or chain.
+
+    Token streaming behavior:
+      - The `on_llm_new_token` event fires for each token produced by the model.
+      - Printing the chunk incrementally displays the response in real time.
+
+    Tool streaming behavior:
+      - The `on_tool_start` event fires when a tool begins execution.
+      - The `on_tool_end` event fires after a tool completes, with the tool output.
+      - The `on_tool_error` event fires if a tool raises an exception.
+    """
     async for event in llm.astream_events(prompt, version="v1"):
-        # The on_llm_new_token event fires for each token produced by the model.
-        # Printing the chunk incrementally displays the response in real time.
-        if event["event"] == "on_llm_new_token":
+        event_type = event["event"]
+        if event_type == "on_llm_new_token":
             print(event["data"]["chunk"], end="", flush=True)
+        elif event_type == "on_tool_start":
+            print(f"\n[Tool start] {event['name']}")
+        elif event_type == "on_tool_end":
+            print(f"\n[Tool end] {event['name']}: {event['data']['output']}")
+        elif event_type == "on_tool_error":
+            print(f"\n[Tool error] {event['name']}: {event['data']['error']}")
     print()
 
 
@@ -49,7 +75,7 @@ def main() -> None:
         streaming=True,
     )
     print("\nAsynchronous streaming response:")
-    asyncio.run(stream_tokens_async(async_llm, prompt))
+    asyncio.run(stream_response(async_llm, prompt))
 
 
 if __name__ == "__main__":
