@@ -79,25 +79,28 @@ def build_chain():
         | chat_model
         | StrOutputParser()
     )
-    return chain
+    return chain, retriever
 
 
 async def main():
     """Run the RAG chain with ainvoke and astream."""
     print("Building RAG chain...")
-    chain = build_chain()
+    chain, retriever = build_chain()
 
-    question = "What is RAG?"
-    print(f"\nQuestion: {question}\n")
+    try:
+        question = "What is RAG?"
+        print(f"\nQuestion: {question}\n")
 
-    print("--- ainvoke ---")
-    answer = await chain.ainvoke({"question": question})
-    print(answer)
+        print("--- ainvoke ---")
+        answer = await chain.ainvoke({"question": question})
+        print(answer)
 
-    print("\n--- astream ---")
-    async for chunk in chain.astream({"question": question}):
-        print(chunk, end="", flush=True)
-    print()
+        print("\n--- astream ---")
+        async for chunk in chain.astream({"question": question}):
+            print(chunk, end="", flush=True)
+        print()
+    finally:
+        await retriever.aclose()
 
 
 if __name__ == "__main__":
