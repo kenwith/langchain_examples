@@ -4,6 +4,11 @@ Example: Agentic RAG
 This example demonstrates how to combine a retriever tool with an agent
 to answer questions using a ReAct loop.
 
+The example is split into two high-level helpers:
+- build_retriever() constructs the in-memory vector store and retriever.
+- run_agentic_rag() runs a question through an AgentExecutor and appends
+  retrieved document metadata to the final answer.
+
 The retriever tool loop works as follows:
 
 1. The user provides a question.
@@ -140,8 +145,8 @@ def create_vectorstore():
     return FAISS.from_documents(SAMPLE_DOCUMENTS, embeddings)
 
 
-def create_retriever():
-    """Create a retriever over the sample vector store.
+def build_retriever():
+    """Build a retriever over the sample vector store.
 
     The retriever is configured to return the top 3 matching document chunks
     for a given query. It is used by the retriever tool and can also be
@@ -160,7 +165,7 @@ def create_retriever_tool() -> Tool:
     Each chunk includes its full metadata (source, title, URL) so the agent
     can cite it in the final answer.
     """
-    retriever = create_retriever()
+    retriever = build_retriever()
 
     @retry(max_retries=3, base_delay=0.5, backoff_factor=2.0)
     def search(query: str) -> str:
@@ -300,13 +305,20 @@ def build_agent() -> AgentExecutor:
     )
 
 
-def main():
-    """Run a sample question through the agentic RAG system."""
-    print("Building agentic RAG system...")
-    agent_executor = build_agent()
+def run_agentic_rag(agent_executor: AgentExecutor, question: str) -> str:
+    """Run a question through an agentic RAG executor and return the answer.
 
-    question = "What is RAG and how does it relate to agents?"
-    print(f"\nQuestion: {question}\n")
+    The question is passed to the AgentExecutor, which runs the ReAct loop
+    with the retriever tool. Retrieved document metadata is appended to the
+    final answer as a formatted "Sources:" section.
+
+    Args:
+        agent_executor: Configured AgentExecutor with a retriever tool.
+        question: The user question to answer.
+
+    Returns:
+        The final answer with any retrieved source citations appended.
+    """
     response = agent_executor.invoke({"input": question})
     answer = response["output"]
 
@@ -314,6 +326,18 @@ def main():
     sources = format_sources(response.get("intermediate_steps", []))
     if sources:
         answer += sources
+
+    return answer
+
+
+def main():
+    """Run a sample question through the agentic RAG system."""
+    print("Building agentic RAG system...")
+    agent_executor = build_agent()
+
+    question = "What is RAG and how does it relate to agents?"
+    print(f"\nQuestion: {question}\n")
+    answer = run_agentic_rag(agent_executor, question)
 
     print(f"\nAnswer: {answer}")
 
