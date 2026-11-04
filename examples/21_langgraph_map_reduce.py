@@ -5,6 +5,14 @@ This example demonstrates how to process multiple documents in parallel using
 LangGraph's Send API to fan out to individual tasks, then aggregate the results.
 It uses a chat model to summarize each document, then combines the summaries.
 
+Map-reduce state flow:
+    START -> map_documents -> (Send fan-out) -> summarize_one (parallel)
+    -> reduce_summaries -> END
+
+The `summaries` list in the state is accumulated with the reducer `operator.add`
+as each parallel `summarize_one` node returns its summary. After all summaries
+are collected, the `reduce_summaries` node produces a single `final_summary`.
+
 To run, set your model provider API key (e.g., OPENAI_API_KEY) and optionally
 change the model name in the code.
 
@@ -32,9 +40,26 @@ MODEL_NAME = "openai:gpt-4o"  # or "anthropic:claude-3-5-sonnet-20240620", etc.
 # State definition
 # ---------------------------------------------------------------------------
 class State(TypedDict):
-    """State of the graph."""
-    documents: List[str]          # input documents
-    summaries: Annotated[List[str], operator.add]  # collected summaries (appended by reducer)
+    """State of the graph.
+
+    - documents: input documents to summarize
+    - summaries: collected summaries, appended by the reducer
+    - final_summary: aggregated summary produced by the reduce step
+    """
+    documents: List[str]                                  # input documents
+    summaries: Annotated[List[str], operator.add]        # collected summaries
+    final_summary: str                                   # aggregated output
+
+# ---------------------------------------------------------------------------
+# Helper functions
+# ---------------------------------------------------------------------------
+def summarize_document(doc: str) -> str:
+    """Generate a concise one-sentence summary for a single document."""
+    model = init_chat_model(MODEL_NAME, temperature=0)
+    response = model.invoke(
+        f"Please provide a concise one-sentence summary of the following document:\n\n{doc}"
+    )
+    return response.content.strip()
 
 # ---------------------------------------------------------------------------
 # Node functions
@@ -52,21 +77,11 @@ def map_documents(state: State):
 
 def summarize_one(state: dict):
     """
-    Summarize a single document using the chat model.
+    Summarize a single document using the helper function.
     This node runs in parallel for each document.
     """
-    # Initialize the model (provider-agnostic)
-    model = init_chat_model(MODEL_NAME, temperature=0)
-
-    # Generate a short summary
-    doc = state["doc"]
-    response = model.invoke(
-        f"Please provide a concise one-sentence summary of the following document:\n\n{doc}"
-    )
-    summary = response.content.strip()
-
-    # Return the summary wrapped in a list so the reducer appends it
-    return {"summaries": [summary]}
+    # Use the helper to summarize the document, wrap in a list for the reducer
+    return {"summaries": [summarize_document(state["doc"])]}
 
 
 def reduce_summaries(state: State):
@@ -105,14 +120,16 @@ def build_graph():
 
     # Define edges
     graph.add_edge(START, "map_documents")
+
+    # The conditional edge uses the Send objects returned by `map_documents`.
+    # Each Send targets the "summarize_one" node with a single document.
     graph.add_conditional_edges(
         "map_documents",
-        lambda state: state,  # not used; we rely on the Send objects
-        path_map=None,        # Send objects determine the next node
+        map_documents,
+        ["summarize_one"],
     )
-    # Since map_documents returns Send objects, we need to specify how to route them.
-    # The graph automatically routes each Send to the target node ("summarize_one").
-    # We only need to add an edge from "summarize_one" to "reduce_summaries".
+
+    # After all parallel summarize_one tasks complete, reduce the summaries.
     graph.add_edge("summarize_one", "reduce_summaries")
     graph.add_edge("reduce_summaries", END)
 
