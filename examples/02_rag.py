@@ -17,6 +17,10 @@ Setup:
 - The OPENAI_API_KEY environment variable must be set to a valid OpenAI API key for embeddings.
 - Optional: Set CHAT_MODEL and CHAT_MODEL_PROVIDER to use a different chat model. Provider-specific API keys may also need to be set.
 - Optional: Place text files in a directory to use as the knowledge base.
+
+The script includes a reusable `format_docs` helper that joins the page content
+of retrieved documents into a single string, which is used in the RAG chain to
+provide context for the chat model.
 """
 import argparse
 import os
