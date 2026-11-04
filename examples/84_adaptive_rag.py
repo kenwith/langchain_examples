@@ -6,6 +6,28 @@ documents, grades their relevance, generates an answer, and grades the answer
 for groundedness. If the documents are irrelevant, the query is rewritten and
 retrieval is retried. If the answer is not grounded, the query is also rewritten
 and the process repeats.
+
+Graph states:
+- question: the current question or rewritten query used for retrieval and generation.
+- documents: the list of documents retrieved, filtered to relevant documents after grading.
+- generation: the generated answer text based on the relevant documents.
+- iterations: the number of query rewrites performed, used to cap retries.
+- grounded: a boolean flag indicating whether the latest generation is grounded in the documents.
+
+Nodes:
+- retrieve: fetches candidate documents using the retriever for the current question.
+- grade_documents: scores each retrieved document for relevance and keeps only those graded 'yes'.
+- transform_query: rewrites the question to make it more specific and increments iterations.
+- generate: produces an answer using the relevant documents as the only context.
+- grade_generation: checks whether the generated answer is grounded in the provided documents.
+
+Edges and conditional routes:
+- START -> retrieve: begins every run by retrieving candidates.
+- retrieve -> grade_documents: grades all retrieved documents.
+- grade_documents -> decide_to_generate: routes to transform_query if no relevant documents remain, otherwise routes to generate.
+- transform_query -> retrieve: loops back to retrieval with the rewritten question.
+- generate -> grade_generation: grades the groundedness of the generated answer.
+- grade_generation -> decide_to_finish: routes to END if the answer is grounded or max_iterations is reached, otherwise routes to transform_query for another rewrite-and-retrieve cycle.
 """
 
 import logging
