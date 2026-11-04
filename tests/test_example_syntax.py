@@ -1,6 +1,7 @@
 """Tests for syntax of example files."""
 from pathlib import Path
 import ast
+import glob
 import importlib.util
 import re
 import sys
@@ -32,7 +33,8 @@ def _import_example(file_path: Path):
 
 def test_example_syntax():
     """Check that all example files are syntactically valid, have docstrings, and are importable."""
-    example_files = sorted(EXAMPLES_DIR.rglob("*.py"))
+    # Use recursive glob discovery so every example, including newly added files, is checked automatically.
+    example_files = sorted(Path(p) for p in glob.glob(str(EXAMPLES_DIR / "**" / "*.py"), recursive=True))
     assert example_files, f"No example files found in {EXAMPLES_DIR}"
     for file_path in example_files:
         # Read source
