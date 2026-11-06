@@ -14,6 +14,7 @@ using a chat model with retrieval context. It can be run in two modes:
 Setup:
 - Install the required packages:
   pip install langchain langchain-community langchain-openai chromadb
+  Additional provider packages may be required for other chat models.
 - The OPENAI_API_KEY environment variable must be set to a valid OpenAI API key for embeddings.
 - Optional: Set CHAT_MODEL and CHAT_MODEL_PROVIDER to use a different chat model. Provider-specific API keys may also need to be set.
 - Optional: Place text files in a directory to use as the knowledge base.
@@ -27,6 +28,7 @@ import os
 import sys
 from collections.abc import Iterable
 
+from langchain.chat_models import init_chat_model
 from langchain_community.document_loaders import DirectoryLoader, TextLoader
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import Chroma
@@ -34,7 +36,6 @@ from langchain_core.documents import Document
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_core.runnables import RunnablePassthrough
-from langchain_openai import ChatOpenAI
 
 # Default persist directory for the Chroma vector store.
 PERSIST_DIRECTORY = "./chroma_db"
@@ -181,8 +182,10 @@ def main() -> None:
     vectorstore = load_vector_store()
     retriever = vectorstore.as_retriever()
 
-    chat_model = ChatOpenAI(
+    # Use init_chat_model to allow provider selection via environment variables.
+    chat_model = init_chat_model(
         model=os.getenv("CHAT_MODEL", "gpt-3.5-turbo"),
+        model_provider=os.getenv("CHAT_MODEL_PROVIDER") or None,
         temperature=0,
     )
 
