@@ -1,10 +1,20 @@
 import logging
 import math
+from typing import Optional
 from langchain.agents import initialize_agent, AgentType, AgentExecutor
 from langchain.llms import OpenAI
 from langchain.tools import tool
+from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
+
+
+class UserInfo(BaseModel):
+    """Pydantic model representing user information."""
+
+    name: str = Field(description="Full name of the user")
+    age: int = Field(description="Age of the user")
+    city: str = Field(description="City of residence")
 
 
 @tool("Calculator")
@@ -60,6 +70,34 @@ def multiply(a: int, b: int) -> str:
         return f"Error: {e}"
 
 
+@tool
+def get_user_info(name: str) -> UserInfo:
+    """Retrieve user information for a given name.
+
+    This tool demonstrates structured tool output using a Pydantic model. It
+    accepts a person's name and returns a UserInfo object containing the name,
+    age, and city. The agent uses this tool when the question asks for details
+    about a specific person, such as their age or location. The input is a
+    string representing the name. The output is a UserInfo instance, which
+    LangChain serializes to a string (e.g., JSON) for the agent's observation.
+
+    Args:
+        name: The name of the person to look up.
+
+    Returns:
+        A UserInfo object with the person's details.
+    """
+    # In a real implementation, this would query a database or external API.
+    # Here, a static mapping is used for demonstration purposes.
+    data = {
+        "Alice": {"age": 30, "city": "New York"},
+        "Bob": {"age": 25, "city": "London"},
+        "Charlie": {"age": 35, "city": "Paris"},
+    }
+    info = data.get(name, {"age": 0, "city": "Unknown"})
+    return UserInfo(name=name, **info)
+
+
 def _ensure_unique_tool_names(tools: list) -> list:
     """Ensure tool names are unique by appending a suffix if needed.
 
@@ -92,10 +130,11 @@ def build_agent() -> AgentExecutor:
 
     This function constructs a LangChain agent using the
     ZERO_SHOT_REACT_DESCRIPTION agent type. It provides a custom prefix and
-    suffix that define the prompt format, and registers two tools: a calculator
-    for mathematical expressions and a multiplier for integer products. The
-    tool names are checked for duplicates and renamed if necessary. The prefix
-    is generated dynamically from the final tool names and descriptions.
+    suffix that define the prompt format, and registers three tools: a calculator
+    for mathematical expressions, a multiplier for integer products, and a
+    user-info tool that returns a structured Pydantic response. The tool names
+    are checked for duplicates and renamed if necessary. The prefix is generated
+    dynamically from the final tool names and descriptions.
 
     Returns:
         An initialized LangChain agent.
@@ -106,6 +145,7 @@ def build_agent() -> AgentExecutor:
     tools = [
         calculator,
         multiply,
+        get_user_info,
     ]
 
     # Ensure unique tool names to avoid conflicts.
