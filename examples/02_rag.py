@@ -58,16 +58,27 @@ def _sample_documents() -> list[Document]:
     return [Document(page_content=text) for text in SAMPLE_TEXTS]
 
 
-def load_documents_from_directory(directory_path: str) -> list[Document]:
-    """Load all text documents from a directory.
+def load_documents_from_directory(
+    directory_path: str,
+    glob_pattern: str = "**/*.txt",
+    loader_cls: type = TextLoader,
+) -> list[Document]:
+    """Load text documents from a directory.
 
     Args:
         directory_path: Path to a directory containing text files.
+        glob_pattern: Glob pattern to match files within the directory.
+            Defaults to "**/*.txt" to load all text files recursively.
+        loader_cls: The loader class to use for each file. Defaults to TextLoader.
 
     Returns:
-        A list of Document objects loaded from all .txt files in the directory.
+        A list of Document objects loaded from the matching files.
     """
-    loader = DirectoryLoader(directory_path, glob="**/*.txt", loader_cls=TextLoader)
+    loader = DirectoryLoader(
+        directory_path,
+        glob=glob_pattern,
+        loader_cls=loader_cls,
+    )
     return loader.load()
 
 
