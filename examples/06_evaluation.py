@@ -1,50 +1,39 @@
-"""Example: Custom evaluator for required keywords.
+"""Example: Custom evaluator for a simple accuracy metric.
 
-This script demonstrates how to define a custom evaluator that checks whether
-the model's response contains a set of required keywords, and how to include
-that evaluator in an evaluation run using LangChain's evaluation framework.
+This script demonstrates how to define a custom evaluator that computes a
+simple accuracy metric by comparing the model's prediction to a reference
+answer, and how to include that evaluator in an evaluation run using
+LangChain's evaluation framework.
 
-The evaluation run uses the following evaluators:
+The evaluation run uses the following evaluator:
 
-- ``RequiredKeywordsEvaluator``: A custom evaluator that verifies the
-  presence of a predefined list of required keywords in the model's response.
-  It returns a score of 1.0 if all keywords are found and 0.0 otherwise.
-- ``EvaluatorType.QA``: A built-in evaluator that uses a chat model to assess
-  the quality of the model's response against a reference answer.
+- ``AccuracyEvaluator``: A custom evaluator that returns a score of 1.0 if
+  the prediction exactly matches the reference answer (ignoring case and
+  surrounding whitespace) and 0.0 otherwise.
 """
 
 from __future__ import annotations
 
-import os
-from typing import List, Optional
+from typing import Optional
 
-from langchain.chat_models import init_chat_model
-from langchain.evaluation import EvaluatorType
 from langchain.evaluation.schema import StringEvaluator
 from langchain.smith import RunEvalConfig
 from langsmith import Client
 from langsmith.evaluation import evaluate
 
 
-class RequiredKeywordsEvaluator(StringEvaluator):
-    """Evaluator that verifies the presence of required keywords.
+class AccuracyEvaluator(StringEvaluator):
+    """Evaluator that computes a simple accuracy metric.
 
-    The evaluator checks if all required keywords appear in the prediction.
-    It returns a score of 1.0 if all keywords are found, and 0.0 otherwise.
+    The evaluator compares the prediction to a reference answer and returns
+    a score of 1.0 if they match exactly (after stripping whitespace and
+    ignoring case) and 0.0 otherwise.
     """
-
-    def __init__(self, required_keywords: List[str]):
-        """Initialize with the list of keywords to check for.
-
-        Args:
-            required_keywords: List of keywords that must be present.
-        """
-        self.required_keywords = required_keywords
 
     @property
     def evaluation_name(self) -> str:
         """Return the name of the evaluator."""
-        return "required_keywords"
+        return "accuracy"
 
     def _evaluate_strings(
         self,
@@ -53,75 +42,45 @@ class RequiredKeywordsEvaluator(StringEvaluator):
         input: Optional[str] = None,
         **kwargs,
     ) -> dict:
-        """Evaluate whether the prediction contains all required keywords.
+        """Evaluate the accuracy of the prediction against the reference.
 
         Args:
             prediction: The model's generated response.
-            reference: The reference answer (optional).
+            reference: The reference answer.
             input: The original input (optional).
             **kwargs: Additional keyword arguments.
 
         Returns:
-            A dictionary with the score and the list of missing keywords.
+            A dictionary with the score and a comment if no reference is provided.
         """
-        missing_keywords = [
-            keyword
-            for keyword in self.required_keywords
-            if keyword.lower() not in prediction.lower()
-        ]
-        score = 1.0 if not missing_keywords else 0.0
-        return {
-            "score": score,
-            "missing_keywords": missing_keywords,
-        }
+        if reference is None:
+            return {
+                "score": 0.0,
+                "comment": "No reference answer provided.",
+            }
+
+        normalized_prediction = prediction.strip().lower()
+        normalized_reference = reference.strip().lower()
+        score = 1.0 if normalized_prediction == normalized_reference else 0.0
+        return {"score": score}
 
 
-def build_evaluator(required_keywords: List[str]) -> RunEvalConfig:
+def build_evaluator() -> RunEvalConfig:
     """Build the evaluation configuration.
 
-    This helper creates a custom keyword evaluator and a provider-agnostic
-    chat model for the built-in QA evaluator. The model is configured through
-    the ``EVAL_MODEL`` and ``EVAL_MODEL_PROVIDER`` environment variables,
-    making the example usable with any LangChain-supported chat model provider.
-
-    Args:
-        required_keywords: List of keywords that must be present in responses.
+    This helper creates a custom accuracy evaluator and returns a
+    ``RunEvalConfig`` that includes it in the evaluation run.
 
     Returns:
-        A ``RunEvalConfig`` containing both the built-in QA evaluator and the
-        custom keyword evaluator.
+        A ``RunEvalConfig`` containing the custom accuracy evaluator.
     """
-    # Create the custom evaluator.
-    custom_evaluator = RequiredKeywordsEvaluator(required_keywords)
-
-    # Initialize a provider-agnostic chat model for the built-in evaluator.
-    # Configure the model and provider through environment variables.
-    eval_llm = init_chat_model(
-        model=os.getenv("EVAL_MODEL", "gpt-4o"),
-        model_provider=os.getenv("EVAL_MODEL_PROVIDER", "openai"),
-    )
-
-    # Configure the evaluation run to include both a standard evaluator
-    # and the custom keyword evaluator.
-    eval_config = RunEvalConfig(
-        evaluators=[
-            EvaluatorType.QA,
-            custom_evaluator,
-        ],
-        eval_llm=eval_llm,
-    )
-    return eval_config
+    return RunEvalConfig(evaluators=[AccuracyEvaluator()])
 
 
 def run_evaluation() -> "EvaluationResults":
     """Run the evaluation and return the results."""
-    # Define the required keywords for the task.
-    required_keywords = ["langchain", "evaluation"]
+    eval_config = build_evaluator()
 
-    # Build the evaluation configuration using the helper.
-    eval_config = build_evaluator(required_keywords)
-
-    # Initialize the LangSmith client and run the evaluation.
     client = Client()
     results = evaluate(
         "my_dataset",
@@ -134,8 +93,7 @@ def run_evaluation() -> "EvaluationResults":
 def _evaluator_description(key: str) -> str:
     """Return a human-readable description for a given evaluator key."""
     descriptions = {
-        "required_keywords": "Checks that all required keywords are present in the response.",
-        "qa": "Assesses the quality of the response against a reference answer using a chat model.",
+        "accuracy": "Checks whether the prediction exactly matches the reference answer.",
     }
     return descriptions.get(key, "No description available.")
 
@@ -171,12 +129,6 @@ def format_results(results) -> None:
                 passed += 1
             else:
                 failed += 1
-
-        # Show additional details when available.
-        metadata = getattr(res, "metadata", None) or {}
-        missing_keywords = metadata.get("missing_keywords")
-        if missing_keywords:
-            print(f"  Missing keywords: {', '.join(missing_keywords)}")
 
         comment = getattr(res, "comment", None)
         if comment:
