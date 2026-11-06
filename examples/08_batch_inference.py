@@ -37,6 +37,7 @@ async def run_batch(
             all batches. If None or non-positive, no limit is applied.
         progress_callback: An optional callback invoked after each batch with
             the number of completed prompts and the total number of prompts.
+            If not provided, a default progress counter is used.
 
     Returns:
         A list of dictionaries, each containing the prompt, result or error,
@@ -63,6 +64,10 @@ async def run_batch(
     else:
         semaphore = None
 
+    # Use a default progress counter if none is provided
+    if progress_callback is None:
+        progress_callback = show_progress
+
     async def process_prompt(prompt: str) -> Dict[str, Union[str, bool]]:
         try:
             if semaphore is not None:
@@ -79,8 +84,7 @@ async def run_batch(
         batch = prompts[start:start + effective_batch_size]
         batch_results = await asyncio.gather(*(process_prompt(p) for p in batch))
         results.extend(batch_results)
-        if progress_callback:
-            progress_callback(len(results), total)
+        progress_callback(len(results), total)
 
     return results
 
@@ -160,7 +164,7 @@ async def main() -> None:
         llm_chain,
         batch_size=1,
         max_concurrency=2,
-        progress_callback=show_progress,
+        # progress_callback is optional; if omitted, show_progress is used
     )
     display_batch_results(results)
 
