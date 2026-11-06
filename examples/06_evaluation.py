@@ -5,6 +5,9 @@ simple accuracy metric by comparing the model's prediction to a reference
 answer, and how to include that evaluator in an evaluation run using
 LangChain's evaluation framework.
 
+It also includes a standalone helper function, ``compute_accuracy``, for
+computing accuracy from a list of predictions and ground truth labels.
+
 The evaluation run uses the following evaluator:
 
 - ``AccuracyEvaluator``: A custom evaluator that returns a score of 1.0 if
@@ -14,12 +17,49 @@ The evaluation run uses the following evaluator:
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Sequence
 
 from langchain.evaluation.schema import StringEvaluator
 from langchain.smith import RunEvalConfig
 from langsmith import Client
 from langsmith.evaluation import evaluate
+
+
+def compute_accuracy(
+    predictions: Sequence[str],
+    ground_truth: Sequence[str],
+) -> float:
+    """Compute the accuracy of predictions against ground truth labels.
+
+    Each prediction is matched to the corresponding ground truth label after
+    removing surrounding whitespace and converting to lowercase. The accuracy
+    is the fraction of matching pairs.
+
+    Args:
+        predictions: A sequence of model predictions.
+        ground_truth: A sequence of ground truth labels.
+
+    Returns:
+        The proportion of predictions that match their ground truth label.
+
+    Raises:
+        ValueError: If ``predictions`` and ``ground_truth`` have different
+            lengths.
+    """
+    if len(predictions) != len(ground_truth):
+        raise ValueError(
+            "Predictions and ground truth must have the same length."
+        )
+
+    if len(predictions) == 0:
+        return 0.0
+
+    matches = sum(
+        1
+        for prediction, expected in zip(predictions, ground_truth)
+        if prediction.strip().lower() == expected.strip().lower()
+    )
+    return matches / len(predictions)
 
 
 class AccuracyEvaluator(StringEvaluator):
@@ -59,9 +99,7 @@ class AccuracyEvaluator(StringEvaluator):
                 "comment": "No reference answer provided.",
             }
 
-        normalized_prediction = prediction.strip().lower()
-        normalized_reference = reference.strip().lower()
-        score = 1.0 if normalized_prediction == normalized_reference else 0.0
+        score = compute_accuracy([prediction], [reference])
         return {"score": score}
 
 
