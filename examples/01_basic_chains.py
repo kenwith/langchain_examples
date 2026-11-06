@@ -106,17 +106,27 @@ from langchain.chains import LLMChain
 
 def build_chain() -> LLMChain:
     """Build and return the LLM chain used in this example."""
+    # Define the prompt template. The template declares the input variable
+    # "product" and contains the instruction that will be sent to the model.
     prompt = PromptTemplate(
         input_variables=["product"],
         template="What is a good name for a company that makes {product}?",
     )
+    # Create an OpenAI LLM instance with a temperature setting. Temperature
+    # controls the randomness of the model's output; higher values like 0.9
+    # produce more creative responses.
     llm = OpenAI(temperature=0.9)
+    # Build an LLMChain that combines the prompt and the LLM. The chain
+    # handles formatting the prompt and invoking the model.
     return LLMChain(llm=llm, prompt=prompt)
 
 
 def run_example(product: str) -> str:
     """Run the prompt chain for a given product and return the response."""
+    # Build the chain once and reuse it for the specific product.
     chain = build_chain()
+    # Run the chain with the provided product description. The chain fills
+    # the template, sends it to the LLM, and returns the generated text.
     return chain.run(product)
 
 
@@ -127,10 +137,14 @@ def main():
     present, executes the chain for a sample product, and prints the response
     to standard output.
     """
+    # Check that the API key is available in the environment. The key is
+    # never hardcoded; it must be set before running the script.
     if "OPENAI_API_KEY" not in os.environ:
         raise ValueError("OPENAI_API_KEY environment variable not set.")
 
+    # Execute the chain for a sample product and capture the result.
     result = run_example("eco-friendly water bottles")
+    # Print the generated company name to the console.
     print(result)
 
 
