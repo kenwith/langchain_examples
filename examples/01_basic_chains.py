@@ -29,16 +29,19 @@ Chain flow:
 5. Print the response. The example prints the generated company name to the
    console.
 
+Required environment variables:
+- OPENAI_API_KEY: The API key for the OpenAI LLM provider. This key must be
+  set in the environment before running the module. The key is never
+  hardcoded; it is read from the environment at runtime. For local
+  development, the variable can be exported in the shell or loaded from a .env
+  file by an external tool such as python-dotenv.
+
 Provider configuration:
 This example uses OpenAI as the LLM provider. The provider requires an API key
-to be available in the environment. The key must be stored in the
-OPENAI_API_KEY environment variable before running the module. The API key is
-never hardcoded; it is read from the environment at runtime. For local
-development, the variable can be exported in the shell or loaded from a .env
-file by an external tool such as python-dotenv. Alternative providers can be
-used by replacing the OpenAI LLM initialization in build_chain() with another
-LangChain LLM wrapper and providing the corresponding credentials via
-environment variables.
+to be available in the environment. Alternative providers can be used by
+replacing the OpenAI LLM initialization in build_chain() with another LangChain
+LLM wrapper and providing the corresponding credentials via environment
+variables.
 
 Expected output:
 The example prints a generated company name for the given product. Because
@@ -59,7 +62,7 @@ inside the main() function, which runs only when this file is executed directly
 as a script. Therefore, importing this module in another program does not
 require an API key and does not consume resources until a function is called.
 
-Usage:
+How to run:
     Run the script directly to see the example in action:
         python examples/01_basic_chains.py
     The main() function can also be imported and called programmatically,
