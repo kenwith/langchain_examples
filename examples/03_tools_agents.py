@@ -37,23 +37,24 @@ def calculator(expression: str) -> str:
 
 
 @tool
-def multiply(a: int, b: int) -> int:
+def multiply(a: int, b: int) -> str:
     """Multiply two integers and return the product.
 
     This tool is registered as a LangChain tool and expects two integer inputs.
     The agent selects this tool when the task requires multiplying exactly two
     integer factors, such as calculating a product, total, area, or scaled
-    quantity. The input should be a JSON string with keys "a" and "b".
+    quantity. The input should be a JSON object with keys "a" and "b".
 
     Args:
         a: The first integer factor.
         b: The second integer factor.
 
     Returns:
-        The product of a and b as an integer.
+        A string representation of the product, or an error message if
+        multiplication fails.
     """
     try:
-        return a * b
+        return str(a * b)
     except Exception as e:
         logger.warning("Multiply tool failed for a=%s, b=%s: %s", a, b, e)
         return f"Error: {e}"
