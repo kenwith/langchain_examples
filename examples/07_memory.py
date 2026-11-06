@@ -1,6 +1,8 @@
 from langchain.memory import ConversationBufferMemory
 from langchain.llms import OpenAI
 from langchain.chains import ConversationChain
+import sys
+
 
 class ChatBot:
     def __init__(self):
@@ -14,6 +16,7 @@ class ChatBot:
     def clear_memory(self):
         """Clear the conversation memory."""
         self.memory.clear()
+
 
 def conversation_loop():
     bot = ChatBot()
@@ -29,5 +32,22 @@ def conversation_loop():
         response = bot.ask(user_input)
         print(f"Bot: {response}")
 
+
+def demo_conversation():
+    """Run a scripted conversation to demonstrate ConversationBufferMemory."""
+    bot = ChatBot()
+    prompts = [
+        "Hi, my name is Alice.",
+        "What is my name?",
+        "What did I just tell you?",
+    ]
+    for prompt in prompts:
+        print(f"You: {prompt}")
+        print(f"Bot: {bot.ask(prompt)}")
+
+
 if __name__ == "__main__":
-    conversation_loop()
+    if len(sys.argv) > 1 and sys.argv[1] == "--demo":
+        demo_conversation()
+    else:
+        conversation_loop()
