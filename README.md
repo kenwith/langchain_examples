@@ -94,6 +94,7 @@ The examples are grouped by the LangChain concept they illustrate. The categorie
 ### Tools
 
 - Define custom tools
+- Create an async custom tool for non-blocking execution
 - Combine tools into a toolkit
 - Connect to external tools and APIs
 
@@ -102,6 +103,7 @@ The examples are grouped by the LangChain concept they illustrate. The categorie
 - Parse comma-separated model output
 - Parse structured JSON-like output
 - Automatically fix malformed output
+- Implement a custom output parser for domain-specific formats
 
 ### Callbacks and Streaming
 
