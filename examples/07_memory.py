@@ -7,6 +7,10 @@ import sys
 class ChatBot:
     def __init__(self):
         self.llm = OpenAI(temperature=0)
+        # ConversationBufferMemory retains the full conversation history.
+        # To use a sliding window of the last k messages instead, replace this
+        # with ConversationBufferWindowMemory(k=5) and import it from
+        # langchain.memory. Adjust k to change the number of messages retained.
         self.memory = ConversationBufferMemory()
         self.conversation = ConversationChain(llm=self.llm, memory=self.memory)
 
