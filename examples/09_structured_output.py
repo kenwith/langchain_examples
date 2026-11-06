@@ -1,4 +1,4 @@
-"""Module docstring for structured output example."""
+"""Example of structured output with a Pydantic model."""
 from typing import Literal
 from pydantic import BaseModel, Field, ValidationError, field_validator
 from langchain_openai import ChatOpenAI
@@ -38,14 +38,6 @@ class Joke(BaseModel):
         return v
 
 
-# Expected JSON schema for the structured output:
-# {
-#   "setup": {"type": "string", "description": "The setup of the joke"},
-#   "punchline": {"type": "string", "description": "The punchline of the joke"},
-#   "rating": {"enum": ["funny", "not funny"], "description": "How funny the joke is"}
-# }
-
-
 def main() -> None:
     llm = ChatOpenAI(model="gpt-4o-mini")
     prompt = ChatPromptTemplate.from_messages(
@@ -54,6 +46,7 @@ def main() -> None:
             ("human", "Tell me a joke about {topic}"),
         ]
     )
+    # The Pydantic model defines the JSON schema and validates the LLM response.
     chain = prompt | llm.with_structured_output(Joke)
     try:
         result = chain.invoke({"topic": "programmers"})
