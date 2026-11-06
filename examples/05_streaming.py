@@ -1,33 +1,38 @@
 """Example 05: Streaming output.
 
-Use a StreamingStdOutCallbackHandler for synchronous streaming and a
-stream_response helper using astream_events for asynchronous token and
-tool streaming. Both print token deltas so the example shows incremental
-output.
+Use the `stream` method for synchronous streaming and a `stream_response`
+helper using `astream_events` for asynchronous token and tool streaming.
+Both print token deltas so the example shows incremental output.
 
 Token streaming behavior:
-  - The `on_llm_new_token` event fires for each token produced by the model.
-  - Printing the chunk incrementally displays the response in real time.
+  - The `stream` method yields each token as it is produced by the model.
+  - Printing each chunk incrementally displays the response in real time.
 
-Tool streaming behavior:
+Async streaming behavior:
+  - The `astream` method provides a simple async token stream.
+  - The `astream_events` method provides a detailed event stream that
+    includes token, tool, and chain events.
+  - The `on_llm_new_token` event fires for each token produced by the model.
   - The `on_tool_start` event fires when a tool begins execution.
   - The `on_tool_end` event fires after a tool completes, with the tool output.
   - The `on_tool_error` event fires if a tool raises an exception.
 
 Note: Streaming support varies by provider. This example uses OpenAI's
-legacy LLM interface. For other providers, adapt the callback handler or
+legacy LLM interface. For other providers, adapt the stream method or
 event names to match the provider's streaming implementation.
 """
 
 import asyncio
 from typing import Any
 
-from langchain.callbacks.streaming_stdout import StreamingStdOutCallbackHandler
 from langchain.llms import OpenAI
 
 
 async def stream_response(llm: Any, prompt: str) -> None:
     """Stream tokens and tool events from an LLM or chain.
+
+    Uses `astream_events` to capture token-level output and tool lifecycle
+    events. For simple token streaming, `astream` can be used instead.
 
     Token streaming behavior:
       - The `on_llm_new_token` event fires for each token produced by the model.
@@ -57,7 +62,6 @@ def main() -> None:
         temperature=0.7,
         max_tokens=256,
         streaming=True,
-        callbacks=[StreamingStdOutCallbackHandler()],
     )
 
     prompt = "Write a short poem about streaming output."
@@ -65,7 +69,8 @@ def main() -> None:
     print(prompt)
 
     print("\nSynchronous streaming response:")
-    llm(prompt)
+    for chunk in llm.stream(prompt):
+        print(chunk, end="", flush=True)
     print()
 
     async_llm = OpenAI(
