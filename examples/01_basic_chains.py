@@ -1,6 +1,10 @@
 """Basic chain example.
 
-This module demonstrates a simple LLMChain with a prompt template.
+This module demonstrates how to build and use a basic LLMChain in LangChain.
+The example illustrates the recommended structure for a small LLM
+application: a prompt template is defined, an LLM instance is created, the
+two are combined into a chain, and the chain is run with a product
+description to produce a company name.
 
 A chain in LangChain is a sequence of components that processes an input and
 produces an output. In this example, the chain combines a prompt template and
@@ -133,7 +137,7 @@ def run_example(product: str) -> str:
     return chain.run(product)
 
 
-def main():
+def main() -> None:
     """Run the example and print the model's generated company name.
 
     The function verifies that the OPENAI_API_KEY environment variable is
