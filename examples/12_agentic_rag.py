@@ -1,22 +1,40 @@
 """
 Example: Agentic RAG
 
-This example demonstrates how to combine a retriever tool with an agent
-to answer questions using a ReAct loop.
+This example demonstrates an agentic retrieval-augmented generation (RAG)
+workflow. A ReAct agent decides when to query a retriever tool, reads the
+retrieved document chunks, and produces a final answer grounded in that
+context. The agent can issue multiple retrieval actions to refine its search
+before answering.
 
-The example is split into two high-level helpers:
-- build_retriever() constructs the in-memory vector store and retriever.
-- run_agentic_rag() runs a question through an AgentExecutor and appends
-  retrieved document metadata to the final answer.
+The system is composed of the following parts:
 
-The retriever tool loop works as follows:
+- An in-memory FAISS vector store built from a small set of sample documents
+  about LangChain concepts. The vector store is created by create_vectorstore()
+  and exposed as a retriever by build_retriever().
+- A retriever tool (create_retriever_tool()) that wraps the retriever with a
+  retry decorator. The tool accepts a natural-language query, retrieves the
+  top-k matching chunks, and returns them along with their metadata (source,
+  title, URL) as the observation for the agent.
+- A ReAct agent (create_agent()) that uses a prompt enforcing the
+  Thought/Action/Action Input/Observation loop. The agent is powered by a
+  chat model configured through init_chat_model().
+- An AgentExecutor (build_agent()) that runs the agent with the retriever
+  tool, enables verbose logging, handles parsing errors, and keeps
+  intermediate steps so that retrieved sources can be cited later.
+- A post-processing step (run_agentic_rag() and format_sources()) that
+  appends a formatted "Sources:" section to the final answer using the
+  metadata from the tool observations.
+
+The agentic RAG loop works as follows:
 
 1. The user provides a question.
-2. The agent (powered by an LLM) decides whether it needs more context.
-3. If needed, the agent emits an Action that calls the retriever tool with a
-   search query.
-4. The retriever tool searches an in-memory FAISS vector store and returns
-   the most relevant document chunks as the Observation.
+2. The agent (powered by an LLM) reasons about whether it needs external
+   context to answer the question.
+3. If context is needed, the agent emits an Action that calls the retriever
+   tool with a search query.
+4. The retriever tool searches the FAISS vector store and returns the most
+   relevant document chunks as the Observation.
 5. The agent reads the Observation and either:
    - calls the retriever tool again with a refined query, or
    - produces a Final Answer grounded in the retrieved context.
