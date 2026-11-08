@@ -38,6 +38,11 @@ class Joke(BaseModel):
         return v
 
 
+def parse_joke_output(joke: Joke) -> dict:
+    """Convert a Joke instance into a dictionary."""
+    return joke.model_dump()
+
+
 def main() -> None:
     llm = ChatOpenAI(model="gpt-4o-mini")
     prompt = ChatPromptTemplate.from_messages(
@@ -50,7 +55,8 @@ def main() -> None:
     chain = prompt | llm.with_structured_output(Joke)
     try:
         result = chain.invoke({"topic": "programmers"})
-        print(result)
+        parsed_result = parse_joke_output(result)
+        print(parsed_result)
     except ValidationError as e:
         print("Validation error:", e)
 
