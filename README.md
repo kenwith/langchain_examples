@@ -9,6 +9,7 @@ A collection of practical, runnable examples for building applications with Lang
 - [Quick Start](#quick-start)
 - [Examples by Category](#examples-by-category)
 - [Running Examples](#running-examples)
+- [Testing](#testing)
 
 ## Overview
 
@@ -125,3 +126,15 @@ pip install -r requirements.txt
 ```
 
 Set the provider environment variable before running. The examples read credentials from `os.getenv(...)`, so no API key should be placed in source code.
+
+## Testing
+
+The repository includes a test suite to verify that the examples are functional and that the code behaves as expected. The tests are designed to run without requiring live API calls, using mocked or stubbed responses where necessary. This allows the tests to be executed in a continuous integration environment without external dependencies.
+
+To run the test suite:
+
+```bash
+pytest
+```
+
+The tests are located in the `tests/` directory and cover the core functionality of each example, including prompt construction, chain execution, and output parsing. Running the tests is recommended before contributing changes to ensure that existing examples are not broken.
