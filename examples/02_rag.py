@@ -62,24 +62,71 @@ def load_documents_from_directory(
     directory_path: str,
     glob_pattern: str = "**/*.txt",
     loader_cls: type = TextLoader,
+    recursive: bool = True,
+    loader_kwargs: dict | None = None,
 ) -> list[Document]:
-    """Load text documents from a directory.
+    """Load documents from a directory using a specified loader.
 
     Args:
         directory_path: Path to a directory containing text files.
         glob_pattern: Glob pattern to match files within the directory.
             Defaults to "**/*.txt" to load all text files recursively.
         loader_cls: The loader class to use for each file. Defaults to TextLoader.
+        recursive: If True, search subdirectories recursively. Defaults to True.
+        loader_kwargs: Additional keyword arguments passed to the loader class.
+            For example, for TextLoader you might pass {'encoding': 'utf-8'}.
 
     Returns:
         A list of Document objects loaded from the matching files.
+
+    Raises:
+        FileNotFoundError: If the specified directory does not exist.
     """
+    if not os.path.isdir(directory_path):
+        raise FileNotFoundError(f"Directory not found: {directory_path}")
+
     loader = DirectoryLoader(
         directory_path,
         glob=glob_pattern,
         loader_cls=loader_cls,
+        recursive=recursive,
+        loader_kwargs=loader_kwargs or {},
     )
     return loader.load()
+
+
+def load_text_documents_from_directory(
+    directory_path: str,
+    glob_pattern: str = "**/*.txt",
+    encoding: str = "utf-8",
+) -> list[Document]:
+    """Load text documents from a directory with sensible defaults.
+
+    This is a convenience wrapper around `load_documents_from_directory` that
+    uses TextLoader and a typical glob pattern. It is intended to be reusable
+    across different RAG projects.
+
+    Args:
+        directory_path: Path to a directory containing text files.
+        glob_pattern: Glob pattern to match files within the directory.
+            Defaults to "**/*.txt" to load all text files recursively.
+        encoding: Encoding used when reading text files. Defaults to "utf-8".
+
+    Returns:
+        A list of Document objects loaded from the matching files.
+
+    Raises:
+        FileNotFoundError: If the specified directory does not exist.
+
+    Example:
+        docs = load_text_documents_from_directory("./data")
+    """
+    return load_documents_from_directory(
+        directory_path,
+        glob_pattern=glob_pattern,
+        loader_cls=TextLoader,
+        loader_kwargs={"encoding": encoding},
+    )
 
 
 def load_documents(directory_path: str | None) -> list[Document]:
@@ -93,7 +140,7 @@ def load_documents(directory_path: str | None) -> list[Document]:
         A list of Document objects loaded from the directory or the built-in samples.
     """
     if directory_path:
-        return load_documents_from_directory(directory_path)
+        return load_text_documents_from_directory(directory_path)
     return _sample_documents()
 
 
