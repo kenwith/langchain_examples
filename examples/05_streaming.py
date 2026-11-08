@@ -26,6 +26,10 @@ Token usage information:
     in its output.
   - Usage details include prompt tokens, completion tokens, and total tokens.
 
+Error handling:
+  - Network or API errors during streaming are caught and reported with a
+    clear message instead of an unhandled traceback.
+
 Note: Streaming support varies by provider. This example uses OpenAI's
 legacy LLM interface. For other providers, adapt the stream method or
 event names to match the provider's streaming implementation.
@@ -84,30 +88,40 @@ async def stream_response(llm: Any, prompt: str) -> None:
       - The `on_tool_start` event fires when a tool begins execution.
       - The `on_tool_end` event fires after a tool completes, with the tool output.
       - The `on_tool_error` event fires if a tool raises an exception.
+
+    Error handling:
+      - Network or API errors during streaming are caught and reported with a
+        clear message instead of an unhandled traceback.
     """
-    async for event in llm.astream_events(prompt, version="v1"):
-        event_type = event["event"]
-        if event_type == "on_llm_new_token":
-            print(event["data"]["chunk"], end="", flush=True)
-        elif event_type == "on_llm_end":
-            output = event["data"]["output"]
-            if hasattr(output, "llm_output"):
-                token_usage = output.llm_output.get("token_usage")
-            elif isinstance(output, dict):
-                token_usage = output.get("llm_output", {}).get("token_usage")
-            else:
-                token_usage = None
-            print()
-            print_token_usage(token_usage)
-        elif event_type == "on_tool_start":
-            print(f"\n[Tool start] {event['name']}")
-        elif event_type == "on_tool_end":
-            print(f"\n[Tool end] {event['name']}: {event['data']['output']}")
-        elif event_type == "on_tool_error":
-            print(f"\n[Tool error] {event['name']}: {event['data']['error']}")
-    # If the loop exits without an on_llm_end event, print a fallback message.
-    if not any(event["event"] == "on_llm_end" for event in []):
-        pass
+    got_llm_end = False
+    try:
+        async for event in llm.astream_events(prompt, version="v1"):
+            event_type = event["event"]
+            if event_type == "on_llm_new_token":
+                print(event["data"]["chunk"], end="", flush=True)
+            elif event_type == "on_llm_end":
+                got_llm_end = True
+                output = event["data"]["output"]
+                if hasattr(output, "llm_output"):
+                    token_usage = output.llm_output.get("token_usage")
+                elif isinstance(output, dict):
+                    token_usage = output.get("llm_output", {}).get("token_usage")
+                else:
+                    token_usage = None
+                print()
+                print_token_usage(token_usage)
+            elif event_type == "on_tool_start":
+                print(f"\n[Tool start] {event['name']}")
+            elif event_type == "on_tool_end":
+                print(f"\n[Tool end] {event['name']}: {event['data']['output']}")
+            elif event_type == "on_tool_error":
+                print(f"\n[Tool error] {event['name']}: {event['data']['error']}")
+    except Exception as exc:
+        print(f"\n[Streaming error] A network or API error occurred: {exc}")
+        return
+
+    if not got_llm_end:
+        print("\n[Token usage] Not available")
 
 
 def main() -> None:
@@ -125,10 +139,14 @@ def main() -> None:
     print("\nSynchronous streaming response:")
     usage_handler = TokenUsageCallbackHandler()
     llm.callbacks = [usage_handler]
-    for chunk in llm.stream(prompt):
-        print(chunk, end="", flush=True)
-    print()
-    print_token_usage(usage_handler.token_usage)
+    try:
+        for chunk in llm.stream(prompt):
+            print(chunk, end="", flush=True)
+    except Exception as exc:
+        print(f"\n[Streaming error] A network or API error occurred: {exc}")
+    else:
+        print()
+        print_token_usage(usage_handler.token_usage)
 
     async_llm = OpenAI(
         model="gpt-3.5-turbo-instruct",
