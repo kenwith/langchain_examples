@@ -7,6 +7,22 @@ client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 # Threshold for considering a document relevant to a query.
 SIMILARITY_THRESHOLD = 0.5
 
+def normalize_vector(vec):
+    """
+    Normalize a vector to unit length.
+
+    Args:
+        vec (list or np.ndarray): Input vector.
+
+    Returns:
+        np.ndarray: Unit-length vector, or the original zero vector if its norm is zero.
+    """
+    v = np.asarray(vec, dtype=float)
+    norm = np.linalg.norm(v)
+    if norm == 0:
+        return v
+    return v / norm
+
 def cosine_similarity(vec1, vec2):
     """
     Compute the cosine similarity between two vectors.
@@ -42,18 +58,18 @@ def is_relevant(similarity_score, threshold=SIMILARITY_THRESHOLD):
 
 def get_embedding(text, model="text-embedding-ada-002"):
     """
-    Get embedding vector for the given text using OpenAI's embedding API.
+    Get a normalized embedding vector for the given text using OpenAI's embedding API.
 
     Args:
         text (str): Input text.
         model (str): Embedding model name.
 
     Returns:
-        list: Embedding vector.
+        list: Unit-length embedding vector.
     """
     text = text.replace("\n", " ")
     response = client.embeddings.create(input=[text], model=model)
-    return response.data[0].embedding
+    return normalize_vector(response.data[0].embedding).tolist()
 
 def rank_documents_by_similarity(query, documents, embedding_model="text-embedding-ada-002"):
     """
