@@ -27,6 +27,8 @@ def build_reranker(
     sentence-transformers is not installed or the model is unavailable), it falls
     back to returning the first `top_k` documents unchanged. When the model is
     available, the reranked documents include a `rerank_score` metadata field.
+    If the reranker returns an empty list, the original retrieved documents are
+    returned unchanged.
 
     Args:
         model_name: Name of the cross-encoder model to use.
@@ -56,24 +58,30 @@ def build_reranker(
 
         Returns:
             A list of documents sorted by relevance (most relevant first).
+            If the reranker returns an empty list, the original documents are
+            returned unchanged.
         """
         if encoder is None:
-            return list(documents[:top_k])
+            reranked = list(documents[:top_k])
+        else:
+            pairs = [(query, doc.page_content) for doc in documents]
+            scores = encoder.predict(pairs)
 
-        pairs = [(query, doc.page_content) for doc in documents]
-        scores = encoder.predict(pairs)
+            # Sort documents by score in descending order.
+            scored = sorted(zip(documents, scores), key=lambda x: x[1], reverse=True)
 
-        # Sort documents by score in descending order.
-        scored = sorted(zip(documents, scores), key=lambda x: x[1], reverse=True)
+            # Create copies with the rerank score attached to metadata.
+            reranked = []
+            for doc, score in scored[:top_k]:
+                metadata = dict(doc.metadata)
+                metadata["rerank_score"] = score
+                reranked.append(
+                    Document(page_content=doc.page_content, metadata=metadata)
+                )
 
-        # Create copies with the rerank score attached to metadata.
-        reranked = []
-        for doc, score in scored[:top_k]:
-            metadata = dict(doc.metadata)
-            metadata["rerank_score"] = score
-            reranked.append(
-                Document(page_content=doc.page_content, metadata=metadata)
-            )
+        # If the reranker returned an empty list, fall back to the original documents.
+        if not reranked:
+            return list(documents)
         return reranked
 
     return rerank_documents
@@ -102,7 +110,9 @@ def rerank_documents(
         A tuple of (reranked_documents, scores). The documents are sorted by
         relevance (most relevant first). The scores list has the same length as
         the document list and contains the rerank score for each document, or
-        None if no cross-encoder model was available.
+        None if no cross-encoder model was available. If the reranker returns an
+        empty list, the original documents are returned unchanged and the scores
+        list contains None for each document.
     """
     reranked = _DEFAULT_RERANKER(query, documents, top_k)
     scores = [doc.metadata.get("rerank_score") for doc in reranked]
