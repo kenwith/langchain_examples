@@ -7,8 +7,9 @@ with any LangChain-compatible LLM, whether from OpenAI, Anthropic, Hugging
 Face, or another provider.
 
 The module also includes formatting helpers to present batch results in a
-uniform way, covering both success and error cases, and a display function
-for a clean, human-readable output.
+uniform way, covering both success and error cases, and helper functions
+`print_batch_results` and `display_batch_results` for clean, human-readable
+output.
 """
 
 import asyncio
@@ -122,6 +123,19 @@ def format_batch_results(results: List[Dict[str, Union[str, bool]]]) -> str:
     return _format_batch_results(results)
 
 
+def print_batch_results(results: List[Dict[str, Union[str, bool]]]) -> None:
+    """Print batch inference results in a clean, numbered format.
+
+    This helper prints only the formatted results, without an additional
+    header or summary. For a complete report with a header and a summary,
+    use `display_batch_results`.
+
+    Args:
+        results: A list of result dictionaries from run_batch.
+    """
+    print(format_batch_results(results))
+
+
 def display_batch_results(results: List[Dict[str, Union[str, bool]]]) -> None:
     """Display batch inference results in a clean, human-readable format.
 
@@ -133,7 +147,7 @@ def display_batch_results(results: List[Dict[str, Union[str, bool]]]) -> None:
     """
     print("Batch Inference Results")
     print("=======================")
-    print(format_batch_results(results))
+    print_batch_results(results)
     successes = sum(1 for r in results if r.get("success"))
     failures = len(results) - successes
     print(f"\nSummary: {successes} succeeded, {failures} failed out of {len(results)} total.")
