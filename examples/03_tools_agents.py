@@ -17,6 +17,19 @@ class UserInfo(BaseModel):
     city: str = Field(description="City of residence")
 
 
+class MultiplyInput(BaseModel):
+    """Input schema for the multiply tool."""
+
+    a: int = Field(description="First integer factor")
+    b: int = Field(description="Second integer factor")
+
+
+class UserInfoInput(BaseModel):
+    """Input schema for the get_user_info tool."""
+
+    name: str = Field(description="Name of the person to look up")
+
+
 @tool("Calculator")
 def calculator(expression: str) -> str:
     """Evaluate a mathematical expression safely.
@@ -46,7 +59,7 @@ def calculator(expression: str) -> str:
         return f"Error: {e}"
 
 
-@tool
+@tool("Multiply", args_schema=MultiplyInput)
 def multiply(a: int, b: int) -> str:
     """Multiply two integers and return the product.
 
@@ -70,22 +83,23 @@ def multiply(a: int, b: int) -> str:
         return f"Error: {e}"
 
 
-@tool
-def get_user_info(name: str) -> UserInfo:
+@tool("GetUserInfo", args_schema=UserInfoInput)
+def get_user_info(name: str) -> str:
     """Retrieve user information for a given name.
 
     This tool demonstrates structured tool output using a Pydantic model. It
-    accepts a person's name and returns a UserInfo object containing the name,
-    age, and city. The agent uses this tool when the question asks for details
-    about a specific person, such as their age or location. The input is a
-    string representing the name. The output is a UserInfo instance, which
-    LangChain serializes to a string (e.g., JSON) for the agent's observation.
+    accepts a person's name and returns a JSON string containing the name, age,
+    and city. The agent uses this tool when the question asks for details about
+    a specific person, such as their age or location. The input is a string
+    representing the name. The output is a JSON-formatted string, which LangChain
+    uses as the observation for the agent.
 
     Args:
         name: The name of the person to look up.
 
     Returns:
-        A UserInfo object with the person's details.
+        A JSON string with the person's details, or a default entry if the name
+        is not found.
     """
     # In a real implementation, this would query a database or external API.
     # Here, a static mapping is used for demonstration purposes.
@@ -95,34 +109,8 @@ def get_user_info(name: str) -> UserInfo:
         "Charlie": {"age": 35, "city": "Paris"},
     }
     info = data.get(name, {"age": 0, "city": "Unknown"})
-    return UserInfo(name=name, **info)
-
-
-def _ensure_unique_tool_names(tools: list) -> list:
-    """Ensure tool names are unique by appending a suffix if needed.
-
-    This function checks for duplicate tool names and renames any conflicting
-    tools by appending "_1", "_2", etc., until a unique name is found. The
-    modification is performed in-place on the tool objects.
-
-    Args:
-        tools: A list of LangChain tool objects.
-
-    Returns:
-        The same list with unique tool names.
-    """
-    seen = set()
-    for tool in tools:
-        name = tool.name
-        if name in seen:
-            suffix = 1
-            new_name = f"{name}_{suffix}"
-            while new_name in seen:
-                suffix += 1
-                new_name = f"{name}_{suffix}"
-            tool.name = new_name
-        seen.add(tool.name)
-    return tools
+    user_info = UserInfo(name=name, **info)
+    return user_info.json()
 
 
 def build_agent() -> AgentExecutor:
@@ -132,9 +120,9 @@ def build_agent() -> AgentExecutor:
     ZERO_SHOT_REACT_DESCRIPTION agent type. It provides a custom prefix and
     suffix that define the prompt format, and registers three tools: a calculator
     for mathematical expressions, a multiplier for integer products, and a
-    user-info tool that returns a structured Pydantic response. The tool names
-    are checked for duplicates and renamed if necessary. The prefix is generated
-    dynamically from the final tool names and descriptions.
+    user-info tool that returns a structured JSON response. The tool names are
+    explicitly set to avoid conflicts. The prefix is generated dynamically from
+    the final tool names and descriptions.
 
     Returns:
         An initialized LangChain agent.
@@ -147,9 +135,6 @@ def build_agent() -> AgentExecutor:
         multiply,
         get_user_info,
     ]
-
-    # Ensure unique tool names to avoid conflicts.
-    tools = _ensure_unique_tool_names(tools)
 
     # Build the prefix dynamically using the actual tool names and descriptions.
     tool_lines = "\n".join([f"{t.name}: {t.description}" for t in tools])
