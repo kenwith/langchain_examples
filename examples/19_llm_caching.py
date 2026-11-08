@@ -4,6 +4,17 @@ Example: LLM Caching with Hit/Miss Counting
 This example demonstrates how to use LangChain's LLM caching mechanism,
 track cache hits and misses with a custom counting cache, and clear the
 cache when needed.
+
+Available cache backends in LangChain:
+- InMemoryCache: Stores entries in memory (default if not specified).
+- SQLiteCache: Persists cache entries in a SQLite database.
+- RedisCache: Uses a Redis server as the cache backend.
+- GPTCache: Integrates with the GPTCache library.
+- Custom caches: Implement the BaseCache interface (as shown here).
+
+The example uses a custom CountingCache to illustrate how to implement
+a cache and track hit/miss statistics. It also shows how to clear the
+cache to force new LLM calls.
 """
 
 import os
@@ -90,6 +101,10 @@ def main():
     # Create a counting cache and set it as the global LLM cache.
     counting_cache = CountingCache()
     set_llm_cache(counting_cache)
+
+    # Guard: clear the cache before each run to ensure a clean state.
+    # This prevents any leftover entries from previous executions.
+    clear_cache(counting_cache)
 
     # Run the same prompt multiple times to demonstrate caching.
     prompt = "What is the capital of France?"
